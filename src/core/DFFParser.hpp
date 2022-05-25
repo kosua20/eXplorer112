@@ -4,10 +4,6 @@
 
 namespace Dff {
 
-struct Context {
-	std::vector<Object> objects;
-};
-
-bool parse(const fs::path& path, Context& context);
+bool parse(const fs::path& path, Model& context);
 
 }
