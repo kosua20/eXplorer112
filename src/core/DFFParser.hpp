@@ -6,4 +6,6 @@ namespace Dff {
 
 bool parse(const fs::path& path, Model& context);
 
+void convertToObj(Model& model, Obj& outObject, const std::string& baseName);
+
 }

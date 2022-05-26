@@ -8,6 +8,7 @@
 #include <vector>
 #include <string>
 #include <unordered_map>
+#include <sstream>
 
 //#define LOG_DFF_CONTENT
 
@@ -568,5 +569,156 @@ bool parse(const fs::path& path, Model& model){
 	fclose(file);
 	return true;
 }
+
+void convertToObj(Model& model, Obj& outObject, const std::string& baseName){
+
+	// Nothing to export.
+	if(model.pairings.empty()){
+		return;
+	}
+
+	// Convert geometries.
+	for(Dff::Geometry& geom : model.geometries){
+		// Sort triangles based on material first.
+		std::sort(geom.faces.begin(), geom.faces.end(), [](const Dff::Triangle& a, const Dff::Triangle& b){
+			if(a.id < b.id){
+				return true;
+			}
+			if(a.id > b.id){
+				return false;
+			}
+			return (a.v0 < b.v0) || (a.v0 == b.v0 && a.v1 < b.v1) || (a.v0 == b.v0 && a.v1 == b.v1 && a.v2 < b.v2);
+		});
+		// Flip texture coordinates.
+		for(auto& uvs : geom.uvs){
+			for(auto& uv : uvs){
+				uv[1] = 1.f - uv[1];
+			}
+		}
+	}
+
+
+	std::stringstream outputMtl;
+
+	// From all the pairs of frame/geometry, we need to build a valid set of objects, each with a texture.
+	int pairId = 0;
+	size_t vertexIndex = 0;
+	size_t uvIndex = 0;
+	size_t normalIndex = 0;
+
+	for(const Dff::Model::Pair& pair : model.pairings){
+
+		// Rebuild frame.
+		int32_t frameIndex = pair.frame;
+		glm::mat4 totalFrame(1.0f);
+		do {
+			totalFrame = model.frames[frameIndex].mat * totalFrame;
+			frameIndex = model.frames[frameIndex].parent;
+			if(frameIndex >= (int32_t)model.frames.size()){
+				Log::warning("Unexpected frame index: %d, stopping.", frameIndex);
+				break;
+			}
+		} while(frameIndex >= 0);
+
+		const glm::mat3 totalFrameNormal = glm::transpose(glm::inverse(glm::mat3(totalFrame)));
+		// Fetch geometry.
+		const Dff::Geometry& geom = model.geometries[pair.geometry];
+		// Assumption: always one morphset and one texset.
+		const Dff::MorphSet& set = geom.sets[0];
+
+		// Output vertices, normals and uvs if present.
+		const size_t vertCount = set.positions.size();
+		const bool hasNormals = set.normals.size() == vertCount;
+
+		const bool hasUvs = !geom.uvs.empty() && (geom.uvs[0].size() == vertCount);
+		const bool hasColors = geom.colors.size() == vertCount;
+
+		outObject.positions.reserve(outObject.positions.size() + vertCount);
+		for(size_t vid = 0; vid < vertCount; ++vid){
+			const glm::vec3 tpos = glm::vec3(totalFrame * glm::vec4(set.positions[vid], 1.f));
+			outObject.positions.push_back(tpos);
+		}
+
+		if(hasNormals){
+			outObject.normals.reserve(outObject.normals.size() + vertCount);
+			for(size_t vid = 0; vid < vertCount; ++vid){
+				const glm::vec3 tnor = glm::normalize(totalFrameNormal * set.normals[vid]);
+				outObject.normals.push_back(tnor);
+			}
+		}
+		if(hasUvs){
+			const Dff::TexSet& uvs = geom.uvs[0];
+			outObject.uvs.reserve(outObject.uvs.size() + vertCount);
+			for(size_t vid = 0; vid < vertCount; ++vid){
+				outObject.uvs.push_back(uvs[vid]);
+			}
+		}
+		// TODO: colors if needed
+
+		// Then triangles, split by material.
+		const size_t triCount = geom.faces.size();
+		outObject.faceSets.reserve(geom.mappings.size());
+
+		uint16_t materialId = 0xFF;
+		for(size_t tid = 0; tid < triCount; ++tid){
+
+			if(geom.faces[tid].id != materialId){
+				materialId = geom.faces[tid].id;
+				// New group.
+				const std::string matName = baseName + "_" + std::to_string(pairId) + "_" + std::to_string(materialId);
+				outputMtl << "newmtl " << matName << "\n";
+
+				const Dff::Material& material = geom.materials[geom.mappings[materialId]];
+				const float& amb = material.ambSpecDiff[0];
+				outputMtl << "Ka " << amb << " " << amb << " " << amb << "\n";
+				const float& diff = material.ambSpecDiff[2];
+				outputMtl << "Kd " << diff << " " << diff << " " << diff << "\n";
+				const float& spec = material.ambSpecDiff[1];
+				outputMtl << "Ks " << spec << " " << spec << " " << spec << "\n";
+				outputMtl << "Ns " << 100 << "\n";
+				if(!material.diffuseName.empty()){
+					outputMtl << "map_Kd " << "textures/" << material.diffuseName << "\n";
+				}
+
+
+				outObject.faceSets.emplace_back();
+				outObject.faceSets.back().faces.reserve(256);
+				outObject.faceSets.back().material = matName;
+			}
+
+			Obj::Set& faceSet = outObject.faceSets.back();
+			Obj::Set::Face& face = faceSet.faces.emplace_back();
+
+			const size_t v0 = geom.faces[tid].v0 + 1u;
+			const size_t v1 = geom.faces[tid].v1 + 1u;
+			const size_t v2 = geom.faces[tid].v2 + 1u;
+
+			// Remember: v/vt/vn
+			face.v0 = v0+vertexIndex;
+			face.v1 = v1+vertexIndex;
+			face.v2 = v2+vertexIndex;
+
+			if(hasUvs){
+				face.t0 = (v0+uvIndex);
+				face.t1 = (v1+uvIndex);
+				face.t2 = (v2+uvIndex);
+			}
+
+			if(hasNormals){
+				face.n0 = (v0+normalIndex);
+				face.n1 = (v1+normalIndex);
+				face.n2 = (v2+normalIndex);
+			}
+		}
+
+		vertexIndex += vertCount;
+		uvIndex += hasUvs ? vertCount : 0;
+		normalIndex += hasNormals ? vertCount : 0;
+		++pairId;
+	}
+
+	outObject.materials = outputMtl.str();
+}
+
 
 }
