@@ -14,6 +14,7 @@ void Log::info(const char* format, ...){
 	va_end(argptr);
 
 	fprintf(stdout, "\n");
+	fflush(stdout);
 }
 
 void Log::warning(const char* format, ...){
@@ -26,6 +27,7 @@ void Log::warning(const char* format, ...){
 	va_end(argptr);
 
 	fprintf(stdout, "\n");
+	fflush(stdout);
 }
 
 void Log::error(const char* format, ...){
@@ -38,12 +40,13 @@ void Log::error(const char* format, ...){
 	va_end(argptr);
 
 	fprintf(stderr, "\n");
+	fflush(stderr);
 }
 
 void Log::check(bool value, const char* format, ...){
 	if(!value){
 
-		fprintf(stderr, "[dffparser] Check failed  : ");
+		fprintf(stderr, "Check  : Failed: ");
 
 		va_list argptr;
 		va_start(argptr, format);
@@ -51,6 +54,7 @@ void Log::check(bool value, const char* format, ...){
 		va_end(argptr);
 
 		fprintf(stderr, "\n");
+		fflush(stderr);
 
 	}
 	assert(value);

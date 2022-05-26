@@ -9,7 +9,7 @@
 #include <string>
 #include <unordered_map>
 
-#define LOG_DFF_CONTENT
+//#define LOG_DFF_CONTENT
 
 namespace Dff {
 
@@ -131,36 +131,46 @@ size_t parseHeader(FILE* file, Type& type){
 	// Check if we know this type of section
 	const char* typeStr = typeToStr(type);
 	if(typeStr){
-		//Log::info("[dffparser] Section %s of size %llu", typeToStr(type), size);
+#ifdef LOG_DFF_CONTENT
+		Log::info("[dffparser] Section %s of size %llu", typeToStr(type), size);
+#endif
 	} else {
-		Log::info("[dffparser] Section unknown 0x%x of size %llu", uint32_t(type), size);
+		Log::warning("[dffparser] Unknown section 0x%x of size %llu", uint32_t(type), size);
 	}
 	
 	return size;
 }
 
-void checkType(Type type, Type expected){
+bool checkType(Type type, Type expected){
 	Log::check(type == expected, "[dffparser] Expected type %s (got %s)", typeToStr(expected), typeToStr(type));
+	return type == expected;
 }
 
-void parseStruct(FILE* file, size_t expectedSize){
+bool parseStruct(FILE* file, size_t expectedSize){
 	Type type;
 	const size_t size = parseHeader(file, type);
 
-	checkType(type, Type::Struct);
+	if(!checkType(type, Type::Struct)){
+		return false;
+	}
 
 	Log::check((expectedSize == 0) || (size == expectedSize), "[dffparser] Expected size %zu (got %zu)", expectedSize, size );
+	return (expectedSize == 0) || (size == expectedSize);
 }
 
 
-void parseTexture(FILE* file, std::string& name){
+bool parseTexture(FILE* file, std::string& name){
 	// Texture header
 	Type type;
 	parseHeader(file, type);
-	checkType(type, Type::Texture);
+	if(!checkType(type, Type::Texture)){
+		return false;
+	}
 
 	// Struct header.
-	parseStruct(file, sizeof(uint16_t) + sizeof(uint8_t) * 2 );
+	if(!parseStruct(file, sizeof(uint16_t) + sizeof(uint8_t) * 2 )){
+		return false;
+	}
 	// Struct content
 	uint8_t filterAndAddress[2];
 	uint16_t hasMips;
@@ -168,28 +178,37 @@ void parseTexture(FILE* file, std::string& name){
 	fread(&hasMips, sizeof(uint16_t), 1, file);
 	// Then parse a string.
 	size_t strSize = parseHeader(file, type);
-	checkType(type, Type::String);
+	if(!checkType(type, Type::String)){
+		return false;
+	}
 	std::string tmp; tmp.resize(strSize);
 	fread(&tmp[0], sizeof(char), strSize, file);
 	name = std::string(tmp.c_str());
 
 	// And another for alpha
 	size_t strAlphaSize = parseHeader(file, type);
-	checkType(type, Type::String);
+	if(!checkType(type, Type::String)){
+		return false;
+	}
 	std::string tmp2; tmp2.resize(strAlphaSize);
 	fread(&tmp2[0], sizeof(char), strAlphaSize, file);
 	std::string nameAlpha = std::string(tmp2.c_str());
 
-	//Log::info("[dffparser] Texture name: %s", name.c_str());
-	
+#ifdef LOG_DFF_CONTENT
+	Log::info("[dffparser] Texture name: %s", name.c_str());
+#endif
+	return true;
 }
 
-void parseExtension(FILE* file, std::string* name = nullptr){
+bool parseExtension(FILE* file, std::string* name = nullptr){
 	Type type;
-	size_t extSize = parseHeader(file, type);
-	size_t currPos = ftell(file);
+	const size_t extSize = parseHeader(file, type);
+	const size_t currPos = ftell(file);
 
-	checkType(type, Type::Extension);
+	//if(!checkType(type, Type::Extension)){
+	//	return false;
+	//}
+
 	// Parse header of the wrapped item.
 	if(extSize != 0u){
 		parseHeader(file, type);
@@ -197,36 +216,48 @@ void parseExtension(FILE* file, std::string* name = nullptr){
 		if((type == Type::NormalMap) && (name != nullptr)){
 			uint32_t dummy;
 			fread(&dummy, sizeof(uint32_t), 1, file);
-			parseTexture(file, *name);
+			if(!parseTexture(file, *name)){
+				return false;
+			}
 		}
 
 		fseek(file, currPos + extSize, SEEK_SET);
 	}
+	return true;
 }
 
-void absorbExtensionsUpTo(FILE* file, size_t endPos){
+bool absorbExtensionsUpTo(FILE* file, size_t endPos){
 	// Eat other extensions (right to render...).
 	while(ftell(file) < (long)endPos){
-		parseExtension(file);
+		if(!parseExtension(file)){
+			return false;
+		}
 	}
-	fseek(file, endPos, SEEK_SET); 
+	fseek(file, endPos, SEEK_SET);
+	return true;
 }
 
-void parseClump(FILE* file, Model& model){
+bool parseClump(FILE* file, Model& model){
 
 	Type type;
 	const size_t clumpSize = parseHeader(file, type);
 	const size_t clumpEnd = clumpSize + ftell(file);
 
-	checkType(type, Type::Clump);
+	if(!checkType(type, Type::Clump)){
+		return false;
+	}
 	// Struct
-	parseStruct(file, 3 * sizeof(int32_t));
+	if(!parseStruct(file, 3 * sizeof(int32_t))){
+		return false;
+	}
 	int32_t atomicCount, lightCount, cameraCount;
 	fread(&atomicCount, sizeof(int32_t), 1, file);
 	fread(&lightCount, sizeof(int32_t), 1, file);
 	fread(&cameraCount, sizeof(int32_t), 1, file);
 
+#ifdef LOG_DFF_CONTENT
 	Log::info("[dffparser] Found %d atomics, %d lights and %d cameras", atomicCount, lightCount, cameraCount);
+#endif
 
 	// Frame list
 	{
@@ -234,13 +265,20 @@ void parseClump(FILE* file, Model& model){
 		const size_t currPos = ftell(file);
 		const size_t endPos = currPos + frameListSize;
 		
-		checkType(type, Type::FrameList);
-
-		parseStruct(file, 0); // Target size not known in advance
+		if(!checkType(type, Type::FrameList)){
+			return false;
+		}
+		// Target size not known in advance
+		if(!parseStruct(file, 0)){
+			return false;
+		}
 		int32_t frameCount = 0;
 		fread(&frameCount, sizeof(int32_t), 1, file);
 
+#ifdef LOG_DFF_CONTENT
 		Log::info("[dffparser] Found %d frames", frameCount);
+#endif
+
 		model.frames.resize(frameCount);
 
 		glm::mat3 rotation;
@@ -257,41 +295,51 @@ void parseClump(FILE* file, Model& model){
 			fread(&flags, sizeof(uint32_t), 1, file);
 
 			model.frames[i].parent = index;
-			model.frames[i].mat = glm::translate(glm::mat4(rotation), position);
-			
-			/*Log::info("[dffparser] \tRotation: %f %f %f %f %f %f %f %f %f, position %f %f %f, index %d, flags %u",
+			model.frames[i].mat = glm::translate(glm::mat4(1.0f), position) * glm::mat4(rotation);
+
+#ifdef LOG_DFF_CONTENT
+			Log::info("[dffparser] \tRotation: %f %f %f %f %f %f %f %f %f, position %f %f %f, index %d, flags %u",
 				 rotation[0].x, rotation[0].y, rotation[0].z,
 				 rotation[1].x, rotation[1].y, rotation[1].z,
 				 rotation[2].x, rotation[2].y, rotation[2].z,
 				 position.x, position.y, position.z,
 				 index, flags);
-			 */
+#endif
 
 		}
 
 		// Bones probably
-  		absorbExtensionsUpTo(file, endPos);
+  		if(!absorbExtensionsUpTo(file, endPos)){
+			return false;
+		}
 	}
 
 	// Geometry list
 	{
 
 		const size_t geomListSize = parseHeader(file, type);
-		checkType(type, Type::GeometryList);
+		if(!checkType(type, Type::GeometryList)){
+			return false;
+		}
 		const size_t geomListEnd = ftell(file) + geomListSize;
-
+		(void)geomListEnd;
 		
-		parseStruct(file, sizeof(int32_t));
+		if(!parseStruct(file, sizeof(int32_t))){
+			return false;
+		}
 		int32_t geometryCount;
 		fread(&geometryCount, sizeof(int32_t), 1, file);
 
+#ifdef LOG_DFF_CONTENT
 		Log::info("[dffparser] Found %d geometries.", geometryCount);
-
+#endif
 		model.geometries.resize(geometryCount);
 
 		for(int32_t k = 0; k < geometryCount; ++k){
 			const size_t geomSize = parseHeader(file, type);
-			checkType(type, Type::GeometryElem);
+			if(!checkType(type, Type::GeometryElem)){
+				return false;
+			}
 
 			const size_t geomEnd = ftell(file) + geomSize;
 
@@ -299,8 +347,10 @@ void parseClump(FILE* file, Model& model){
 
 			// Geometric data
 			{
-				
-				parseStruct(file, 0u); // Not known in advance
+				// Not known in advance
+				if(!parseStruct(file, 0u)){
+					return false;
+				}
 				int32_t values[4];
 				fread(values, sizeof(int32_t), 4, file);
 				const int32_t numTexSets = (values[0] >> 16) & 255;
@@ -313,10 +363,11 @@ void parseClump(FILE* file, Model& model){
 				// float  "ambient"
 				// float  "specular"
 				// float  "diffuse"
-				
+
+#ifdef LOG_DFF_CONTENT
 				Log::info("[dffparser] Geometry with %d vertices, %d triangles, %d texsets and %d morphsets (native: %s, colors: %s).",
 					numVertices, numTriangles, numTexSets, numMorphs, nativeGeom ? "yes" : "no", prelitGeom ? "yes" : "no");
-
+#endif
 				
 				if(!nativeGeom){
 					// Colors
@@ -363,9 +414,13 @@ void parseClump(FILE* file, Model& model){
 			// Material data
 			{
 				parseHeader(file, type);
-				checkType(type, Type::MaterialList);
-
-				parseStruct(file, 0u); // Not knwon in advance
+				if(!checkType(type, Type::MaterialList)){
+					return false;
+				}
+				// Not known in advance
+				if(!parseStruct(file, 0u)){
+					return false;
+				}
 				uint32_t materialCount;
 				fread(&materialCount, sizeof(uint32_t), 1, file);
 				uint32_t effectiveCount = 0;
@@ -385,15 +440,21 @@ void parseClump(FILE* file, Model& model){
 
 				}
 
+#ifdef LOG_DFF_CONTENT
 				Log::info("[dffparser] Found %u/%u materials", effectiveCount, materialCount);
+#endif
 				geometry.materials.resize(effectiveCount);
 
 				for(uint32_t j = 0; j < effectiveCount; ++j){
 					const size_t materialSize = parseHeader(file, type);
-					checkType(type, Type::MaterialElem);
+					if(!checkType(type, Type::MaterialElem)){
+						return false;
+					}
 					const size_t materialEnd = ftell(file) + materialSize;
 
-					parseStruct(file, 3 * sizeof(int32_t) + 3 * sizeof(float) + sizeof(Color));
+					if(!parseStruct(file, 3 * sizeof(int32_t) + 3 * sizeof(float) + sizeof(Color))){
+						return false;
+						}
 
 					Color color; 
 					int32_t flags, unused, textured;
@@ -404,27 +465,37 @@ void parseClump(FILE* file, Model& model){
 					fread(&textured, sizeof(int32_t), 1 , file);
 					fread(&ambSpecDiff[0], sizeof(float), 3, file);
 
+#ifdef LOG_DFF_CONTENT
 					Log::info("[dffparser] Material with flags %d, texture: %s, color: (%u,%u,%u,%u), ambient: %f, diffuse: %f, specular: %f",
 						flags, textured != 0 ? "yes" : "no", color.r, color.g, color.b, color.a, ambSpecDiff[0], ambSpecDiff[2], ambSpecDiff[1]);
+#endif
 
 					Material& material = geometry.materials[j];
 
 					material.ambSpecDiff = ambSpecDiff;
 
 					if(textured != 0u){
-						parseTexture(file, material.diffuseName);
+						if(!parseTexture(file, material.diffuseName)){
+							return false;
+						}
 						// Attempt to parse normal map if available.
 						if(ftell(file) < (long)materialEnd){
-							parseExtension(file, &material.normalName);
+							if(!parseExtension(file, &material.normalName)){
+								return false;
+							}
 						}
 					}
 
-					absorbExtensionsUpTo(file, materialEnd);
+					if(!absorbExtensionsUpTo(file, materialEnd)){
+						return false;
+					}
 				}
 				
 			}
 
-			absorbExtensionsUpTo(file, geomEnd);
+			if(!absorbExtensionsUpTo(file, geomEnd)){
+				return false;
+			}
 		}
 		//absorbExtensionsUpTo(file, geomEnd);
 	}
@@ -435,10 +506,14 @@ void parseClump(FILE* file, Model& model){
 
 		for(int32_t i = 0; i < atomicCount; ++i){
 			size_t atomSize = parseHeader(file, type);
-			checkType(type, Type::Atomic);
+			if(!checkType(type, Type::Atomic)){
+				return false;
+			}
 			const size_t endPos = ftell(file) + atomSize;
 			
-			parseStruct(file, 4 * sizeof(uint32_t));
+			if(!parseStruct(file, 4 * sizeof(uint32_t))){
+				return false;
+			}
 			
 			uint32_t values[4];
 			fread(values, sizeof(uint32_t), 4, file);
@@ -446,16 +521,22 @@ void parseClump(FILE* file, Model& model){
 			uint32_t geometryIndex = values[1];
 			uint32_t flags = values[2];
 
+#ifdef LOG_DFF_CONTENT
 			Log::info("[dffparser] Atomic %d: frame %u, geometry %u, flags %u", i, frameIndex, geometryIndex, flags);
+#endif
 			model.pairings[i] = {geometryIndex, frameIndex};
 
-  			absorbExtensionsUpTo(file, endPos);
+  			if(!absorbExtensionsUpTo(file, endPos)){
+				return false;
+			}
 
 		}
 	}
 
-  	absorbExtensionsUpTo(file, clumpEnd);
-
+  	if(!absorbExtensionsUpTo(file, clumpEnd)){
+		return false;
+	}
+	return true;
 }
 
 bool parse(const fs::path& path, Model& model){
@@ -473,13 +554,18 @@ bool parse(const fs::path& path, Model& model){
 	rewind(file);
 
 	// Parse
-	Dff::parseClump(file, model);
+	if(!parseClump(file, model)){
+		fclose(file);
+		return false;
+	}
 
 	// Eat other remaining extensions.
-	Dff::absorbExtensionsUpTo(file, fileSize);
+	if(!absorbExtensionsUpTo(file, fileSize)){
+		fclose(file);
+		return false;
+	}
 
 	fclose(file);
-
 	return true;
 }
 
