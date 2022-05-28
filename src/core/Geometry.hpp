@@ -82,4 +82,14 @@ struct Obj {
 	std::string materials;
 };
 
-void writeObjToStreams(const Obj& obj, std::ofstream& objFile, std::ofstream& mtlFile);
+struct ObjOffsets {
+	uint32_t v = 0u;
+	uint32_t t = 0u;
+	uint32_t n = 0u;
+};
+
+void writeMtlToStream(const Obj& obj, std::ofstream& mtlFile);
+
+void writeObjToStream(const Obj& obj, std::ofstream& objFile, ObjOffsets & offsets, const glm::mat4& frame);
+
+void writeObjToStream(const Obj& obj, std::ofstream& objFile);
