@@ -3,6 +3,7 @@
 #include <vector>
 #include <string>
 #include <fstream>
+#include <unordered_set>
 
 struct Color {
 	uint8_t r;
@@ -10,56 +11,6 @@ struct Color {
 	uint8_t b;
 	uint8_t a;
 };
-
-namespace Dff {
-
-struct Triangle {
-	uint16_t v1, v0, id, v2;
-};
-
-struct MorphSet {
-	std::vector<glm::vec3> positions;
-	std::vector<glm::vec3> normals;
-};
-
-using TexSet = std::vector<glm::vec2>;
-
-struct Material {
-	std::string diffuseName;
-	std::string normalName;
-	glm::vec3 ambSpecDiff;
-};
-
-struct Geometry {
-
-	std::vector<MorphSet> sets;
-	std::vector<TexSet> uvs;
-
-	std::vector<Color> colors;
-	std::vector<Triangle> faces;
-
-	std::vector<Material> materials;
-	std::vector<int32_t> mappings;
-
-};
-
-struct Frame {
-	glm::mat4 mat{1.f};
-	int32_t parent = -1;
-};
-
-struct Model {
-	struct Pair {
-		unsigned int geometry;
-		unsigned int frame;
-	};
-
-	std::vector<Geometry> geometries;
-	std::vector<Frame> frames;
-	std::vector<Pair> pairings;
-};
-
-}
 
 struct Obj {
 	std::vector<glm::vec3> positions;
@@ -87,6 +38,9 @@ struct ObjOffsets {
 	uint32_t t = 0u;
 	uint32_t n = 0u;
 };
+
+
+using TexturesList = std::unordered_set<std::string>;
 
 void writeMtlToStream(const Obj& obj, std::ofstream& mtlFile);
 

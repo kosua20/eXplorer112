@@ -14,6 +14,52 @@
 
 namespace Dff {
 
+struct Triangle {
+	uint16_t v1, v0, id, v2;
+};
+
+struct MorphSet {
+	std::vector<glm::vec3> positions;
+	std::vector<glm::vec3> normals;
+};
+
+using TexSet = std::vector<glm::vec2>;
+
+struct Material {
+	std::string diffuseName;
+	std::string normalName;
+	glm::vec3 ambSpecDiff;
+};
+
+struct Geometry {
+
+	std::vector<MorphSet> sets;
+	std::vector<TexSet> uvs;
+
+	std::vector<Color> colors;
+	std::vector<Triangle> faces;
+
+	std::vector<Material> materials;
+	std::vector<int32_t> mappings;
+
+};
+
+struct Frame {
+	glm::mat4 mat{1.f};
+	int32_t parent = -1;
+};
+
+struct Model {
+	struct Pair {
+		unsigned int geometry;
+		unsigned int frame;
+	};
+
+	std::vector<Geometry> geometries;
+	std::vector<Frame> frames;
+	std::vector<Pair> pairings;
+};
+
 enum Type {
 	Struct = 1,
 	String = 2,
@@ -120,6 +166,7 @@ const char* typeToStr(const Dff::Type& type){
 	}
 	return nullptr;
 }
+
 
 size_t parseHeader(FILE* file, Type& type){
 	uint32_t header[3];
@@ -570,7 +617,7 @@ bool parse(const fs::path& path, Model& model){
 	return true;
 }
 
-void convertToObj(Model& model, Obj& outObject, const std::string& baseName){
+void convertToObj(Model& model, Obj& outObject, const std::string& baseName, TexturesList& usedTextures){
 
 	// Nothing to export.
 	if(model.pairings.empty()){
@@ -677,7 +724,8 @@ void convertToObj(Model& model, Obj& outObject, const std::string& baseName){
 				outputMtl << "Ks " << spec << " " << spec << " " << spec << "\n";
 				outputMtl << "Ns " << 100 << "\n";
 				if(!material.diffuseName.empty()){
-					outputMtl << "map_Kd " << "textures/" << material.diffuseName << "\n";
+					outputMtl << "map_Kd " << "textures/" << material.diffuseName << ".png\n";
+					usedTextures.insert(material.diffuseName);
 				}
 
 
@@ -720,5 +768,18 @@ void convertToObj(Model& model, Obj& outObject, const std::string& baseName){
 	outObject.materials = outputMtl.str();
 }
 
+bool load(const fs::path& path, Obj& outObject, TexturesList& usedTextures){
+
+	Model model;
+	if(!parse(path, model)){
+		Log::error("Failed to parse.");
+		return false;
+	}
+
+	const std::string itemName = path.filename().replace_extension().string();
+	convertToObj(model, outObject, itemName, usedTextures);
+
+	return true;
+}
 
 }
