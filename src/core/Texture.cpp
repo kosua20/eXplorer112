@@ -45,7 +45,7 @@ bool convertDDStoPNG(const fs::path& ddsPath, const fs::path& pngPath){
 		fclose(f);
 	}
 	// Query DDS header.
-	ddsktx_texture_info tc = {0};
+	ddsktx_texture_info tc = {};
 	if(!ddsktx_parse(&tc, ddsData, ddsSize, NULL)) {
 		free(ddsData);
 		return false;
@@ -62,6 +62,9 @@ bool convertDDStoPNG(const fs::path& ddsPath, const fs::path& pngPath){
 		case DDSKTX_FORMAT_BC3:
 			dxtFormat = squishDxt5;
 			break;
+		case DDSKTX_FORMAT_BGRA8:
+			dxtFormat = 0;
+			break;
 		default:
 			Log::error("Unsupported DDS format.");
 			free(ddsData);
@@ -73,15 +76,25 @@ bool convertDDStoPNG(const fs::path& ddsPath, const fs::path& pngPath){
 	ddsktx_get_sub(&tc, &subData, ddsData, ddsSize, 0, 0, 0);
 
 	const size_t linearSize = subData.width * subData.height * tc.bpp;
-	// Allocate memory.
-	unsigned char* linearData = (unsigned char*)malloc(linearSize);
 
-	SquishDecompressImage(linearData, subData.width, subData.height, subData.buff, dxtFormat);
+	int res = 0;
+	if(dxtFormat > 0){
+		// Allocate memory.
+		unsigned char* linearData = (unsigned char*)malloc(linearSize);
+		SquishDecompressImage(linearData, subData.width, subData.height, subData.buff, dxtFormat);
+		// Write result to png.
+		res = stbi_write_png(pngPath.c_str(), subData.width, subData.height, 4, linearData, subData.width * 4);
+		free(linearData);
 
-	// Write result to png.
-	int res = stbi_write_png(pngPath.c_str(), subData.width, subData.height, 4, linearData, subData.width * 4);
-	
-	free(linearData);
+	} else {
+		// Directly write raw BGRA8 data to PNG.
+		for(uint32_t pix = 0; pix < (uint32_t)subData.size_bytes; pix += 4){
+			// BGRA to RGBA
+			std::swap(((unsigned char*)subData.buff)[pix], ((unsigned char*)subData.buff)[pix+2]);
+		}
+		res = stbi_write_png(pngPath.c_str(), subData.width, subData.height, 4, subData.buff, subData.row_pitch_bytes);
+	}
+
 	free(ddsData);
 	return res != 0;
 }
