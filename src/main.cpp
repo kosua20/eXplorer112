@@ -11,6 +11,118 @@
 #include <fstream>
 #include <map>
 
+bool isEntityVisible(const pugi::xml_node& entity){
+	const char* objVisibility = entity.find_child_by_attribute("name", "visible").child_value();
+	const bool visible = !objVisibility || strcmp(objVisibility, "true") == 0 || strcmp(objVisibility, "1") == 0;
+	return visible;
+}
+
+glm::mat4 getEntityFrame(const pugi::xml_node& entity){
+	const char* objPosStr = entity.find_child_by_attribute("name", "position").child_value();
+	const char* objRotStr = entity.find_child_by_attribute("name", "rotation").child_value();
+	const glm::vec3 position = Area::parseVec3(objPosStr);
+	const glm::vec3 rotAngles = Area::parseVec3(objRotStr) / 180.0f * (float)M_PI;
+
+	glm::mat4 frame = glm::translate(glm::mat4(1.0f), position)
+	* glm::rotate(glm::mat4(1.0f), rotAngles[2], glm::vec3(0.0f, 0.0f, 1.0f))
+	* glm::rotate(glm::mat4(1.0f), rotAngles[1], glm::vec3(0.0f, 1.0f, 0.0f))
+	* glm::rotate(glm::mat4(1.0f), rotAngles[0], glm::vec3(1.0f, 0.0f, 0.0f));
+
+	return frame;
+}
+
+void processEntity(const pugi::xml_node& entity, const glm::mat4& globalFrame, bool templated, const std::vector<fs::path>& modelsList, const fs::path& inputPath,
+				   std::map<fs::path, Obj>& objectsLibrary, TexturesList& usedTextures,
+				   ObjOffsets& offsets, std::ofstream& outputObj,  std::ofstream& outputMtl){
+
+	const auto typeNode = entity.find_child_by_attribute("name", "type");
+	if(!typeNode){
+		return;
+	}
+
+	const char* type = typeNode.first_child().value();
+	if((strcmp(type, "ACTOR") != 0) && (strcmp(type, "DOOR") != 0) && (strcmp(type, "CREATURE") != 0)
+	   && (strcmp(type, "LIGHT") != 0) && (strcmp(type, "CAMERA") != 0) ){
+		return;
+	}
+
+	if(!isEntityVisible(entity)){
+		return;
+	}
+
+	const char* objName = entity.find_child_by_attribute("name", "name").child_value();
+	const char* objPathStr = entity.find_child_by_attribute("name", "sourceName").child_value();
+
+	if(strcmp(type, "CAMERA") == 0){
+		objPathStr = entity.find_child_by_attribute("name", "cameramodel").child_value();
+		if(!objPathStr || objPathStr[0] == '\0'){
+			objPathStr = entity.find_child_by_attribute("name", "cameraModel").child_value();
+		}
+		if(!objPathStr || objPathStr[0] == '\0'){
+			objPathStr = "models\\objets\\cameras\\camera.dff";
+		}
+	}
+
+	// Only keep elements linked with a model.
+	if(!objPathStr || objPathStr[0] == '\0')
+		return;
+
+	// Application of the frame on templates is weird.
+	// It seems the template frame takes priority. Maybe it's the delta from the template frame to the first sub-element frame that should be used on other elements?
+	glm::mat4 frame = templated ? globalFrame : getEntityFrame(entity);
+
+	// Special case for lights
+	if(strcmp(type, "LIGHT") == 0){
+
+		const char* mdlPosStr = entity.find_child_by_attribute("name", "modelPosition").child_value();
+		const char* mdlRotStr = entity.find_child_by_attribute("name", "modelRotation").child_value();
+
+		const glm::vec3 mdlPosition = Area::parseVec3(mdlPosStr);
+		const glm::vec3 mdlRotAngles = Area::parseVec3(mdlRotStr) / 180.0f * (float)M_PI;
+		const glm::mat4 mdlFrame =  glm::translate(glm::mat4(1.0f), mdlPosition)
+			* glm::eulerAngleYXZ(mdlRotAngles[1], mdlRotAngles[0], mdlRotAngles[2]);
+
+		frame = frame * mdlFrame;
+	} else if(strcmp(type, "CAMERA") == 0){
+		const char* cam2DRotStr = entity.find_child_by_attribute("name", "camerarotation").child_value();
+		const glm::vec2 cam2DRot = Area::parseVec2(cam2DRotStr);
+		// This is a wild guess.
+		const glm::mat4 mdlFrame = glm::rotate(glm::mat4(1.0f), -cam2DRot[1], glm::vec3(0.0f, 1.0f, 0.0f));
+		frame = frame * mdlFrame;
+	}
+
+	// Cleanup model path.
+	std::string objPathStrUp(objPathStr);
+	TextUtilities::replace(objPathStrUp, "\\", "/");
+	objPathStrUp = TextUtilities::lowercase(objPathStrUp);
+
+	fs::path objPath = inputPath / objPathStrUp;
+	objPath.replace_extension("dff");
+	const std::string modelName = objPath.filename().replace_extension();
+
+	Log::info("Actor: %s", objName);
+	//Log::info("Actor: %s, rot: (%f %f %f), model: %s, visible: %s", objName, rotAngles[0], rotAngles[1], rotAngles[2], modelName.c_str(), visible ? "yes" : "no");
+
+	if(std::find(modelsList.begin(), modelsList.end(), objPath) == modelsList.end()){
+		Log::error("Could not find model %s", modelName.c_str());
+		return;
+	}
+
+	// If object not already loaded, load it.
+	if(objectsLibrary.find(objPath) == objectsLibrary.end()){
+		objectsLibrary[objPath] = Obj();
+
+		Log::info("Retrieving model %s", modelName.c_str());
+
+		if(!Dff::load(objPath, objectsLibrary[objPath], usedTextures)){
+			return;
+		}
+		writeMtlToStream(objectsLibrary[objPath], outputMtl);
+
+	}
+	writeObjToStream(objectsLibrary[objPath], outputObj, offsets, frame);
+}
+
 int main(int argc, const char** argv)
 {
 	if(argc < 3){
@@ -42,12 +154,14 @@ int main(int argc, const char** argv)
 	System::listAllFilesOfType(texturesPath, ".dds", texturesList);
 	System::listAllFilesOfType(texturesPath, ".tga", texturesList);
 
-	std::map<fs::path, Obj> objectsLibrary;
 
-	for(const auto& worldPath : worldsList)
+	//for(const auto& worldPath : worldsList)
 	{
-		//const fs::path worldPath = worldsPath / "1poop_int.world";
+		const fs::path worldPath = worldsPath / "1poop_int.world";
+		//const fs::path worldPath = worldsPath / "tutoeco.world";
+		//const fs::path worldPath = worldsPath / "zt.world";
 		Log::info("Processing world %s", worldPath.c_str());
+		std::map<fs::path, Obj> objectsLibrary;
 
 		// Save obj file
 		const std::string baseName = worldPath.filename().replace_extension();
@@ -65,74 +179,46 @@ int main(int argc, const char** argv)
 		ObjOffsets offsets;
 
 		pugi::xml_document world;
-		world.load_file(worldPath.c_str());
+		if(!world.load_file(worldPath.c_str())){
+			Log::error("Unable to load template file at path %s", worldPath.c_str());
+			//continue;
+			return 1;
+		}
+
 		const auto& entities = world.child("World").child("scene").child("entities");
 
-		for(const auto& entity : entities.children()){
-			const auto typeNode = entity.find_child_by_attribute("name", "type");
-			if(!typeNode){
+		for(const auto& entity : entities.children("entity")){
+			processEntity(entity, glm::mat4(1.0f), false, modelsList, inputPath, objectsLibrary, usedTextures, offsets, outputObj, outputMtl );
+
+			// TODO: Interesting types to investigate: FX?
+		}
+
+		for(const auto& instance : entities.children("instance")){
+			if(!isEntityVisible(instance)){
 				continue;
 			}
 
-			const char* type = typeNode.first_child().value();
-			if((strcmp(type, "ACTOR") == 0) || (strcmp(type, "DOOR") == 0)){
+			const glm::mat4 frame = getEntityFrame(instance);
 
-				const char* objName = entity.find_child_by_attribute("name", "name").first_child().value();
-				const char* objPosStr = entity.find_child_by_attribute("name", "position").first_child().value();
-				const char* objRotStr = entity.find_child_by_attribute("name", "rotation").first_child().value();
-				const char* objPathStr = entity.find_child_by_attribute("name", "sourceName").first_child().value();
-				const char* objVisibility = entity.find_child_by_attribute("name", "visible").first_child().value();
+			std::string xmlFile = instance.find_child_by_attribute("name", "template").child_value();
+			TextUtilities::replace(xmlFile, "\\", "/");
+			const fs::path xmlPath = inputPath / xmlFile;
 
-				glm::vec3 position = Area::parseVec3(objPosStr);
-				glm::vec3 rotAngles = Area::parseVec3(objRotStr) / 180.0f * (float)M_PI;
-				const bool visible = !objVisibility || strcmp(objVisibility, "true") == 0;
-
-				if(!visible)
-					continue;
-
-				const glm::mat4 frame =  glm::translate(glm::mat4(1.0f), position)
-					* glm::eulerAngleYXZ(rotAngles[1], rotAngles[0], rotAngles[2]);
-
-				// Cleanup model path.
-				std::string objPathStrUp(objPathStr);
-				TextUtilities::replace(objPathStrUp, "\\", "/");
-				objPathStrUp = TextUtilities::lowercase(objPathStrUp);
-
-				const fs::path objPath = inputPath / objPathStrUp;
-				const std::string modelName = objPath.filename().replace_extension();
-
-				Log::info("Actor: %s", objName);
-				//Log::info("Actor: %s, rot: (%f %f %f), model: %s, visible: %s", objName, rotAngles[0], rotAngles[1], rotAngles[2], modelName.c_str(), visible ? "yes" : "no");
-
-				if(std::find(modelsList.begin(), modelsList.end(), objPath) == modelsList.end()){
-					Log::error("Could not find model %s", modelName.c_str());
-					continue;
-				}
-
-				// If object not already loaded, load it.
-				if(objectsLibrary.find(objPath) == objectsLibrary.end()){
-					objectsLibrary[objPath] = Obj();
-
-					Log::info("Retrieving model %s", modelName.c_str());
-
-					if(!Dff::load(objPath, objectsLibrary[objPath], usedTextures)){
-						continue;
-					}
-					writeMtlToStream(objectsLibrary[objPath], outputMtl);
-
-				}
-				writeObjToStream(objectsLibrary[objPath], outputObj, offsets, frame);
-
+			pugi::xml_document templateDef;
+			if(!templateDef.load_file(xmlPath.c_str())){
+				Log::error("Unable to load template file at path %s", xmlPath.c_str());
 			}
-			// Ignore other types for now.
+
+			const auto& entities = templateDef.child("template").child("entities");
+			for(const auto& entity : entities.children("entity")){
+				processEntity(entity, frame, true, modelsList, inputPath, objectsLibrary, usedTextures, offsets, outputObj, outputMtl );
+			}
 		}
 
 		const auto& areas = world.child("World").child("scene").child("areas");
 
-		int i = 0;
 		for(const auto& area : areas.children()){
 
-			i++;
 			const char* areaPathStr = area.attribute("sourceName").value();
 			// Cleanup model path.
 			std::string areaPathStrUp(areaPathStr);
@@ -159,7 +245,9 @@ int main(int argc, const char** argv)
 
 		// Try to find each texture.
 		for(const std::string& textureName : usedTextures){
-
+			if(textureName.empty()){
+				continue;
+			}
 			bool found = false;
 			fs::path selectedTexturePath;
 
@@ -176,20 +264,23 @@ int main(int argc, const char** argv)
 			}
 
 			const fs::path destinationPath = outTexturePath / (textureName + ".png");
-			if(found){
-				// Copy the file.
-				if(selectedTexturePath.extension() == ".tga"){
-					convertTGAtoPNG(selectedTexturePath, destinationPath);
-				} else if(selectedTexturePath.extension() == ".dds"){
-					convertDDStoPNG(selectedTexturePath, destinationPath);
-				} else {
-					Log::error("Unsupported texture format for file %s", selectedTexturePath.filename().c_str());
-				}
+			if(!fs::exists(destinationPath)){
+				if(found){
+					// Copy the file.
+					if(selectedTexturePath.extension() == ".tga"){
+						convertTGAtoPNG(selectedTexturePath, destinationPath);
+					} else if(selectedTexturePath.extension() == ".dds"){
+						convertDDStoPNG(selectedTexturePath, destinationPath);
+					} else {
+						Log::error("Unsupported texture format for file %s", selectedTexturePath.filename().c_str());
+					}
 
-			} else {
-				// Generate a dummy texture.
-				writeDefaultTexture(destinationPath);
+				} else {
+					// Generate a dummy texture.
+					writeDefaultTexture(destinationPath);
+				}
 			}
+
 
 		}
 
