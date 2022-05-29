@@ -28,6 +28,7 @@ struct Obj {
 
 		std::vector<Face> faces;
 		std::string material;
+		std::string name;
 	};
 	std::vector<Set> faceSets;
 	std::string materials;

@@ -9,6 +9,10 @@ namespace Area {
 
 
 glm::vec2 parseVec2(const char* val){
+	if(val == nullptr || val[0] == '\0'){
+		return glm::vec2(0.0f);
+	}
+
 	std::string valStr(val);
 	valStr = TextUtilities::trim(valStr, "()");
 	const std::vector<std::string> tokens = TextUtilities::split(valStr, " ", true);
@@ -20,6 +24,10 @@ glm::vec2 parseVec2(const char* val){
 }
 
 glm::vec3 parseVec3(const char* val){
+	if(val == nullptr || val[0] == '\0'){
+		return glm::vec3(0.0f);
+	}
+
 	std::string valStr(val);
 	valStr = TextUtilities::trim(valStr, "()");
 	const std::vector<std::string> tokens = TextUtilities::split(valStr, " ", true);
@@ -60,8 +68,13 @@ glm::mat4 parseFrame(const char* val){
 bool load(const fs::path& path, Obj& outObject, TexturesList& usedTextures ){
 
 	pugi::xml_document areaFile;
-	areaFile.load_file(path.c_str());
+	if(!areaFile.load_file(path.c_str())){
+		Log::error("Unable to load area file at path %s", path.c_str());
+		return false;
+	}
+	
 	const auto& areaScene = areaFile.child("RwRf3").child("scene");
+	const std::string areaName = path.filename().replace_extension().string();
 
 	// Parse shaders first
 	struct Shader {
@@ -78,10 +91,13 @@ bool load(const fs::path& path, Obj& outObject, TexturesList& usedTextures ){
 		}
 
 		const char* shaderName = shader.attribute("name").as_string();
-		Shader& shaderDesc = shaders[std::string(shaderName)];
+		std::string shaderBaseName(shaderName);
+		TextUtilities::replace(shaderBaseName, "-", "_");
+		const std::string shaderFullName = areaName + "_" + shaderBaseName;
+		Shader& shaderDesc = shaders[shaderFullName];
 
 		std::stringstream mtlContent;
-		mtlContent << "newmtl " << shaderName << "\n";
+		mtlContent << "newmtl " << shaderFullName << "\n";
 		mtlContent << "Ka " << 0.f << " " << 0.f << " " << 0.f << "\n";
 		mtlContent << "Kd " << 1.0f << " " << 1.0f << " " << 1.0f << "\n";
 		mtlContent << "Ks " << 1.0f << " " << 1.0f << " " << 1.0f << "\n";
@@ -103,11 +119,13 @@ bool load(const fs::path& path, Obj& outObject, TexturesList& usedTextures ){
 				}
 				if(textureName.find("#") != std::string::npos){
 					Log::warning("Skipping texture named %s for shader %s", textureName.c_str(), shaderName);
-					continue;
+					textureName = "default_texture";
 				}
+
+				textureName = TextUtilities::lowercase(textureName);
 				mtlContent << "map_Kd " << "textures/" << textureName << ".png\n";
-				// TODO: keep full path?
 				shaderDesc.textureName = textureName;
+
 			}
 		}
 
@@ -124,6 +142,7 @@ bool load(const fs::path& path, Obj& outObject, TexturesList& usedTextures ){
 
 	const auto& groups = areaScene.children("group");
 	for(const auto& group : groups){
+		const char* groupName = group.attribute("name").value();
 		const auto frameNode = group.find_child_by_attribute("name", "localxform");
 		glm::mat4 frame(1.0f);
 		if(frameNode){
@@ -131,8 +150,22 @@ bool load(const fs::path& path, Obj& outObject, TexturesList& usedTextures ){
 		}
 
 		frame = areaFrame * frame;
-
 		const glm::mat3 frameNormal = glm::transpose(glm::inverse(glm::mat3(frame)));
+
+		// Skip some objects
+		const auto userData = group.child("userdata").find_child_by_attribute("name", "3dsmax User Properties");
+		if(userData){
+			const char* userType = userData.child_value();
+			// Also encountered "transparent"
+			if(strcmp(userType, "\"decal\"") == 0){
+				continue;
+			} else if(strcmp(userType, "\"transparent\"") == 0){
+				continue;
+			} else if(strstr(userType, "\"portal") != nullptr){
+				// Skip physics/sound/visibility portals
+				continue;
+			}
+		}
 
 		// In practice there is always one polymesh per group.
 		{
@@ -184,14 +217,23 @@ bool load(const fs::path& path, Obj& outObject, TexturesList& usedTextures ){
 				}
 			}
 
-
+			uint32_t polymeshId = 0;
 			for(const auto& primList : polymesh.children("primlist")){
 				const size_t pCount = primList.attribute("count").as_int();
 				const char* pShader = primList.attribute("shader").as_string();
+				// If no shader, probably some physics collision data (or maybe a scene bouding shape with a color?)
+				if(pShader[0] == '\0'){
+					continue;
+				}
 
+				std::string shaderBaseName(pShader);
+				TextUtilities::replace(shaderBaseName, "-", "_");
+				const std::string shaderFullName = areaName + "_" + shaderBaseName;
 
 				Obj::Set& set = outObject.faceSets.emplace_back();
-				set.material = std::string(pShader);
+
+				set.material = shaderFullName;
+				set.name = areaName + "_" + groupName + std::to_string(polymeshId);
 				set.faces.reserve(pCount);
 
 				shaders[set.material].used = true;
@@ -222,6 +264,7 @@ bool load(const fs::path& path, Obj& outObject, TexturesList& usedTextures ){
 					}
 
 				}
+				++polymeshId;
 
 			}
 

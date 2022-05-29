@@ -724,14 +724,16 @@ void convertToObj(Model& model, Obj& outObject, const std::string& baseName, Tex
 				outputMtl << "Ks " << spec << " " << spec << " " << spec << "\n";
 				outputMtl << "Ns " << 100 << "\n";
 				if(!material.diffuseName.empty()){
-					outputMtl << "map_Kd " << "textures/" << material.diffuseName << ".png\n";
-					usedTextures.insert(material.diffuseName);
+					const std::string textureName = TextUtilities::lowercase(material.diffuseName);
+					outputMtl << "map_Kd " << "textures/" << textureName << ".png\n";
+					usedTextures.insert(textureName);
 				}
 
 
-				outObject.faceSets.emplace_back();
-				outObject.faceSets.back().faces.reserve(256);
-				outObject.faceSets.back().material = matName;
+				Obj::Set& faceSet = outObject.faceSets.emplace_back();
+				faceSet.faces.reserve(256);
+				faceSet.material = matName;
+				faceSet.name = matName;
 			}
 
 			Obj::Set& faceSet = outObject.faceSets.back();

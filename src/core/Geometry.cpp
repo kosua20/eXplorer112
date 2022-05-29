@@ -23,6 +23,7 @@ void writeObjToStream(const Obj& obj, std::ofstream& objFile, ObjOffsets & offse
 
 	objFile << "s 1\n";
 	for(const Obj::Set& set : obj.faceSets){
+		objFile << "o " << set.name << "\n";
 		objFile << "usemtl " << set.material << "\n";
 
 		const bool hasUV = !set.faces.empty() && (set.faces[0].t0 != 0xFFFF);
