@@ -98,7 +98,7 @@ void processEntity(const pugi::xml_node& entity, const glm::mat4& globalFrame, b
 
 	fs::path objPath = inputPath / objPathStrUp;
 	objPath.replace_extension("dff");
-	const std::string modelName = objPath.filename().replace_extension();
+	const std::string modelName = objPath.filename().replace_extension().string();
 
 	Log::info("Actor: %s", objName);
 	//Log::info("Actor: %s, rot: (%f %f %f), model: %s, visible: %s", objName, rotAngles[0], rotAngles[1], rotAngles[2], modelName.c_str(), visible ? "yes" : "no");
@@ -164,7 +164,7 @@ int main(int argc, const char** argv)
 		std::map<fs::path, Obj> objectsLibrary;
 
 		// Save obj file
-		const std::string baseName = worldPath.filename().replace_extension();
+		const std::string baseName = worldPath.filename().replace_extension().string();
 		const fs::path outPath = outputPath / baseName;
 		const fs::path outTexturePath = outPath / "textures";
 

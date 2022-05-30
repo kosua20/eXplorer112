@@ -9,6 +9,7 @@
 #include <string>
 #include <unordered_map>
 #include <sstream>
+#include <algorithm>
 
 //#define LOG_DFF_CONTENT
 
@@ -251,7 +252,7 @@ bool parseTexture(FILE* file, std::string& name){
 bool parseExtension(FILE* file, std::string* name = nullptr){
 	Type type;
 	const size_t extSize = parseHeader(file, type);
-	const size_t currPos = ftell(file);
+	const long currPos = ftell(file);
 
 	//if(!checkType(type, Type::Extension)){
 	//	return false;
@@ -269,7 +270,7 @@ bool parseExtension(FILE* file, std::string* name = nullptr){
 			}
 		}
 
-		fseek(file, currPos + extSize, SEEK_SET);
+		fseek(file, currPos + (long)extSize, SEEK_SET);
 	}
 	return true;
 }
@@ -281,7 +282,7 @@ bool absorbExtensionsUpTo(FILE* file, size_t endPos){
 			return false;
 		}
 	}
-	fseek(file, endPos, SEEK_SET);
+	fseek(file, (long)endPos, SEEK_SET);
 	return true;
 }
 
@@ -589,7 +590,7 @@ bool parseClump(FILE* file, Model& model){
 
 bool parse(const fs::path& path, Model& model){
 
-	FILE* file = fopen(path.c_str(), "rb");
+	FILE* file = fopen( path.string().c_str(), "rb");
 
 	if(file == nullptr){
 		Log::error("[dffparser] Unable to open file at path \"%s\"", path.c_str());
@@ -649,9 +650,9 @@ void convertToObj(Model& model, Obj& outObject, const std::string& baseName, Tex
 
 	// From all the pairs of frame/geometry, we need to build a valid set of objects, each with a texture.
 	int pairId = 0;
-	size_t vertexIndex = 0;
-	size_t uvIndex = 0;
-	size_t normalIndex = 0;
+	uint32_t vertexIndex = 0;
+	uint32_t uvIndex = 0;
+	uint32_t normalIndex = 0;
 
 	for(const Dff::Model::Pair& pair : model.pairings){
 
@@ -674,13 +675,13 @@ void convertToObj(Model& model, Obj& outObject, const std::string& baseName, Tex
 		const Dff::MorphSet& set = geom.sets[0];
 
 		// Output vertices, normals and uvs if present.
-		const size_t vertCount = set.positions.size();
-		const bool hasNormals = set.normals.size() == vertCount;
+		const uint32_t vertCount = (uint32_t)set.positions.size();
+		const bool hasNormals = (uint32_t)set.normals.size() == vertCount;
 
-		const bool hasUvs = !geom.uvs.empty() && (geom.uvs[0].size() == vertCount);
-		const bool hasColors = geom.colors.size() == vertCount;
+		const bool hasUvs = !geom.uvs.empty() && ( (uint32_t) geom.uvs[0].size() == vertCount);
+		const bool hasColors = (uint32_t) geom.colors.size() == vertCount;
 
-		outObject.positions.reserve(outObject.positions.size() + vertCount);
+		outObject.positions.reserve( (uint32_t) outObject.positions.size() + vertCount);
 		for(size_t vid = 0; vid < vertCount; ++vid){
 			const glm::vec3 tpos = glm::vec3(totalFrame * glm::vec4(set.positions[vid], 1.f));
 			outObject.positions.push_back(tpos);
@@ -739,9 +740,9 @@ void convertToObj(Model& model, Obj& outObject, const std::string& baseName, Tex
 			Obj::Set& faceSet = outObject.faceSets.back();
 			Obj::Set::Face& face = faceSet.faces.emplace_back();
 
-			const size_t v0 = geom.faces[tid].v0 + 1u;
-			const size_t v1 = geom.faces[tid].v1 + 1u;
-			const size_t v2 = geom.faces[tid].v2 + 1u;
+			const uint32_t v0 = geom.faces[tid].v0 + 1u;
+			const uint32_t v1 = geom.faces[tid].v1 + 1u;
+			const uint32_t v2 = geom.faces[tid].v2 + 1u;
 
 			// Remember: v/vt/vn
 			face.v0 = v0+vertexIndex;
