@@ -23,9 +23,9 @@ glm::vec2 parseVec2(const char* val){
 	return { std::stof(tokens[0]), std::stof(tokens[1])};
 }
 
-glm::vec3 parseVec3(const char* val){
+glm::vec3 parseVec3(const char* val, const glm::vec3& fallback){
 	if(val == nullptr || val[0] == '\0'){
-		return glm::vec3(0.0f);
+		return fallback;
 	}
 
 	std::string valStr(val);
@@ -33,7 +33,7 @@ glm::vec3 parseVec3(const char* val){
 	const std::vector<std::string> tokens = TextUtilities::split(valStr, " ", true);
 	if(tokens.size() != 3){
 		Log::error("Unable to parse vec3.");
-		return glm::vec3(0.0f);
+		return fallback;
 	}
 	return { std::stof(tokens[0]), std::stof(tokens[1]), std::stof(tokens[2])};
 }

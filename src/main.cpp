@@ -11,6 +11,7 @@
 #include <fstream>
 #include <map>
 
+
 bool isEntityVisible(const pugi::xml_node& entity){
 	const char* objVisibility = entity.find_child_by_attribute("name", "visible").child_value();
 	const bool visible = !objVisibility || strcmp(objVisibility, "true") == 0 || strcmp(objVisibility, "1") == 0;
@@ -20,13 +21,16 @@ bool isEntityVisible(const pugi::xml_node& entity){
 glm::mat4 getEntityFrame(const pugi::xml_node& entity){
 	const char* objPosStr = entity.find_child_by_attribute("name", "position").child_value();
 	const char* objRotStr = entity.find_child_by_attribute("name", "rotation").child_value();
+	const char* objScaStr = entity.find_child_by_attribute("name", "scale").child_value();
 	const glm::vec3 position = Area::parseVec3(objPosStr);
 	const glm::vec3 rotAngles = Area::parseVec3(objRotStr) / 180.0f * (float)M_PI;
+	const glm::vec3 scale = Area::parseVec3(objScaStr, glm::vec3(1.0f));
 
 	glm::mat4 frame = glm::translate(glm::mat4(1.0f), position)
 	* glm::rotate(glm::mat4(1.0f), rotAngles[2], glm::vec3(0.0f, 0.0f, 1.0f))
 	* glm::rotate(glm::mat4(1.0f), rotAngles[1], glm::vec3(0.0f, 1.0f, 0.0f))
-	* glm::rotate(glm::mat4(1.0f), rotAngles[0], glm::vec3(1.0f, 0.0f, 0.0f));
+	* glm::rotate(glm::mat4(1.0f), rotAngles[0], glm::vec3(1.0f, 0.0f, 0.0f))
+	* glm::scale(glm::mat4(1.0f), scale);
 
 	return frame;
 }
@@ -69,7 +73,14 @@ void processEntity(const pugi::xml_node& entity, const glm::mat4& globalFrame, b
 
 	// Application of the frame on templates is weird.
 	// It seems the template frame takes priority. Maybe it's the delta from the template frame to the first sub-element frame that should be used on other elements?
-	glm::mat4 frame = templated ? globalFrame : getEntityFrame(entity);
+	glm::mat4 localFrame = getEntityFrame(entity);
+
+	const bool useLocalFrame = !templated || (entity.find_child_by_attribute("param", "name", "link"));
+
+	glm::mat4 frame = globalFrame;
+	if(useLocalFrame){
+		frame = frame * localFrame;
+	}
 
 	// Special case for lights
 	if(strcmp(type, "LIGHT") == 0){
@@ -90,6 +101,7 @@ void processEntity(const pugi::xml_node& entity, const glm::mat4& globalFrame, b
 		const glm::mat4 mdlFrame = glm::rotate(glm::mat4(1.0f), -cam2DRot[1], glm::vec3(0.0f, 1.0f, 0.0f));
 		frame = frame * mdlFrame;
 	}
+
 
 	// Cleanup model path.
 	std::string objPathStrUp(objPathStr);
@@ -121,6 +133,7 @@ void processEntity(const pugi::xml_node& entity, const glm::mat4& globalFrame, b
 
 	}
 	writeObjToStream(objectsLibrary[objPath], outputObj, offsets, frame);
+
 }
 
 int main(int argc, const char** argv)
@@ -154,12 +167,15 @@ int main(int argc, const char** argv)
 	System::listAllFilesOfType(texturesPath, ".dds", texturesList);
 	System::listAllFilesOfType(texturesPath, ".tga", texturesList);
 
+//#define SCENE_FILE "la_croisee.world"
 
-	//for(const auto& worldPath : worldsList)
+#ifndef SCENE_FILE
+	for(const auto& worldPath : worldsList)
+#endif
 	{
-		const fs::path worldPath = worldsPath / "1poop_int.world";
-		//const fs::path worldPath = worldsPath / "tutoeco.world";
-		//const fs::path worldPath = worldsPath / "zt.world";
+#ifdef SCENE_FILE
+		const fs::path worldPath = worldsPath / SCENE_FILE;
+#endif
 		Log::info("Processing world %s", worldPath.c_str());
 		std::map<fs::path, Obj> objectsLibrary;
 
@@ -171,19 +187,24 @@ int main(int argc, const char** argv)
 		fs::create_directory(outPath);
 		fs::create_directory(outTexturePath);
 
-		std::ofstream outputMtl(outPath / (baseName + ".mtl"));
-		std::ofstream outputObj(outPath / (baseName + ".obj"));
-		outputObj << "mtllib " << baseName << ".mtl" << "\n";
-
 		TexturesList usedTextures;
 		ObjOffsets offsets;
 
 		pugi::xml_document world;
-		if(!world.load_file(worldPath.c_str())){
-			Log::error("Unable to load template file at path %s", worldPath.c_str());
-			//continue;
+		pugi::xml_parse_result res = world.load_file(worldPath.c_str());
+		if(!res){
+			Log::error("Unable to load world file at path %s:%llu %s", worldPath.c_str(), res.offset, res.description());
+
+#ifdef SCENE_FILE
 			return 1;
+#else
+			continue;
+#endif
 		}
+
+		std::ofstream outputMtl(outPath / (baseName + ".mtl"));
+		std::ofstream outputObj(outPath / (baseName + ".obj"));
+		outputObj << "mtllib " << baseName << ".mtl" << "\n";
 
 		const auto& entities = world.child("World").child("scene").child("entities");
 
@@ -198,7 +219,7 @@ int main(int argc, const char** argv)
 				continue;
 			}
 
-			const glm::mat4 frame = getEntityFrame(instance);
+			glm::mat4 frame = getEntityFrame(instance);
 
 			std::string xmlFile = instance.find_child_by_attribute("name", "template").child_value();
 			TextUtilities::replace(xmlFile, "\\", "/");
@@ -210,8 +231,10 @@ int main(int argc, const char** argv)
 			}
 
 			const auto& entities = templateDef.child("template").child("entities");
+
 			for(const auto& entity : entities.children("entity")){
 				processEntity(entity, frame, true, modelsList, inputPath, objectsLibrary, usedTextures, offsets, outputObj, outputMtl );
+
 			}
 		}
 
