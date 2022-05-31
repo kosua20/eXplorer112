@@ -60,9 +60,9 @@ void writeObjToStream(const Obj& obj, std::ofstream& objFile, ObjOffsets & offse
 
 		}
 	}
-	offsets.v += obj.positions.size();
-	offsets.t += obj.uvs.size();
-	offsets.n += obj.normals.size();
+	offsets.v += (uint32_t)obj.positions.size();
+	offsets.t += (uint32_t)obj.uvs.size();
+	offsets.n += (uint32_t)obj.normals.size();
 }
 
 void writeObjToStream(const Obj& obj, std::ofstream& objFile){

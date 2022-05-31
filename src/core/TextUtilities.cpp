@@ -1,6 +1,7 @@
 #include "core/TextUtilities.hpp"
 #include "core/Log.hpp"
 
+#include <algorithm>
 #include <sstream>
 
 std::string TextUtilities::trim(const std::string & str, const std::string & del) {

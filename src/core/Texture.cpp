@@ -16,16 +16,16 @@
 
 bool convertDDStoPNG(const fs::path& ddsPath, const fs::path& pngPath){
 	void* ddsData = nullptr;
-	size_t ddsSize = 0;
+	int ddsSize = 0;
 
 	{
-		FILE* f = fopen(ddsPath.c_str(), "rb");
+		FILE* f = fopen( ddsPath.string().c_str(), "rb");
 		if(f == nullptr){
 			return false;
 		}
 		fseek(f, 0, SEEK_END);
 		ddsSize = ftell(f);
-		if(ddsSize == 0u){
+		if(ddsSize == 0){
 			fclose(f);
 			return false;
 		}
@@ -83,7 +83,7 @@ bool convertDDStoPNG(const fs::path& ddsPath, const fs::path& pngPath){
 		unsigned char* linearData = (unsigned char*)malloc(linearSize);
 		SquishDecompressImage(linearData, subData.width, subData.height, subData.buff, dxtFormat);
 		// Write result to png.
-		res = stbi_write_png(pngPath.c_str(), subData.width, subData.height, 4, linearData, subData.width * 4);
+		res = stbi_write_png(pngPath.string().c_str(), subData.width, subData.height, 4, linearData, subData.width * 4);
 		free(linearData);
 
 	} else {
@@ -92,7 +92,7 @@ bool convertDDStoPNG(const fs::path& ddsPath, const fs::path& pngPath){
 			// BGRA to RGBA
 			std::swap(((unsigned char*)subData.buff)[pix], ((unsigned char*)subData.buff)[pix+2]);
 		}
-		res = stbi_write_png(pngPath.c_str(), subData.width, subData.height, 4, subData.buff, subData.row_pitch_bytes);
+		res = stbi_write_png(pngPath.string().c_str(), subData.width, subData.height, 4, subData.buff, subData.row_pitch_bytes);
 	}
 
 	free(ddsData);
@@ -101,11 +101,12 @@ bool convertDDStoPNG(const fs::path& ddsPath, const fs::path& pngPath){
 
 bool convertTGAtoPNG(const fs::path& tgaPath, const fs::path& pngPath){
 	int x, y, comp;
-	unsigned char* data = stbi_load(tgaPath.c_str(), &x, &y, &comp, 4);
+
+	unsigned char* data = stbi_load(tgaPath.string().c_str(), &x, &y, &comp, 4);
 	if(data == nullptr){
 		return false;
 	}
-	int res = stbi_write_png(pngPath.c_str(), x, y, 4, data, 4 * x);
+	int res = stbi_write_png( pngPath.string().c_str(), x, y, 4, data, 4 * x);
 	stbi_image_free(data);
 	return res != 0;
 }
@@ -118,6 +119,6 @@ bool writeDefaultTexture(const fs::path& pngPath){
 		{255, 255, 255, 255}, {255, 255, 255, 255}, {255,   0, 255, 255}, {255,   0, 255, 255}
 	};
 
-	return stbi_write_png(pngPath.c_str(), 4, 4, 4, &data[0].r, 4 * 4) != 0;
+	return stbi_write_png(pngPath.string().c_str(), 4, 4, 4, &data[0].r, 4 * 4) != 0;
 
 }

@@ -171,7 +171,7 @@ bool load(const fs::path& path, Obj& outObject, TexturesList& usedTextures ){
 		{
 			const auto polymesh = group.child("polymesh");
 			const auto vertexList = polymesh.child("vertexlist");
-			const size_t vCount = vertexList.attribute("count").as_int();
+			const uint32_t vCount = vertexList.attribute("count").as_int();
 
 			const auto format = vertexList.child("format");
 			int vIndex = -1;
