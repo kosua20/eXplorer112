@@ -19,9 +19,8 @@ workspace("eXporter112")
 		symbols("On")
 
 	filter({})
-	startproject("eXporter112")
 
-	project("eXporter112")
+	project("eXporter")
 		kind("ConsoleApp")
 
 		language("C++")
@@ -44,8 +43,37 @@ workspace("eXporter112")
 		sysincludedirs({ "libs/", "src/libs" })
 
 		-- common files
-		files({"src/main.cpp", "src/core/**", "src/libs/**.hpp", "src/libs/*/*.cpp", "src/libs/**.h", "src/libs/*/*.c", "premake5.lua"})
+		files({"src/tool/**", "src/core/**", "src/libs/**.hpp", "src/libs/*/*.cpp", "src/libs/**.h", "src/libs/*/*.c", "premake5.lua"})
 		removefiles({"**.DS_STORE", "**.thumbs"})
+
+	project("vIewer")
+		kind("ConsoleApp")
+
+		language("C++")
+		cppdialect("C++17")
+
+		-- Compiler flags
+		filter("toolset:not msc*")
+			buildoptions({ "-Wall", "-Wextra" })
+		filter("toolset:msc*")
+			buildoptions({ "-W3"})
+		filter({})
+		-- visual studio filters
+		filter("action:vs*")
+			defines({ "_CRT_SECURE_NO_WARNINGS" })  
+		filter({})
+
+		-- Common include dirs
+		-- System headers are used to support angled brackets in Xcode.
+		includedirs({"src/"})
+		sysincludedirs({ "libs/", "src/libs" })
+
+		-- common files
+		files({"src/app/**", "src/core/**", "src/libs/**.hpp", "src/libs/*/*.cpp", "src/libs/**.h", "src/libs/*/*.c", "premake5.lua"})
+		removefiles({"**.DS_STORE", "**.thumbs"})
+
+	
+	startproject("eXporter")
 
 		
 

@@ -96,9 +96,10 @@ void processEntity(const pugi::xml_node& entity, const glm::mat4& globalFrame, b
 		frame = frame * mdlFrame;
 	} else if(strcmp(type, "CAMERA") == 0){
 		const char* cam2DRotStr = entity.find_child_by_attribute("name", "camerarotation").child_value();
-		const glm::vec2 cam2DRot = Area::parseVec2(cam2DRotStr);
+		const glm::vec2 cam2DRot = Area::parseVec2(cam2DRotStr) / 180.0f * glm::pi<float>();
 		// This is a wild guess.
-		const glm::mat4 mdlFrame = glm::rotate(glm::mat4(1.0f), -cam2DRot[1], glm::vec3(0.0f, 1.0f, 0.0f));
+		glm::mat4 mdlFrame = glm::rotate(glm::mat4(1.0f), cam2DRot[1], glm::vec3(0.0f, 1.0f, 0.0f));
+		mdlFrame = glm::rotate(mdlFrame, cam2DRot[0], glm::vec3(glm::transpose(mdlFrame)[0]));
 		frame = frame * mdlFrame;
 	}
 
@@ -167,7 +168,7 @@ int main(int argc, const char** argv)
 	System::listAllFilesOfType(texturesPath, ".dds", texturesList);
 	System::listAllFilesOfType(texturesPath, ".tga", texturesList);
 
-//#define SCENE_FILE "la_croisee.world"
+#define SCENE_FILE "tutoeco.world"
 
 #ifndef SCENE_FILE
 	for(const auto& worldPath : worldsList)
