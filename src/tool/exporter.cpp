@@ -1,7 +1,7 @@
 #include "core/Log.hpp"
 #include "core/System.hpp"
 #include "core/TextUtilities.hpp"
-#include "core/Texture.hpp"
+#include "core/Image.hpp"
 #include "core/DFFParser.hpp"
 #include "core/AreaParser.hpp"
 
@@ -289,22 +289,23 @@ int main(int argc, const char** argv)
 
 			const fs::path destinationPath = outTexturePath / (textureName + ".png");
 			if(!fs::exists(destinationPath)){
+
+				Image image;
 				if(found){
 					// Copy the file.
-					if(selectedTexturePath.extension() == ".tga"){
-						convertTGAtoPNG(selectedTexturePath, destinationPath);
-					} else if(selectedTexturePath.extension() == ".dds"){
-						convertDDStoPNG(selectedTexturePath, destinationPath);
-					} else {
-						Log::error("Unsupported texture format for file %s", selectedTexturePath.filename().c_str());
+					if(!image.load(selectedTexturePath)){
+						Log::error("Unsupported texture format for input file %s", selectedTexturePath.filename().c_str());
 					}
 
 				} else {
 					// Generate a dummy texture.
-					writeDefaultTexture(destinationPath);
+					Image::generateDefaultImage(image);
+				}
+				// Save image to disk as PNG.
+				if(!image.save(destinationPath)){
+					Log::error("Unsupported texture format for output file %s", destinationPath.filename().c_str());
 				}
 			}
-
 
 		}
 
