@@ -1,8 +1,10 @@
 #pragma once
-#include <string>
-#include <vector>
+
+#include "core/Common.hpp"
+
 /**
  \brief Provides utilities process strings.
+ \ingroup System
  */
 class TextUtilities {
 
@@ -14,12 +16,31 @@ public:
 	 */
 	static std::string trim(const std::string & str, const std::string & del);
 
+	/** Remove file extension from the end of a string and extract it.
+	 \param str the string to remove the extension from
+	 \return the extension string
+	 */
+	static std::string splitExtension(std::string & str);
+
+	/** Extract the filename from the end of a string (extension will be included).
+	\param str the string to extract the filename from
+	\return the filename string
+	*/
+	static std::string extractFilename(const std::string & str);
+
 	/** Replace all occurences of a substring in a string by another string.
 	 \param source the string in which substitutions should happen
 	 \param fromString substring to replace
 	 \param toString new substring to insert
 	 */
 	static void replace(std::string & source, const std::string & fromString, const std::string & toString);
+
+	/** Replace all listed characters by another character in a string.
+	 \param source the string in which substitutions should happen
+	 \param fromChars list of characters
+	 \param toChar new character to insert
+	 */
+	static void replace(std::string & source, const std::string & fromChars, const char toChar);
 
 	/** Test if a string is a prefix of another string.
 	 \param source the string to examine
@@ -50,13 +71,20 @@ public:
 	 */
 	static std::vector<std::string> split(const std::string & str, const std::string & delimiter, bool skipEmpty);
 	
+	/** Split a string into a list of lines. This function supports both '\\n' and '\\r\\n'.
+	 \param str the string to split
+	 \param skipEmpty should empty lines be ignored
+	 \return a list of lines
+	 */
+	static std::vector<std::string> splitLines(const std::string & str, bool skipEmpty);
+
+	/** Generate a zero-padded string representation of an unsigned integer.
+	\param number the number to represent as a string
+	\param padding the length to pad the number string to
+	\return the number string padded representation
+	*/
+	static std::string padInt(uint number, uint padding);
+
 	static std::string lowercase(const std::string & src);
-
-	static std::string padLeft(const std::string & s, size_t length, char c);
 	
-	static std::string padRight(const std::string & s, size_t length, char c);
-
-	static size_t count(const std::string & s);
-
-
 };

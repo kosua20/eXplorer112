@@ -1,7 +1,4 @@
 #include "core/TextUtilities.hpp"
-#include "core/Log.hpp"
-
-#include <algorithm>
 #include <sstream>
 
 std::string TextUtilities::trim(const std::string & str, const std::string & del) {
@@ -13,6 +10,24 @@ std::string TextUtilities::trim(const std::string & str, const std::string & del
 	return str.substr(firstNotDel, lastNotDel - firstNotDel + 1);
 }
 
+std::string TextUtilities::splitExtension(std::string & str) {
+	const std::string::size_type pos = str.find_last_of('.');
+	if(pos == std::string::npos) {
+		return "";
+	}
+	const std::string ext(str.substr(pos));
+	str.erase(str.begin() + pos, str.end());
+	return ext;
+}
+
+std::string TextUtilities::extractFilename(const std::string & str){
+	const std::string::size_type loc = str.find_last_of("/\\");
+	if(loc == std::string::npos) {
+		return str;
+	}
+	return str.substr(loc+1);
+}
+
 void TextUtilities::replace(std::string & source, const std::string & fromString, const std::string & toString) {
 	std::string::size_type nextPos = 0;
 	const size_t fromSize		   = fromString.size();
@@ -20,6 +35,14 @@ void TextUtilities::replace(std::string & source, const std::string & fromString
 	while((nextPos = source.find(fromString, nextPos)) != std::string::npos) {
 		source.replace(nextPos, fromSize, toString);
 		nextPos += toSize;
+	}
+}
+
+void TextUtilities::replace(std::string & source, const std::string & fromChars, const char toChar) {
+	std::string::size_type nextPos = 0;
+	while((nextPos = source.find_first_of(fromChars, nextPos)) != std::string::npos) {
+		source[nextPos] = toChar;
+		nextPos += 1;
 	}
 }
 
@@ -59,12 +82,12 @@ std::string TextUtilities::join(const std::vector<std::string> & tokens, const s
 std::vector<std::string> TextUtilities::split(const std::string & str, const std::string & delimiter, bool skipEmpty){
 	std::string subdelimiter = " ";
 	if(delimiter.empty()){
-		Log::warning("Delimiter is empty, using space as a delimiter.");
+		Log::warning( "Delimiter is empty, using space as a delimiter.");
 	} else {
 		subdelimiter = delimiter.substr(0,1);
 	}
 	if(delimiter.size() > 1){
-		Log::warning("Only the first character of the delimiter will be used.");
+		Log::warning( "Only the first character of the delimiter will be used (%c).", delimiter[0]);
 	}
 	std::stringstream sstr(str);
 	std::string value;
@@ -77,6 +100,25 @@ std::vector<std::string> TextUtilities::split(const std::string & str, const std
 	return tokens;
 }
 
+std::vector<std::string> TextUtilities::splitLines(const std::string & str, bool skipEmpty){
+
+	std::stringstream sstr(str);
+	std::string value;
+	std::vector<std::string> tokens;
+	while(std::getline(sstr, value)) {
+		value = TextUtilities::trim(value, "\r");
+		if(!skipEmpty || !value.empty()) {
+			tokens.emplace_back(value);
+		}
+	}
+	return tokens;
+}
+
+std::string TextUtilities::padInt(uint number, uint padding) {
+	const std::string numStr = std::to_string(number);
+	const int delta			 = int(padding) - int(numStr.size());
+	return delta <= 0 ? numStr : (std::string(delta, '0') + numStr);
+}
 
 std::string TextUtilities::lowercase(const std::string & src){
 	std::string dst(src);;
@@ -85,35 +127,4 @@ std::string TextUtilities::lowercase(const std::string & src){
 		return std::tolower(c);
 	});
 	return dst;
-}
-
-size_t TextUtilities::count(const std::string & s){
-	const char *c_str = s.c_str();
-	size_t strLen = s.length();
-	size_t charCount = 0;
-	size_t u = 0;
-	while(u < strLen){
-		u += size_t(std::mblen(&c_str[u], strLen - u));
-		++charCount;
-	}
-	return charCount;
-}
-
-std::string TextUtilities::padLeft(const std::string & s, size_t length, char c){
-	const size_t sz = count(s);
-	if(sz >= length){
-		return s;
-	}
-	std::string pad(length - sz, c);
-	return pad + s;
-}
-
-std::string TextUtilities::padRight(const std::string & s, size_t length, char c){
-
-	const size_t sz = count(s);
-	if(sz >= length){
-		return s;
-	}
-	std::string pad(length - sz, c);
-	return s + pad;
 }

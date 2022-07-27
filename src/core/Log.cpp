@@ -4,6 +4,22 @@
 #include <cstdarg>
 #include <cassert>
 
+void Log::verbose(const char* format, ...){
+#ifdef _DEBUG
+	fprintf(stdout, "Verbose: ");
+
+	va_list argptr;
+	va_start(argptr, format);
+	vfprintf(stdout, format, argptr);
+	va_end(argptr);
+
+	fprintf(stdout, "\n");
+	fflush(stdout);
+#else
+	(void)format;
+#endif
+}
+
 void Log::info(const char* format, ...){
 
 	fprintf(stdout, "Info   : ");
