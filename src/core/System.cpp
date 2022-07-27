@@ -71,3 +71,53 @@ void System::saveString(const fs::path & path, const std::string & content) {
 	outputFile << content;
 	outputFile.close();
 }
+
+
+std::string System::getStringWithIncludes(const fs::path & filename, std::vector<std::string>& names){
+
+	// Special case: if names is empty, we are at the root and no special name was specified, add the filename.
+	if(names.empty()) {
+		names.push_back(filename);
+	}
+
+	// Reset line count for the current file.
+	const std::string currentLoc = std::to_string(names.size() - 1);
+	std::string newStr = "#line 1 " + currentLoc + "\n";
+
+	const auto lines = TextUtilities::splitLines(loadString(filename), false);
+	// Check if some lines are include.
+	for(size_t lid = 0; lid < lines.size(); ++lid){
+		const std::string & line = lines[lid];
+		const std::string::size_type pos = line.find("#include");
+		if(pos == std::string::npos){
+			newStr.append(line);
+			newStr.append("\n");
+			continue;
+		}
+		const std::string::size_type bpos = line.find('"', pos);
+		const std::string::size_type epos = line.find('"', bpos+1);
+		if(bpos == std::string::npos || epos == std::string::npos){
+			Log::warning( "Misformed include at line %llu of %s, empty line.", (unsigned long)lid , filename.c_str());
+			newStr.append("\n");
+			continue;
+		}
+		// Extract the file name.
+		const std::string subname = line.substr(bpos + 1, epos - (bpos + 1));
+
+		// If the file has already been included, skip it.
+		if(std::find(names.begin(), names.end(), subname) != names.end()){
+			newStr.append("\n");
+			continue;
+		}
+
+		names.push_back(subname);
+		// Insert the content.
+		const std::string content = System::getStringWithIncludes(filename.parent_path() / subname, names);
+		newStr.append(content);
+		newStr.append("\n");
+		// And reset to where we were before in the current file.
+		newStr.append("#line " + std::to_string(lid+2) + " " + currentLoc + "\n");
+
+	}
+	return newStr;
+}
