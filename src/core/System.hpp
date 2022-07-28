@@ -20,6 +20,6 @@ namespace System {
 
 	void saveString(const fs::path & path, const std::string & content);
 
-	std::string getStringWithIncludes(const fs::path & filename, std::vector<std::string>& names);
+	std::string getStringWithIncludes(const fs::path & filename, std::vector<fs::path>& names);
 
 }

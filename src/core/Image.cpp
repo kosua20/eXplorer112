@@ -51,7 +51,7 @@ bool Image::load(const fs::path & path) {
 
 			compressedPixels.resize(ddsSize);
 
-			if(fread(compressedPixels.data(), 1, ddsSize, f) != ddsSize) {
+			if(fread(compressedPixels.data(), 1, ddsSize, f) != (size_t)ddsSize) {
 				fclose(f);
 				return false;
 			}

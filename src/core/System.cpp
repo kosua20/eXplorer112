@@ -73,7 +73,7 @@ void System::saveString(const fs::path & path, const std::string & content) {
 }
 
 
-std::string System::getStringWithIncludes(const fs::path & filename, std::vector<std::string>& names){
+std::string System::getStringWithIncludes(const fs::path & filename, std::vector<fs::path>& names){
 
 	// Special case: if names is empty, we are at the root and no special name was specified, add the filename.
 	if(names.empty()) {
@@ -101,18 +101,18 @@ std::string System::getStringWithIncludes(const fs::path & filename, std::vector
 			newStr.append("\n");
 			continue;
 		}
-		// Extract the file name.
-		const std::string subname = line.substr(bpos + 1, epos - (bpos + 1));
+		// Extract the file path.
+		const fs::path subPath = line.substr(bpos + 1, epos - (bpos + 1));
 
 		// If the file has already been included, skip it.
-		if(std::find(names.begin(), names.end(), subname) != names.end()){
+		if(std::find(names.begin(), names.end(), subPath) != names.end()){
 			newStr.append("\n");
 			continue;
 		}
 
-		names.push_back(subname);
+		names.push_back(subPath);
 		// Insert the content.
-		const std::string content = System::getStringWithIncludes(filename.parent_path() / subname, names);
+		const std::string content = System::getStringWithIncludes(filename.parent_path() / subPath, names);
 		newStr.append(content);
 		newStr.append("\n");
 		// And reset to where we were before in the current file.

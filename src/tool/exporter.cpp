@@ -23,7 +23,7 @@ glm::mat4 getEntityFrame(const pugi::xml_node& entity){
 	const char* objRotStr = entity.find_child_by_attribute("name", "rotation").child_value();
 	const char* objScaStr = entity.find_child_by_attribute("name", "scale").child_value();
 	const glm::vec3 position = Area::parseVec3(objPosStr);
-	const glm::vec3 rotAngles = Area::parseVec3(objRotStr) / 180.0f * (float)M_PI;
+	const glm::vec3 rotAngles = Area::parseVec3(objRotStr) / 180.0f * glm::pi<float>();
 	const glm::vec3 scale = Area::parseVec3(objScaStr, glm::vec3(1.0f));
 
 	glm::mat4 frame = glm::translate(glm::mat4(1.0f), position)
@@ -89,7 +89,7 @@ void processEntity(const pugi::xml_node& entity, const glm::mat4& globalFrame, b
 		const char* mdlRotStr = entity.find_child_by_attribute("name", "modelRotation").child_value();
 
 		const glm::vec3 mdlPosition = Area::parseVec3(mdlPosStr);
-		const glm::vec3 mdlRotAngles = Area::parseVec3(mdlRotStr) / 180.0f * (float)M_PI;
+		const glm::vec3 mdlRotAngles = Area::parseVec3(mdlRotStr) / 180.0f * glm::pi<float>();
 		const glm::mat4 mdlFrame =  glm::translate(glm::mat4(1.0f), mdlPosition)
 			* glm::eulerAngleYXZ(mdlRotAngles[1], mdlRotAngles[0], mdlRotAngles[2]);
 
