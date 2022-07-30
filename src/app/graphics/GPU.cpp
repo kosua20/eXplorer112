@@ -10,6 +10,7 @@
 #include "graphics/GPUInternal.hpp"
 
 #define VMA_STATIC_VULKAN_FUNCTIONS 0
+#define VMA_DYNAMIC_VULKAN_FUNCTIONS 0
 #define VMA_IMPLEMENTATION
 
 #pragma clang diagnostic push
@@ -65,9 +66,9 @@ bool GPU::setup(const std::string & appName) {
 	// We have to tell Vulkan the extensions we need.
 	const std::vector<const char*> extensions = VkUtils::getRequiredInstanceExtensions(debugEnabled);
 	if(!VkUtils::checkExtensionsSupport(extensions)){
-		Log::error("GPU: Unsupported extensions.");
 		return false;
 	}
+	
 	instanceInfo.enabledExtensionCount = static_cast<uint32_t>(extensions.size());
 	instanceInfo.ppEnabledExtensionNames = extensions.data();
 	// Allow portability drivers enumeration to support MoltenVK.
@@ -252,6 +253,8 @@ bool GPU::setupWindow(Window * window){
 	_vulkanFunctions.vkGetBufferMemoryRequirements2KHR = vkGetBufferMemoryRequirements2;
 	_vulkanFunctions.vkGetPhysicalDeviceMemoryProperties2KHR = vkGetPhysicalDeviceMemoryProperties2;
 
+	_vulkanFunctions.vkGetDeviceBufferMemoryRequirements = vkGetDeviceBufferMemoryRequirements;
+	_vulkanFunctions.vkGetDeviceImageMemoryRequirements = vkGetDeviceImageMemoryRequirements;
 
 	allocatorInfo.pVulkanFunctions = &_vulkanFunctions;
 	VK_RET(vmaCreateAllocator(&allocatorInfo, &_allocator));

@@ -25,7 +25,7 @@ class Texture;
 	#define VK_RETURN_CHECK(F, L) do {\
 		VkResult res = (F);\
 		if(res != VK_SUCCESS){\
-			Log::Error() << Log::GPU << "Vulkan return error at line " << L << std::endl;\
+			Log::error("GPU: Vulkan return error at line %u", L);\
 			VkUtils::checkResult(res);\
 		}\
 	} while(0);
