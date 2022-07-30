@@ -64,6 +64,7 @@ bool Image::load(const fs::path & path) {
 		}
 
 		compressedFormat = 0;
+		components = 4;
 		switch(tc.format){
 			case DDSKTX_FORMAT_BC1:
 				compressedFormat = squishDxt1;
@@ -82,15 +83,21 @@ bool Image::load(const fs::path & path) {
 				return false;
 		}
 
+
 		// Query first layer/face/level only.
 		ddsktx_sub_data subData;
 		ddsktx_get_sub(&tc, &subData, compressedPixels.data(), ddsSize, 0, 0, 0);
 
+//		if((tc.flags & DDSKTX_TEXTURE_FLAG_ALPHA) == 0){
+//			components = 3;
+//		}
+		width = subData.width;
+		height = subData.height;
+
 		// Allocate memory.
-		const size_t linearSize = subData.width * subData.height * tc.bpp;
+		const size_t linearSize = width *  height * components;
 		pixels.resize(linearSize);
 
-		int res = 0;
 		if(compressedFormat > 0){
 			// Decompress.
 			SquishDecompressImage(pixels.data(), subData.width, subData.height, subData.buff, compressedFormat);
@@ -106,7 +113,7 @@ bool Image::load(const fs::path & path) {
 			compressedPixels.clear();
 		}
 
-		return res != 0;
+		return true;
 	}
 
 	compressedFormat = 0;
