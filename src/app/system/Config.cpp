@@ -187,8 +187,8 @@ RenderingConfig::RenderingConfig(const std::vector<std::string> & argv) : Config
 			rate = 30;
 		} else if(key == "fullscreen") {
 			fullscreen = true;
-		} else if((key == "internal-res" || key == "ivr") && !values.empty()) {
-			internalVerticalResolution = std::stoi(values[0]);
+		} else if((key == "rendering-ratio" || key == "ratio") && !values.empty()) {
+			resolutionRatio = std::stof(values[0]);
 		} else if(key == "wxh" && values.size() >= 2) {
 			const uint w  = uint(std::stoi(values[0]));
 			const uint h  = uint(std::stoi(values[1]));
@@ -203,11 +203,7 @@ RenderingConfig::RenderingConfig(const std::vector<std::string> & argv) : Config
 	registerArgument("no-vsync", "", "Disable V-sync.");
 	registerArgument("half-rate", "", "30fps mode.");
 	registerArgument("fullscreen", "", "Enable fullscreen.");
-	registerArgument("internal-res", "ivr", "Vertical rendering resolution", "height.");
+	registerArgument("rendering-ration", "ratio", "Rendering resolution ratio", "fraction");
 	registerArgument("wxh", "", "Window dimensions.", std::vector<std::string> {"width", "height"});
 	registerArgument("force-aspect", "far", "Force window aspect ratio.");
-}
-
-glm::vec2 RenderingConfig::renderingResolution(){
-	return float(internalVerticalResolution) / screenResolution[1] * screenResolution;
 }

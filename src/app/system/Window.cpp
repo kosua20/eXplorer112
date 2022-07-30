@@ -33,17 +33,23 @@ _config(config), _allowEscape(escapeQuit) {
 	glfwWindowHint(GLFW_FOCUSED, hidden ? GLFW_FALSE : GLFW_TRUE);
 	glfwWindowHint(GLFW_SRGB_CAPABLE, GLFW_TRUE);
 
+	const GLFWvidmode * mode = glfwGetVideoMode(glfwGetPrimaryMonitor());
+	glfwWindowHint(GLFW_RED_BITS, mode->redBits);
+	glfwWindowHint(GLFW_GREEN_BITS, mode->greenBits);
+	glfwWindowHint(GLFW_BLUE_BITS, mode->blueBits);
+	glfwWindowHint(GLFW_REFRESH_RATE, mode->refreshRate);
+
 	if(config.fullscreen) {
-		const GLFWvidmode * mode = glfwGetVideoMode(glfwGetPrimaryMonitor());
-		glfwWindowHint(GLFW_RED_BITS, mode->redBits);
-		glfwWindowHint(GLFW_GREEN_BITS, mode->greenBits);
-		glfwWindowHint(GLFW_BLUE_BITS, mode->blueBits);
-		glfwWindowHint(GLFW_REFRESH_RATE, mode->refreshRate);
 		/// \note We might want to impose the configured size here. This means the monitor could be set in a non-native mode.
 		_window = glfwCreateWindow(mode->width, mode->height, name.c_str(), glfwGetPrimaryMonitor(), nullptr);
 	} else {
+		const unsigned int defaultWidth = mode->width;
+		const unsigned int defaultHeight = mode->height;
+		// If the initial size has not been customized, fill with default parameters.
+		const int tgtWidth = _config.initialWidth > 0.f ? int(_config.initialWidth) : defaultWidth;
+		const int tgtHeight = _config.initialHeight > 0.f ? int(_config.initialHeight) : defaultHeight;
 		// Create a window with a given size. Width and height are defined in the configuration.
-		_window = glfwCreateWindow(int(_config.initialWidth), int(_config.initialHeight), name.c_str(), nullptr, nullptr);
+		_window = glfwCreateWindow(tgtWidth, tgtHeight, name.c_str(), nullptr, nullptr);
 	}
 
 	if(!_window) {

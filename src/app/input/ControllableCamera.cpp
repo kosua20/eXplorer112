@@ -45,10 +45,6 @@ void ControllableCamera::update() {
 			Log::warning("Input: No joystick connected.");
 		}
 	}
-	if(Input::manager().resized()) {
-		const glm::ivec2 screenSize = Input::manager().size();
-		ratio(float(screenSize[0]) / float(screenSize[1]));
-	}
 }
 
 void ControllableCamera::physics(double frameTime) {

@@ -114,11 +114,6 @@ public:
 	 */
 	explicit RenderingConfig(const std::vector<std::string> & argv);
 
-	/** Compute the rendering resolution based on internal settings.
-	 \return the rendering resolution
-	 */
-	glm::vec2 renderingResolution();
-
 	/// The configuration version number (unused).
 	const size_t version = 1;
 
@@ -132,23 +127,21 @@ public:
 	bool fullscreen = false;
 
 	/// Initial width of the window in relative pixels.
-	unsigned int initialWidth = 1000;
+	unsigned int initialWidth = 0;
 
 	/// Initial height of the window in relative pixels.
-	unsigned int initialHeight = 750;
+	unsigned int initialHeight = 0;
 
-	/// \brief Internal vertical rendering resolution.
-	/// \note The width should be computed based on the window aspect ratio.
-	int internalVerticalResolution = 720;
+	float resolutionRatio = 1.0f;
 
 	/// Should the aspect ratio of the window be constrained.
 	bool forceAspectRatio = false;
 
 	/// Size of the window in raw pixels, updated at launch based on screen density.
-	glm::vec2 screenResolution = glm::vec2(800.0f, 600.0f);
+	glm::vec2 screenResolution = glm::vec2(0.f, 0.f);
 
 	/// The last recorded window position and size on screen.
-	glm::ivec4 windowFrame = glm::vec4(0, 0, 800, 600);
+	glm::ivec4 windowFrame = glm::vec4(0, 0, 0, 0);
 
 
 };
