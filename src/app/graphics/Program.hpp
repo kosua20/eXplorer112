@@ -17,10 +17,10 @@ VK_DEFINE_HANDLE(VkShaderModule)
 VK_DEFINE_HANDLE(VkPipelineLayout)
 VK_DEFINE_HANDLE(VkDescriptorSetLayout)
 
-#define UNIFORMS_SET 0
+// #define UNIFORMS_SET 0 unused
 #define SAMPLERS_SET 1
 #define IMAGES_SET 2
-#define BUFFERS_SET 3
+#define BUFFERS_SET 0
 
 /**
  \brief Represents a group of shaders used for rendering.
@@ -296,10 +296,10 @@ private:
 
 	//std::unordered_map<int, DynamicBufferState> _dynamicBuffers; ///< Dynamic uniform buffer definitions (set 0).
 	std::unordered_map<int, TextureState> _textures; ///< Dynamic image-sampler definitions (set 2).
-	std::unordered_map<int, StaticBufferState> _staticBuffers; ///< Static uniform buffer definitions (set 3).
+	std::unordered_map<int, StaticBufferState> _staticBuffers; ///< Static uniform buffer definitions (set 0).
 
-	std::array<bool, 4> _dirtySets; ///< Marks which descriptor sets are dirty.
-	std::array<DescriptorSet, 4> _currentSets; ///< Descriptor sets.
+	std::array<bool, 3> _dirtySets; ///< Marks which descriptor sets are dirty.
+	std::array<DescriptorSet, 3> _currentSets; ///< Descriptor sets.
 	std::vector<uint32_t> _currentOffsets; ///< Offsets in the descriptor set for dynamic uniform buffers.
 
 	bool _reloaded = false; ///< Has the program been reloaded.

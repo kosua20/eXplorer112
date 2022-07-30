@@ -340,7 +340,7 @@ void ShaderCompiler::reflect(glslang::TProgram & program, Program::Stage & stage
 		// Else, buffer.
 		// If we are in a storage buffer or generic UBO, we won't be accessed on the CPU individually.
 		Program::BufferDef& containingBuffer = stage.buffers[uniform.index];
-		if(containingBuffer.set != UNIFORMS_SET){
+		if(true /*containingBuffer.set != UNIFORMS_SET*/ ){
 			continue;
 		}
 		// Else, uniform buffer containing custom uniforms that we want to set individually from the GPU.

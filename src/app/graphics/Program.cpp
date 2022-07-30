@@ -102,7 +102,8 @@ void Program::reflect(){
 			const uint set = buffer.set;
 
 			// We only internally manage dynamic UBOs, in set UNIFORMS_SET.
-			if(set != UNIFORMS_SET){
+			//if(set != UNIFORMS_SET)
+			{
 				// The other buffer set is just initialized.
 				if(set != BUFFERS_SET){
 					Log::error( "Low frequency UBOs should be in set %u, skipping.", BUFFERS_SET);
