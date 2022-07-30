@@ -21,14 +21,18 @@ struct Obj {
 	struct Set {
 
 		struct Face {
+
+			static const uint32_t INVALID = 0xFFFF;
+
 			uint32_t v0 = 0, v1 = 0, v2 = 0;
-			uint32_t t0 = 0xFFFF, t1 = 0xFFFF, t2 = 0xFFFF;
-			uint32_t n0 = 0xFFFF, n1 = 0xFFFF, n2 = 0xFFFF;
+			uint32_t t0 = INVALID, t1 = INVALID, t2 = INVALID;
+			uint32_t n0 = INVALID, n1 = INVALID, n2 = INVALID;
 		};
 
 		std::vector<Face> faces;
 		std::string material;
 		std::string name;
+		std::string texture;
 	};
 	std::vector<Set> faceSets;
 	std::string materials;

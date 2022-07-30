@@ -26,8 +26,8 @@ void writeObjToStream(const Obj& obj, std::ofstream& objFile, ObjOffsets & offse
 		objFile << "o " << set.name << "\n";
 		objFile << "usemtl " << set.material << "\n";
 
-		const bool hasUV = !set.faces.empty() && (set.faces[0].t0 != 0xFFFF);
-		const bool hasNormals = !set.faces.empty() && (set.faces[0].n0 != 0xFFFF);
+		const bool hasUV = !set.faces.empty() && (set.faces[0].t0 != Obj::Set::Face::INVALID);
+		const bool hasNormals = !set.faces.empty() && (set.faces[0].n0 != Obj::Set::Face::INVALID);
 
 		for(const Obj::Set::Face& f : set.faces){
 			const uint32_t v0 = f.v0 + offsets.v;

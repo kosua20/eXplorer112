@@ -724,8 +724,9 @@ void convertToObj(Model& model, Obj& outObject, const std::string& baseName, Tex
 				const float& spec = material.ambSpecDiff[1];
 				outputMtl << "Ks " << spec << " " << spec << " " << spec << "\n";
 				outputMtl << "Ns " << 100 << "\n";
+				std::string textureName;
 				if(!material.diffuseName.empty()){
-					const std::string textureName = TextUtilities::lowercase(material.diffuseName);
+					textureName = TextUtilities::lowercase(material.diffuseName);
 					outputMtl << "map_Kd " << "textures/" << textureName << ".png\n";
 					usedTextures.insert(textureName);
 				}
@@ -735,6 +736,7 @@ void convertToObj(Model& model, Obj& outObject, const std::string& baseName, Tex
 				faceSet.faces.reserve(256);
 				faceSet.material = matName;
 				faceSet.name = matName;
+				faceSet.texture = textureName;
 			}
 
 			Obj::Set& faceSet = outObject.faceSets.back();
