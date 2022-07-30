@@ -436,6 +436,20 @@ void Program::clean() {
 	_currentOffsets.clear();
 }
 
+void Program::buffer(const UniformBufferBase& buffer, uint slot){
+	auto existingBuff = _staticBuffers.find(slot);
+	if(existingBuff != _staticBuffers.end()) {
+		StaticBufferState& refBuff = existingBuff->second;
+		assert(refBuff.count == 1);
+		if((refBuff.buffers[0] != buffer.gpu->buffer) || (refBuff.offsets[0] != buffer.currentOffset()) || (refBuff.size != buffer.baseSize())){
+			refBuff.buffers[0] = buffer.gpu->buffer;
+			refBuff.offsets[0] = uint(buffer.currentOffset());
+			refBuff.size = uint(buffer.baseSize());
+			_dirtySets[BUFFERS_SET] = true;
+		}
+	}
+}
+
 void Program::buffer(const Buffer& buffer, uint slot){
 	auto existingBuff = _staticBuffers.find(slot);
 	if(existingBuff != _staticBuffers.end()) {

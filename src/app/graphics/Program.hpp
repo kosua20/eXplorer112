@@ -145,7 +145,7 @@ public:
 	 * \param buffer the buffer to bind
 	 * \param slot the location to bind to
 	 */
-	//void buffer(const UniformBufferBase& buffer, uint slot);
+	void buffer(const UniformBufferBase& buffer, uint slot);
 
 	/** Bind a buffer to a given location.
 	 * \param buffer the buffer to bind
