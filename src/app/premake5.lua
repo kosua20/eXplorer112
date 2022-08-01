@@ -90,9 +90,15 @@ project("viEwer")
 		"../libs/**.hpp", "../libs/*/*.cpp", "../libs/**.h", "../libs/*/*.c", 
 		"libs/**.hpp", "libs/*/*.cpp", "libs/**.h", "libs/*/*.c",
 		"premake5.lua"})
+
+	-- Shaders
+	files({"../../resources/shaders/**"});
+		
+	-- Remove compiled libs and hidden files.
 	removefiles { "libs/sr_gui/**" }
 	removefiles { "libs/glfw/**" }
 	removefiles({"**.DS_STORE", "**.thumbs"})
+
 
 
 -- Libraries for the viewer
