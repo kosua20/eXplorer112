@@ -117,6 +117,9 @@ struct ImGui_ImplVulkan_Data
     uint32_t                    Subpass;
     VkShaderModule              ShaderModuleVert;
     VkShaderModule              ShaderModuleFrag;
+	VkFormat 					ColorFormat;
+	VkFormat 					DepthFormat;
+	VkFormat 					StencilFormat;
 
     // Font data
     VkSampler                   FontSampler;
@@ -836,6 +839,8 @@ static void ImGui_ImplVulkan_CreatePipelineLayout(VkDevice device, const VkAlloc
 static void ImGui_ImplVulkan_CreatePipeline(VkDevice device, const VkAllocationCallbacks* allocator, VkPipelineCache pipelineCache, VkRenderPass renderPass, VkSampleCountFlagBits MSAASamples, VkPipeline* pipeline, uint32_t subpass)
 {
     ImGui_ImplVulkan_Data* bd = ImGui_ImplVulkan_GetBackendData();
+	ImGui_ImplVulkan_InitInfo& v = bd->VulkanInitInfo;
+
     ImGui_ImplVulkan_CreateShaderModules(device, allocator);
 
     VkPipelineShaderStageCreateInfo stage[2] = {};
@@ -917,6 +922,13 @@ static void ImGui_ImplVulkan_CreatePipeline(VkDevice device, const VkAllocationC
     dynamic_state.dynamicStateCount = (uint32_t)IM_ARRAYSIZE(dynamic_states);
     dynamic_state.pDynamicStates = dynamic_states;
 
+	VkPipelineRenderingCreateInfoKHR rendering_info = {};
+	rendering_info.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO;
+	rendering_info.stencilAttachmentFormat = v.StencilFormat;
+	rendering_info.depthAttachmentFormat = v.DepthFormat;
+	rendering_info.colorAttachmentCount = 1;
+	rendering_info.pColorAttachmentFormats = &v.ColorFormat;
+
     ImGui_ImplVulkan_CreatePipelineLayout(device, allocator);
 
     VkGraphicsPipelineCreateInfo info = {};
@@ -933,8 +945,9 @@ static void ImGui_ImplVulkan_CreatePipeline(VkDevice device, const VkAllocationC
     info.pColorBlendState = &blend_info;
     info.pDynamicState = &dynamic_state;
     info.layout = bd->PipelineLayout;
-    info.renderPass = renderPass;
-    info.subpass = subpass;
+    info.renderPass = VK_NULL_HANDLE;
+    info.subpass = 0;
+	info.pNext = &rendering_info;
     VkResult err = vkCreateGraphicsPipelines(device, pipelineCache, 1, &info, allocator, pipeline);
     check_vk_result(err);
 }
@@ -1077,7 +1090,7 @@ bool    ImGui_ImplVulkan_Init(ImGui_ImplVulkan_InitInfo* info, VkRenderPass rend
     IM_ASSERT(info->DescriptorPool != VK_NULL_HANDLE);
     IM_ASSERT(info->MinImageCount >= 2);
     IM_ASSERT(info->ImageCount >= info->MinImageCount);
-    IM_ASSERT(render_pass != VK_NULL_HANDLE);
+    //IM_ASSERT(render_pass != VK_NULL_HANDLE);
 
     bd->VulkanInitInfo = *info;
     bd->RenderPass = render_pass;
@@ -1641,7 +1654,8 @@ static void ImGui_ImplVulkan_SetWindowSize(ImGuiViewport* viewport, ImVec2 size)
 
 static void ImGui_ImplVulkan_RenderWindow(ImGuiViewport* viewport, void*)
 {
-    ImGui_ImplVulkan_Data* bd = ImGui_ImplVulkan_GetBackendData();
+    /*
+	 ImGui_ImplVulkan_Data* bd = ImGui_ImplVulkan_GetBackendData();
     ImGui_ImplVulkan_ViewportData* vd = (ImGui_ImplVulkan_ViewportData*)viewport->RendererUserData;
     ImGui_ImplVulkanH_Window* wd = &vd->Window;
     ImGui_ImplVulkan_InitInfo* v = &bd->VulkanInitInfo;
@@ -1711,6 +1725,7 @@ static void ImGui_ImplVulkan_RenderWindow(ImGuiViewport* viewport, void*)
             check_vk_result(err);
         }
     }
+	 */
 }
 
 static void ImGui_ImplVulkan_SwapBuffers(ImGuiViewport* viewport, void*)

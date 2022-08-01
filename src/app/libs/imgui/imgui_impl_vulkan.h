@@ -58,6 +58,9 @@ struct ImGui_ImplVulkan_InitInfo
     VkPipelineCache                 PipelineCache;
     VkDescriptorPool                DescriptorPool;
     uint32_t                        Subpass;
+	VkFormat 						ColorFormat;
+	VkFormat 						DepthFormat;
+	VkFormat 						StencilFormat;
     uint32_t                        MinImageCount;          // >= 2
     uint32_t                        ImageCount;             // >= MinImageCount
     VkSampleCountFlagBits           MSAASamples;            // >= VK_SAMPLE_COUNT_1_BIT (0 -> default to VK_SAMPLE_COUNT_1_BIT)

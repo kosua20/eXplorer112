@@ -272,13 +272,14 @@ void Window::setupImGui() {
 	_imgui->PipelineCache = VK_NULL_HANDLE;
 	_imgui->DescriptorPool = context->descriptorAllocator.getImGuiPool();
 	_imgui->Subpass = 0;
+	_swapchain->getFormats(_imgui->ColorFormat, _imgui->DepthFormat, _imgui->StencilFormat);
 	_imgui->MinImageCount = _swapchain->minCount();
 	_imgui->ImageCount = _swapchain->count();
 	_imgui->MSAASamples = VK_SAMPLE_COUNT_1_BIT;
 	_imgui->Allocator = nullptr;
 	_imgui->CheckVkResultFn = &VkUtils::checkResult;
 
-	ImGui_ImplVulkan_Init(_imgui, _swapchain->getRenderPass());
+	ImGui_ImplVulkan_Init(_imgui, VK_NULL_HANDLE);
 
 	// Upload font.
 	VkCommandBuffer commandBuffer = VkUtils::beginSyncOperations(*context);
