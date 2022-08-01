@@ -17,6 +17,8 @@ void main(){
 	if(engine.shadingMode == MODE_SHADING_LIGHT){
 		vec3 lightDir = normalize(vec3(1.0));
 		shading = max(0.0, dot(normalize(In.n), lightDir));
+		// Ambient
+		shading += 0.1;
 	}
 
 	vec3 albedo = engine.color.rgb;

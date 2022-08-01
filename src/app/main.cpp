@@ -117,6 +117,7 @@ struct ModelScene {
 	Obj dff;
 	std::vector<Mesh> meshes;
 	std::vector<Texture> textures;
+	std::vector<uint> meshToTextures;
 
 	void clean(){
 		for(Mesh& mesh : meshes){
@@ -127,6 +128,7 @@ struct ModelScene {
 		}
 		meshes.clear();
 		textures.clear();
+		meshToTextures.clear();
 
 		dff = Obj();
 	}
@@ -142,32 +144,7 @@ struct ModelScene {
 
 		for(const Obj::Set& set : dff.faceSets){
 
-			{
-				const std::string textureName = set.texture;
-				textures.emplace_back(textureName.empty() ? "tex" : textureName);
-				Texture& tex = textures.back();
-
-				for(const fs::path& texturePath : files.texturesList){
-					const std::string existingName = texturePath.filename().replace_extension().string();
-					if(existingName == textureName){
-						tex.images.resize(1);
-						tex.images[0].load(texturePath);
-						break;
-					}
-				}
-				if(tex.images.empty()){
-					tex.images.emplace_back();
-					Image::generateDefaultImage(tex.images[0]);
-				}
-				// Update texture parameters.
-				tex.width = tex.images[0].width;
-				tex.height = tex.images[0].height;
-				tex.depth = tex.levels = 1;
-				tex.shape = TextureShape::D2;
-				// TODO: handle compressed textures directly
-				tex.upload(Layout::SRGB8_ALPHA8, false);
-			}
-
+			// Load geometry.
 			{
 				meshes.emplace_back(set.name);
 				Mesh& mesh = meshes.back();
@@ -202,6 +179,50 @@ struct ModelScene {
 				mesh.computeBoundingBox();
 				mesh.upload();
 			}
+			// Load texture if it has not already been loaded.
+			{
+				const std::string textureName = set.texture;
+				const uint textureCount = (uint)textures.size();
+
+				uint textureIndex = textureCount;
+				// Look at existing textures first.
+				for(uint tid = 0u; tid < textureCount; ++tid){
+					if(textures[tid].name() == textureName){
+						textureIndex = tid;
+						break;
+					}
+				}
+
+				// If not found, create a new texture.
+				if(textureIndex == textureCount){
+
+					textures.emplace_back(textureName.empty() ? "tex" : textureName);
+					Texture& tex = textures.back();
+
+					for(const fs::path& texturePath : files.texturesList){
+						const std::string existingName = texturePath.filename().replace_extension().string();
+						if(existingName == textureName){
+							tex.images.resize(1);
+							tex.images[0].load(texturePath);
+							break;
+						}
+					}
+					if(tex.images.empty()){
+						tex.images.emplace_back();
+						Image::generateDefaultImage(tex.images[0]);
+					}
+					// Update texture parameters.
+					tex.width = tex.images[0].width;
+					tex.height = tex.images[0].height;
+					tex.depth = tex.levels = 1;
+					tex.shape = TextureShape::D2;
+					// TODO: handle compressed textures directly
+					tex.upload(Layout::SRGB8_ALPHA8, false);
+				}
+
+				meshToTextures.emplace_back(textureIndex);
+
+			}
 		}
 	}
 };
@@ -221,7 +242,6 @@ int main(int argc, char ** argv) {
 	Window window("eXperience112 viewer", config, allowEscapeQuit);
 	const std::string iniPath = APP_RESOURCE_DIRECTORY / "imgui.ini";
 	ImGui::GetIO().IniFilename = iniPath.c_str();
-	const float TEXT_BASE_HEIGHT = ImGui::GetTextLineHeightWithSpacing();
 
 	// Try to load configuration.
 	GameFiles gameFiles;
@@ -272,6 +292,10 @@ int main(int argc, char ** argv) {
 
 	// GUi state
 	Mesh boundingBox("bbox");
+	enum class ViewerMode {
+		MODEL, WORLD
+	};
+	ViewerMode viewMode = ViewerMode::MODEL;
 	int shadingMode = MODE_SHADING_LIGHT;
 	int albedoMode = MODE_ALBEDO_TEXTURE;
 	int selectedModel = -1;
@@ -367,60 +391,105 @@ int main(int argc, char ** argv) {
 		}
 
 		// Begin GUI setup.
-		if(ImGui::Begin("Models")){
-			const unsigned int modelsCount = (uint)gameFiles.modelsList.size();
-			ImGui::Text("Found %u models", modelsCount);
+		if(ImGui::Begin("Files")){
 
-			if(ImGui::BeginTable("#ModelsTable", 2, tableFlags)){
-				// Header
-				ImGui::TableSetupScrollFreeze(0, 1); // Make top row always visible
-				ImGui::TableSetupColumn("Name", ImGuiTableColumnFlags_None);
-				ImGui::TableSetupColumn("Directory", ImGuiTableColumnFlags_None);
-				ImGui::TableHeadersRow();
+			if (ImGui::BeginTabBar("#FilesTabBar")){
 
-				// Demonstrate using clipper for large vertical lists
-				ImGuiListClipper clipper;
-				clipper.Begin(modelsCount);
-				while (clipper.Step()) {
-					for (int row = clipper.DisplayStart; row < clipper.DisplayEnd; row++){
-						ImGui::PushID(row);
-						ImGui::TableNextColumn();
+				if (ImGui::BeginTabItem("Models")){
+					viewMode = ViewerMode::MODEL;
 
-						const fs::path& modelPath = gameFiles.modelsList[row];
-						std::string modelName = modelPath.filename();
-						const std::string modelParent = modelPath.parent_path().filename();
+					const unsigned int modelsCount = (uint)gameFiles.modelsList.size();
+					ImGui::Text("Found %u models", modelsCount);
 
-						if(selectedModel == row){
-							modelName = "* " + modelName;
-						}
+					if(ImGui::BeginTable("#ModelsTable", 2, tableFlags)){
+						// Header
+						ImGui::TableSetupScrollFreeze(0, 1); // Make top row always visible
+						ImGui::TableSetupColumn("Name", ImGuiTableColumnFlags_None);
+						ImGui::TableSetupColumn("Directory", ImGuiTableColumnFlags_None);
+						ImGui::TableHeadersRow();
 
-						if(ImGui::Selectable(modelName.c_str(), selectedModel == row, selectableTableFlags)){
-							if(selectedModel != row){
-								model.clean();
-								selectedModel = row;
-								model.load(modelPath, gameFiles);
-								// Compute the bounding box.
-								BoundingBox modelBox;
-								for(Mesh& mesh : model.meshes){
-									modelBox.merge(mesh.bbox);
+						// Demonstrate using clipper for large vertical lists
+						ImGuiListClipper clipper;
+						clipper.Begin(modelsCount);
+						while (clipper.Step()) {
+							for (int row = clipper.DisplayStart; row < clipper.DisplayEnd; row++){
+								ImGui::PushID(row);
+								ImGui::TableNextColumn();
+
+								const fs::path& modelPath = gameFiles.modelsList[row];
+								std::string modelName = modelPath.filename();
+								const std::string modelParent = modelPath.parent_path().filename();
+
+								if(selectedModel == row){
+									modelName = "* " + modelName;
 								}
-								// Center the camera.
-								const glm::vec3 center = modelBox.getCentroid();
-								const glm::vec3 extent = modelBox.getSize();
-								camera.pose(center + glm::vec3(0.0, 0.0, extent[2]), center, glm::vec3(0.0, 1.0f, 0.0f));
-								selectedMesh = -1;
-								selectedTexture = -1;
+
+								if(ImGui::Selectable(modelName.c_str(), selectedModel == row, selectableTableFlags)){
+									if(selectedModel != row){
+										model.clean();
+										selectedModel = row;
+										model.load(modelPath, gameFiles);
+										// Compute the bounding box.
+										BoundingBox modelBox;
+										for(Mesh& mesh : model.meshes){
+											modelBox.merge(mesh.bbox);
+										}
+										// Center the camera.
+										const glm::vec3 center = modelBox.getCentroid();
+										const glm::vec3 extent = modelBox.getSize();
+										camera.pose(center + glm::vec3(0.0, 0.0, extent[2]), center, glm::vec3(0.0, 1.0f, 0.0f));
+										selectedMesh = -1;
+										selectedTexture = -1;
+									}
+								}
+								ImGui::TableNextColumn();
+								ImGui::Text("%s", modelParent.c_str());
+
+								ImGui::PopID();
 							}
 						}
-						ImGui::TableNextColumn();
-						ImGui::Text("%s", modelParent.c_str());
 
-						ImGui::PopID();
+						ImGui::EndTable();
 					}
+					ImGui::EndTabItem();
 				}
 
-				ImGui::EndTable();
+				if(ImGui::BeginTabItem("Worlds")){
+					viewMode = ViewerMode::WORLD;
+					selectedModel = -1;
+					
+					const unsigned int worldCount = (uint)gameFiles.worldsList.size();
+					ImGui::Text("Found %u worlds", worldCount);
+
+					if(ImGui::BeginTable("#WorldsTable", 2, tableFlags)){
+						// Header
+						ImGui::TableSetupScrollFreeze(0, 1); // Make top row always visible
+						ImGui::TableSetupColumn("Name", ImGuiTableColumnFlags_None);
+						ImGui::TableSetupColumn("Directory", ImGuiTableColumnFlags_None);
+						ImGui::TableHeadersRow();
+
+						for(int row = 0; row < (int)worldCount; row++){
+							ImGui::PushID(row);
+							ImGui::TableNextColumn();
+
+							const fs::path& worldPath = gameFiles.worldsList[row];
+							std::string worldName = worldPath.filename();
+							const std::string worldParent = worldPath.parent_path().filename();
+
+							ImGui::Text("%s", worldName.c_str());
+							ImGui::TableNextColumn();
+							ImGui::Text("%s", worldParent.c_str());
+
+							ImGui::PopID();
+						}
+
+						ImGui::EndTable();
+					}
+					ImGui::EndTabItem();
+				}
+				ImGui::EndTabBar();
 			}
+
 		}
 			
 		ImGui::End();
@@ -433,14 +502,14 @@ int main(int argc, char ** argv) {
 					selectedMesh = -1;
 				}
 				ImVec2 winSize = ImGui::GetContentRegionAvail();
-				winSize.y = 0.5f * winSize.y;
+				winSize.y = 0.48f * winSize.y;
 
 				if(ImGui::BeginTable("#MeshList", 3, tableFlags, winSize)){
 					// Header
 					ImGui::TableSetupScrollFreeze(0, 1); // Make top row always visible
 					ImGui::TableSetupColumn("Name", ImGuiTableColumnFlags_None);
-					ImGui::TableSetupColumn("Triangles", ImGuiTableColumnFlags_None);
 					ImGui::TableSetupColumn("Vertices", ImGuiTableColumnFlags_None);
+					ImGui::TableSetupColumn("Triangles", ImGuiTableColumnFlags_None);
 					ImGui::TableHeadersRow();
 
 					const int meshCount = (int)model.meshes.size();
@@ -468,9 +537,9 @@ int main(int argc, char ** argv) {
 							}
 						}
 						ImGui::TableNextColumn();
-						ImGui::Text("%lu", mesh.metrics().indices/3);
-						ImGui::TableNextColumn();
 						ImGui::Text("%lu", mesh.metrics().vertices);
+						ImGui::TableNextColumn();
+						ImGui::Text("%lu", mesh.metrics().indices/3);
 
 						ImGui::PopID();
 					}
@@ -520,9 +589,6 @@ int main(int argc, char ** argv) {
 				winSize.y = std::max(winSize.y, 2.f);
 				ImGui::ImageButton(model.textures[selectedTexture], ImVec2(winSize.x, winSize.y), ImVec2(0.0,0.0), ImVec2(1.0,1.0), 0, ImVec4(1.0f, 0.0f, 1.0f, 1.0f));
 			}
-
-
-
 		}
 		ImGui::End();
 
@@ -603,42 +669,46 @@ int main(int argc, char ** argv) {
 		fb.bind(glm::vec4(0.25f, 0.25f, 0.25f, 1.0f), 1.0f, Framebuffer::Operation::DONTCARE);
 		GPU::setViewport(0, 0, fb.width(), fb.height());
 
-		GPU::setPolygonState(PolygonMode::FILL);
-		GPU::setDepthState(true, TestFunction::LESS, true);
-		GPU::setBlendState(false);
-		GPU::setCullState(true);
+		if(viewMode == ViewerMode::MODEL){
 
-		texturedObject->use();
-		texturedObject->buffer(ubo, 0);
-
-		for(unsigned int i = 0; i < model.meshes.size(); ++i){
-			texturedObject->texture(model.textures[i], 0);
-			GPU::drawMesh(model.meshes[i]);
-		}
-
-		if(showWireframe){
-			// Temporarily force the mode.
-			ubo.at(0).shadingMode = MODE_SHADING_NONE;
-			ubo.at(0).albedoMode = MODE_ALBEDO_UNIFORM;
-			ubo.upload();
+			GPU::setPolygonState(PolygonMode::FILL);
+			GPU::setDepthState(true, TestFunction::LESS, true);
+			GPU::setBlendState(false);
+			GPU::setCullState(true);
 
 			texturedObject->use();
 			texturedObject->buffer(ubo, 0);
-			GPU::setPolygonState(PolygonMode::LINE);
+
 			for(unsigned int i = 0; i < model.meshes.size(); ++i){
-				if(selectedMesh == -1 || selectedMesh == (int)i){
-					GPU::drawMesh(model.meshes[i]);
+				texturedObject->texture(model.textures[model.meshToTextures[i]], 0);
+				GPU::drawMesh(model.meshes[i]);
+			}
+
+			if(showWireframe){
+				// Temporarily force the mode.
+				ubo.at(0).shadingMode = MODE_SHADING_NONE;
+				ubo.at(0).albedoMode = MODE_ALBEDO_UNIFORM;
+				ubo.upload();
+
+				texturedObject->use();
+				texturedObject->buffer(ubo, 0);
+				GPU::setPolygonState(PolygonMode::LINE);
+				for(unsigned int i = 0; i < model.meshes.size(); ++i){
+					if(selectedMesh == -1 || selectedMesh == (int)i){
+						GPU::drawMesh(model.meshes[i]);
+					}
 				}
+			}
+
+			if(selectedMesh >= 0){
+				coloredObject->use();
+				coloredObject->buffer(ubo, 0);
+				GPU::setPolygonState(PolygonMode::LINE);
+				GPU::setCullState(false);
+				GPU::drawMesh(boundingBox);
 			}
 		}
 
-		if(selectedMesh >= 0){
-			coloredObject->use();
-			coloredObject->buffer(ubo, 0);
-			GPU::setPolygonState(PolygonMode::LINE);
-			GPU::setCullState(false);
-			GPU::drawMesh(boundingBox);
-		}
 
 		Framebuffer::backbuffer()->bind(glm::vec4(0.2f, 0.2f, 0.2f, 1.0f), Framebuffer::Operation::DONTCARE, Framebuffer::Operation::DONTCARE);
 
