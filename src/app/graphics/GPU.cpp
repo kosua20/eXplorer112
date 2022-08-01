@@ -18,6 +18,7 @@
 #pragma clang diagnostic ignored "-Wunused-parameter"
 #pragma clang diagnostic ignored "-Wunused-variable"
 #pragma clang diagnostic ignored "-Wunused-private-field"
+#pragma clang diagnostic ignored "-Wnullability-completeness"
 #include <vma/vk_mem_alloc.h>
 #pragma clang diagnostic pop
 

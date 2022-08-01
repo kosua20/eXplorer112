@@ -25,6 +25,7 @@ void Mesh::clearGeometry() {
 	normals.clear();
 	tangents.clear();
 	bitangents.clear();
+	colors.clear();
 	texcoords.clear();
 	indices.clear();
 	// Don't update the metrics automatically

@@ -6,7 +6,10 @@
 #define DDSKTX_IMPLEMENT
 
 #include <stb/stb_image.h>
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wmissing-field-initializers"
 #include <stb/stb_image_write.h>
+#pragma clang diagnostic pop
 #include <dds-ktx/dds-ktx.h>
 
 #include <squish/squish.h>
