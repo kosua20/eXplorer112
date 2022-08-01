@@ -7,9 +7,7 @@
 #include <array>
 
 // Forward declarations.
-VK_DEFINE_HANDLE(VkFramebuffer)
 VK_DEFINE_HANDLE(VkImageView)
-VK_DEFINE_HANDLE(VkRenderPass)
 
 /**
  \brief Represent a rendering target, of any size, format and type, backed by a GPU framebuffer.
@@ -137,9 +135,6 @@ public:
 	 */
 	bool isEquivalent(const Framebuffer& other) const;
 
-	/** \return a render pass compatible with this framebuffer */
-	VkRenderPass getRenderPass() const { return _renderPasses[0][0][0]; }
-
 	/** Read back the value at a given pixel in the first layer and first level of the first color attachment.
 	 \param pos the position in pixels
 	 \return a float RGBA color.
@@ -261,23 +256,8 @@ private:
 
 	/// \brief View on one layer of one level of the framebuffer.
 	struct Slice {
-		VkFramebuffer framebuffer = VK_NULL_HANDLE; ///< Native handle.
 		std::vector<VkImageView> attachments; ///< Views for all attachments.
 	};
-
-	/** Create a render pass for the corresponding load operations.
-	 *  \param colorOp the operation to perform on the color attachments
-	 *  \param depthOp the operation to perform on the depth attachment
-	 *  \param stencilOp the operation to perform on the stencil attachment
-	 *  \param presentable should the framebuffer end up in a presentable state (if its the backbuffer)
-	 *  \return the newly created render pass
-	 */
-	VkRenderPass createRenderpass(Operation colorOp, Operation depthOp, Operation stencilOp, bool presentable);
-
-	/** Create all possible render passes.
-	 * \param isBackbuffer will the framebuffer be used as backbuffer (specific presentation end layout)
-	 */
-	void populateRenderPasses(bool isBackbuffer);
 	
 	/** Populate the framebuffer pipeline state. */
 	void populateLayoutState();
@@ -291,8 +271,6 @@ private:
 	std::vector<std::vector<Slice>> _framebuffers; ///< Per-level per-layer framebuffer info.
 	std::vector<Texture> _colors; ///< The color textures.
 	Texture _depth = Texture("Depth"); ///< The depth texture.
-	
-	std::array<std::array<std::array<VkRenderPass, 3>, 3>, 3> _renderPasses; ///< Render passes for all operations possible combinations.
 	State _state; ///< The framebuffer pipeline state.
 
 	glm::vec4 _readColor = glm::vec4(0.0f); ///< Buffered read-back pixel color.

@@ -27,7 +27,7 @@
 #include <set>
 
 const std::vector<const char*> validationLayers = { "VK_LAYER_KHRONOS_validation" /*, "VK_LAYER_LUNARG_api_dump"*/ };
-const std::vector<const char*> deviceExtensions = { VK_KHR_SWAPCHAIN_EXTENSION_NAME };
+const std::vector<const char*> deviceExtensions = { VK_KHR_SWAPCHAIN_EXTENSION_NAME, VK_KHR_CREATE_RENDERPASS_2_EXTENSION_NAME,  VK_KHR_DEPTH_STENCIL_RESOLVE_EXTENSION_NAME,  VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME };
 
 GPUContext _context;
 
@@ -58,7 +58,7 @@ bool GPU::setup(const std::string & appName) {
 	appInfo.applicationVersion = VK_MAKE_VERSION(1, 0, 0);
 	appInfo.pEngineName = "Rendu";
 	appInfo.engineVersion = VK_MAKE_VERSION(1, 0, 0);
-	appInfo.apiVersion = VK_API_VERSION_1_1;
+	appInfo.apiVersion = VK_API_VERSION_1_3;
 
 	VkInstanceCreateInfo instanceInfo = {};
 	instanceInfo.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
@@ -201,7 +201,14 @@ bool GPU::setupWindow(Window * window){
 	features.tessellationShader = VK_TRUE;
 	features.imageCubeArray = VK_TRUE;
 	features.fillModeNonSolid = VK_TRUE;
+
 	deviceInfo.pEnabledFeatures = &features;
+
+	VkPhysicalDeviceDynamicRenderingFeaturesKHR dynamicRenderingFeature { };
+	dynamicRenderingFeature.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES_KHR;
+	dynamicRenderingFeature.dynamicRendering = VK_TRUE;
+	deviceInfo.pNext = &dynamicRenderingFeature;
+
 	// Extensions.
 	auto extensions = deviceExtensions;
 	// If portability is available, we have to enabled it.
@@ -210,7 +217,7 @@ bool GPU::setupWindow(Window * window){
 	}
 	deviceInfo.enabledExtensionCount = static_cast<uint32_t>(extensions.size());
 	deviceInfo.ppEnabledExtensionNames = extensions.data();
-
+	
 	if(vkCreateDevice(_context.physicalDevice, &deviceInfo, nullptr, &_context.device) != VK_SUCCESS) {
 		Log::error("GPU: Unable to create logical device.");
 		return false;
@@ -222,7 +229,7 @@ bool GPU::setupWindow(Window * window){
 
 	// Setup allocator.
 	VmaAllocatorCreateInfo allocatorInfo = {};
-	allocatorInfo.vulkanApiVersion = VK_API_VERSION_1_1;
+	allocatorInfo.vulkanApiVersion = VK_API_VERSION_1_3;
 	allocatorInfo.physicalDevice = _context.physicalDevice;
 	allocatorInfo.device = _context.device;
 	allocatorInfo.instance = _context.instance;
@@ -1453,7 +1460,7 @@ void GPU::unbindFramebufferIfNeeded(){
 		return;
 	}
 	VkCommandBuffer& commandBuffer = _context.getRenderCommandBuffer();
-	vkCmdEndRenderPass(commandBuffer);
+	vkCmdEndRenderingKHR(commandBuffer);
 	++_metrics.renderPasses;
 	_context.hadRenderPass = true;
 
@@ -1535,17 +1542,11 @@ void GPU::clean(GPUTexture & tex){
 	--_metrics.textures;
 }
 
-void GPU::clean(Framebuffer & framebuffer, bool deleteRenderPasses){
+void GPU::clean(Framebuffer & framebuffer){
 
 	for(auto& slices : framebuffer._framebuffers){
 
 		for(auto& slice : slices){
-			// Delete the framebuffer.
-			_context.resourcesToDelete.emplace_back();
-			ResourceToDelete& rsc = _context.resourcesToDelete.back();
-			rsc.framebuffer = slice.framebuffer;
-			rsc.frame = _context.frameIndex;
-			rsc.name = framebuffer.name();
 
 			// Delete the attachment views if the framebuffer owned them.
 			if(!framebuffer._isBackbuffer){
@@ -1559,22 +1560,6 @@ void GPU::clean(Framebuffer & framebuffer, bool deleteRenderPasses){
 			}
 		}
 	}
-
-	// Delete the render passes if requested.
-	if(deleteRenderPasses){
-		for(const auto& passes2 : framebuffer._renderPasses){
-			for(const auto& passes1 : passes2){
-				for(const VkRenderPass& pass : passes1){
-					_context.resourcesToDelete.emplace_back();
-					ResourceToDelete& rsc = _context.resourcesToDelete.back();
-					rsc.renderPass = pass;
-					rsc.frame = _context.frameIndex;
-					rsc.name = framebuffer.name();
-				}
-			}
-		}
-	}
-	
 }
 
 void GPU::clean(GPUMesh & mesh){
@@ -1637,12 +1622,6 @@ void GPU::processDestructionRequests(){
 		}
 		if(rsc.buffer != VK_NULL_HANDLE){
 			vmaDestroyBuffer(_allocator, rsc.buffer, rsc.data);
-		}
-		if(rsc.framebuffer != VK_NULL_HANDLE){
-			vkDestroyFramebuffer(_context.device, rsc.framebuffer, nullptr);
-		}
-		if(rsc.renderPass != VK_NULL_HANDLE){
-			vkDestroyRenderPass(_context.device, rsc.renderPass, nullptr);
 		}
 		_context.resourcesToDelete.pop_front();
 	}

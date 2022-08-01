@@ -415,7 +415,7 @@ private:
 	 * \param framebuffer the object to delete
 	 * \param deleteRenderPasses should the render passes be deleted (we can skip it for swapchains)
 	 */
-	static void clean(Framebuffer & framebuffer, bool deleteRenderPasses);
+	static void clean(Framebuffer & framebuffer);
 
 	/** Clean a shader program object. 
 	 * \param program the object to delete

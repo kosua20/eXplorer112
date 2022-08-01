@@ -403,9 +403,33 @@ VkPipeline PipelineCache::buildGraphicsPipeline(const GPUState& state){
 	}
 
 	// Render pass
+	VkPipelineRenderingCreateInfoKHR renderingInfo{};
+	std::vector<VkFormat> colorFormats(attachmentCount);
 	{
-		pipelineInfo.renderPass = state.pass.framebuffer->getRenderPass();
-		pipelineInfo.subpass = 0;
+		const Framebuffer& fb = *state.pass.framebuffer;
+		for(uint aid = 0; aid < attachmentCount; ++aid){
+			colorFormats[aid] = fb.texture(aid)->gpu->format;
+		}
+
+		renderingInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO_KHR;
+		renderingInfo.colorAttachmentCount = colorState.attachmentCount;
+		renderingInfo.pColorAttachmentFormats = colorFormats.data();
+		renderingInfo.viewMask = 0u;
+
+		renderingInfo.depthAttachmentFormat = VK_FORMAT_UNDEFINED;
+		renderingInfo.stencilAttachmentFormat = VK_FORMAT_UNDEFINED;
+
+		if(fb.depthBuffer()){
+			const GPUTexture* depth = fb.depthBuffer()->gpu.get();
+			renderingInfo.depthAttachmentFormat = depth->format;
+			if(depth->typedFormat == Layout::DEPTH24_STENCIL8 || depth->typedFormat == Layout::DEPTH32F_STENCIL8){
+				renderingInfo.stencilAttachmentFormat = depth->format;
+			}
+		}
+
+		pipelineInfo.pNext = &renderingInfo;
+		pipelineInfo.renderPass = VK_NULL_HANDLE;
+		pipelineInfo.subpass = 0u;
 	}
 	// No inheritance
 	{

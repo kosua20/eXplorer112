@@ -45,8 +45,7 @@ public:
 	/** Destructor. */
 	~Swapchain();
 
-	/** \return a renderpass compatible with the swapchain backbuffer. */
-	VkRenderPass getRenderPass();
+	void getFormats(VkFormat& color, VkFormat& depth, VkFormat& stencil);
 
 private:
 

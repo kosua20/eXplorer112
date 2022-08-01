@@ -226,25 +226,12 @@ void Swapchain::setup(uint32_t width, uint32_t height){
 		viewInfoMip.subresourceRange.layerCount = 1;
 		VK_RET(vkCreateImageView(_context->device, &viewInfoMip, nullptr, &(fb._colors[0].gpu->levelViews[0])));
 
-		// Generate the render passes.
-		fb.populateRenderPasses(false);
 		fb.populateLayoutState();
 		
 		fb._framebuffers.resize(1);
 		fb._framebuffers[0].resize(1);
 		fb._framebuffers[0][0].attachments = { fb._colors[0].gpu->view, fb._depth.gpu->view };
 
-		VkFramebufferCreateInfo framebufferInfo = {};
-		framebufferInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
-		framebufferInfo.renderPass = fb._renderPasses[0][0][0];
-		framebufferInfo.attachmentCount = static_cast<uint32_t>(fb._framebuffers[0][0].attachments.size());
-		framebufferInfo.pAttachments = fb._framebuffers[0][0].attachments.data();
-		framebufferInfo.width = extent.width;
-		framebufferInfo.height = extent.height;
-		framebufferInfo.layers = 1;
-		if(vkCreateFramebuffer(_context->device, &framebufferInfo, nullptr, &fb._framebuffers[0][0].framebuffer) != VK_SUCCESS) {
-			Log::error("GPU: Unable to create swap framebuffers.");
-		}
 	}
 
 
@@ -281,8 +268,14 @@ void Swapchain::resize(uint width, uint height){
 	setup((uint32_t)width, (uint32_t)height);
 }
 
-VkRenderPass Swapchain::getRenderPass(){
-	return _framebuffers[0]->getRenderPass();
+void Swapchain::getFormats(VkFormat& color, VkFormat& depth, VkFormat& stencil){
+	color = _framebuffers[0]->texture(0)->gpu->format;
+	depth = _depth.gpu->format;
+	if(_depth.gpu->typedFormat == Layout::DEPTH24_STENCIL8 || _depth.gpu->typedFormat == Layout::DEPTH32F_STENCIL8){
+		stencil = depth;
+	} else {
+		stencil = VK_FORMAT_UNDEFINED;
+	}
 }
 
 bool Swapchain::finishFrame(){

@@ -58,110 +58,12 @@ Framebuffer::Framebuffer(TextureShape shape, uint width, uint height, uint depth
 
 		}
 	}
-
-	// Populate all render passes. If this is too wasteful (27 render passes), we could create them on request and cache them.
-	populateRenderPasses(false);
-	populateLayoutState();
+		populateLayoutState();
 
 	// Create the framebuffer.
 	finalizeFramebuffer();
 
 }
-
-VkRenderPass Framebuffer::createRenderpass(Operation colorOp, Operation depthOp, Operation stencilOp, bool presentable){
-
-	const size_t attachCount = _colors.size() + (_hasDepth ? 1 : 0);
-	std::vector<VkAttachmentDescription> attachDescs(attachCount);
-	std::vector<VkAttachmentReference> attachRefs(attachCount);
-
-	static const std::array<VkAttachmentLoadOp, 3> ops = {VK_ATTACHMENT_LOAD_OP_LOAD, VK_ATTACHMENT_LOAD_OP_CLEAR, VK_ATTACHMENT_LOAD_OP_DONT_CARE};
-
-	const VkAttachmentLoadOp colorLoad = ops[uint(colorOp)];
-	const VkAttachmentStoreOp colorStore = VK_ATTACHMENT_STORE_OP_STORE;
-	const VkAttachmentLoadOp 	depthLoad = ops[uint(depthOp)];
-	const VkAttachmentStoreOp depthStore = VK_ATTACHMENT_STORE_OP_STORE; // could be DONT_CARE when depth is internal ?
-	const VkAttachmentLoadOp 	stencilLoad = ops[uint(stencilOp)];
-	const VkAttachmentStoreOp stencilStore = VK_ATTACHMENT_STORE_OP_STORE;  // could be DONT_CARE when depth is internal ?
-
-	for(size_t cid = 0; cid < _colors.size(); ++cid){
-		VkAttachmentDescription& desc = attachDescs[cid];
-		desc.format = _colors[cid].gpu->format;
-		desc.samples = VK_SAMPLE_COUNT_1_BIT;
-		desc.loadOp = colorLoad;
-		desc.storeOp = colorStore;
-		desc.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-		desc.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-		desc.initialLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-		desc.finalLayout = presentable ? VK_IMAGE_LAYOUT_PRESENT_SRC_KHR : VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-
-		VkAttachmentReference& ref = attachRefs[cid];
-		ref.attachment = uint32_t(cid);
-		ref.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-	}
-
-	// Depth is the last attachment.
-	if(_hasDepth){
-		VkAttachmentDescription& desc = attachDescs.back();
-		desc.format = _depth.gpu->format;
-		desc.samples = VK_SAMPLE_COUNT_1_BIT;
-		desc.loadOp = depthLoad;
-		desc.storeOp = depthStore;
-		desc.stencilLoadOp = stencilLoad;
-		desc.stencilStoreOp = stencilStore;
-		desc.initialLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
-		desc.finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
-
-		VkAttachmentReference& ref = attachRefs.back();
-		ref.attachment = static_cast<uint32_t>(_colors.size());
-		ref.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
-	}
-
-	// Subpass.
-	VkSubpassDescription subpass = {};
-	subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
-	subpass.colorAttachmentCount = static_cast<uint32_t>(_colors.size());
-	subpass.pColorAttachments = attachRefs.data();
-	subpass.pDepthStencilAttachment = _hasDepth ? &attachRefs.back() : nullptr;
-
-	// Dependencies.
-	std::array<VkSubpassDependency, 1> dependencies;
-	dependencies[0].srcSubpass = VK_SUBPASS_EXTERNAL;
-	dependencies[0].dstSubpass = 0;
-	dependencies[0].srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
-	dependencies[0].srcAccessMask = 0;
-	dependencies[0].dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
-	dependencies[0].dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
-	dependencies[0].dependencyFlags = 0;
-
-	// Render pass.
-	VkRenderPassCreateInfo renderPassInfo = {};
-	renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
-	renderPassInfo.attachmentCount = static_cast<uint32_t>(attachDescs.size());
-	renderPassInfo.pAttachments = attachDescs.data();
-	renderPassInfo.subpassCount = 1;
-	renderPassInfo.pSubpasses = &subpass;
-	renderPassInfo.dependencyCount = uint32_t(dependencies.size());
-	renderPassInfo.pDependencies = dependencies.data();
-
-	GPUContext* context = GPU::getInternal();
-	VkRenderPass pass = VK_NULL_HANDLE;
-	if(vkCreateRenderPass(context->device, &renderPassInfo, nullptr, &pass) != VK_SUCCESS) {
-		Log::error("GPU : Unable to create render pass.");
-	}
-	return pass;
-}
-
-void Framebuffer::populateRenderPasses(bool isBackbuffer){
-	const uint operationCount = uint(_renderPasses.size());
-	for(uint cid = 0; cid < operationCount; ++cid){
-		for(uint did = 0; did < operationCount; ++did){
-			for(uint sid = 0; sid < operationCount; ++sid){
-				_renderPasses[cid][did][sid] = createRenderpass(Operation(cid), Operation(did), Operation(sid), isBackbuffer);
-			}
-		}
-	}
-}
-
 void Framebuffer::populateLayoutState(){
 	for(uint cid = 0; cid < _colors.size(); ++cid){
 		_state.colors.push_back(_colors[cid].gpu->typedFormat);
@@ -190,9 +92,6 @@ void Framebuffer::finalizeFramebuffer(){
 	// Generate per-mip per-layer framebuffers.
 	for(uint mid = 0; mid < _mips; ++mid){
 		_framebuffers[mid].resize(_layers);
-
-		const uint wMip = std::max<uint>(1u, _width >> mid);
-		const uint hMip = std::max<uint>(1u, _height >> mid);
 
 		for(uint lid = 0; lid < _layers; ++lid){
 			Slice& slice = _framebuffers[mid][lid];
@@ -236,24 +135,8 @@ void Framebuffer::finalizeFramebuffer(){
 					return;
 				}
 			}
-
-			VkFramebufferCreateInfo framebufferInfo = {};
-			framebufferInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
-			// We can use any operations for the pass, they will all be compatible no matter the operations.
-			framebufferInfo.renderPass = _renderPasses[0][0][0];
-			framebufferInfo.attachmentCount = static_cast<uint32_t>(slice.attachments.size());
-			framebufferInfo.pAttachments = slice.attachments.data();
-			framebufferInfo.width = wMip;
-			framebufferInfo.height = hMip;
-			framebufferInfo.layers = 1; // We don't support multi-layered rendering for now.
-
-			if(vkCreateFramebuffer(context->device, &framebufferInfo, nullptr, &slice.framebuffer) != VK_SUCCESS) {
-				Log::error("GPU: Unable to create framebuffer.");
-			}
-
 		}
 	}
-
 }
 
 void Framebuffer::bind(const LoadOperation& colorOp, const LoadOperation& depthOp, const LoadOperation& stencilOp) const {
@@ -265,44 +148,87 @@ void Framebuffer::bind(uint layer, uint mip, const LoadOperation& colorOp, const
 
 	// Retrieve the framebuffer slice and render pass.
 	const Slice& slice = _framebuffers[mip][layer];
-	const VkRenderPass& pass = _renderPasses[uint(colorOp.mode)][uint(depthOp.mode)][uint(stencilOp.mode)];
 
 	GPU::bindFramebuffer(*this, layer, mip);
 
 	GPUContext* context = GPU::getInternal();
 	VkCommandBuffer& commandBuffer = context->getRenderCommandBuffer();
 
-	// Retrieve clear colors and transition the regions of the resources we need.
-	const uint attachCount = uint(_colors.size()) + (_hasDepth ? 1 : 0);
-	std::vector<VkClearValue> clearVals(attachCount);
-
-	for(uint cid = 0; cid < _colors.size(); ++cid){
-		clearVals[cid].color.float32[0] = colorOp.value[0];
-		clearVals[cid].color.float32[1] = colorOp.value[1];
-		clearVals[cid].color.float32[2] = colorOp.value[2];
-		clearVals[cid].color.float32[3] = colorOp.value[3];
-		VkUtils::imageLayoutBarrier(commandBuffer, *_colors[cid].gpu, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, mip, 1, layer, 1);
-	}
-	if(_hasDepth){
-		clearVals.back().depthStencil.depth = depthOp.value[0];
-		clearVals.back().depthStencil.stencil = uint32_t(stencilOp.value[0]);
-		VkUtils::imageLayoutBarrier(commandBuffer, *_depth.gpu, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, mip, 1, layer, 1);
-	}
-
 	const uint w = std::max<uint>(1u, _width >> mip);
 	const uint h = std::max<uint>(1u, _height >> mip);
 
-	VkRenderPassBeginInfo info = {};
-	info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-	info.pNext = nullptr;
-	info.framebuffer = slice.framebuffer;
-	info.renderPass = pass;
-	info.clearValueCount = uint32_t(clearVals.size());
-	info.pClearValues = clearVals.data();
+	static const std::array<VkAttachmentLoadOp, 3> ops = {VK_ATTACHMENT_LOAD_OP_LOAD, VK_ATTACHMENT_LOAD_OP_CLEAR, VK_ATTACHMENT_LOAD_OP_DONT_CARE};
+
+	const VkAttachmentLoadOp colorLoad = ops[uint(colorOp.mode)];
+	const VkAttachmentStoreOp colorStore = VK_ATTACHMENT_STORE_OP_STORE;
+	const VkAttachmentLoadOp 	depthLoad = ops[uint(depthOp.mode)];
+	const VkAttachmentStoreOp depthStore = VK_ATTACHMENT_STORE_OP_STORE; // could be DONT_CARE when depth is internal ?
+	const VkAttachmentLoadOp 	stencilLoad = ops[uint(stencilOp.mode)];
+	const VkAttachmentStoreOp stencilStore = VK_ATTACHMENT_STORE_OP_STORE;  // could be DONT_CARE when depth is internal ?
+
+	VkRenderingInfoKHR info = {};
+	info.sType = VK_STRUCTURE_TYPE_RENDERING_INFO_KHR;
 	info.renderArea.extent = {uint32_t(w), uint32_t(h)};
 	info.renderArea.offset = {0u, 0u};
+	info.layerCount = 1;
+	info.colorAttachmentCount = 0;
+	info.pColorAttachments = nullptr;
+	info.pDepthAttachment = nullptr;
+	info.pStencilAttachment = nullptr;
+	info.viewMask = 0;
+	info.flags = 0;
 
-	vkCmdBeginRenderPass(commandBuffer, &info, VK_SUBPASS_CONTENTS_INLINE);
+	const size_t colorsCount = _colors.size();
+	std::vector<VkRenderingAttachmentInfoKHR> colorInfos(colorsCount);
+	VkRenderingAttachmentInfoKHR depthInfo;
+	VkRenderingAttachmentInfoKHR stencilInfo;
+
+	for(uint cid = 0; cid < colorsCount; ++cid){
+		VkRenderingAttachmentInfoKHR& colorInfo = colorInfos[cid];
+		colorInfo.imageView = slice.attachments[cid];
+		colorInfo.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO_KHR;
+		colorInfo.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+		colorInfo.clearValue.color.float32[0] = colorOp.value[0];
+		colorInfo.clearValue.color.float32[1] = colorOp.value[1];
+		colorInfo.clearValue.color.float32[2] = colorOp.value[2];
+		colorInfo.clearValue.color.float32[3] = colorOp.value[3];
+		colorInfo.loadOp = colorLoad;
+		colorInfo.storeOp = colorStore;
+		colorInfo.resolveMode = VK_RESOLVE_MODE_NONE;
+
+		VkUtils::imageLayoutBarrier(commandBuffer, *_colors[cid].gpu, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, mip, 1, layer, 1);
+	}
+
+	if(colorsCount != 0){
+		info.pColorAttachments = colorInfos.data();
+		info.colorAttachmentCount = colorsCount;
+	}
+
+	if(_hasDepth){
+		info.pDepthAttachment = &depthInfo;
+		depthInfo.imageView = slice.attachments.back();
+		depthInfo.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO_KHR;
+		depthInfo.imageLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+		depthInfo.clearValue.depthStencil.depth = depthOp.value[0];
+		depthInfo.loadOp = depthLoad;
+		depthInfo.storeOp = depthStore;
+		depthInfo.resolveMode = VK_RESOLVE_MODE_NONE;
+
+		if(_depth.gpu->typedFormat == Layout::DEPTH24_STENCIL8 || _depth.gpu->typedFormat == Layout::DEPTH32F_STENCIL8){
+			info.pStencilAttachment = &stencilInfo;
+			stencilInfo.imageView = slice.attachments.back();
+			stencilInfo.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO_KHR;
+			stencilInfo.imageLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+			stencilInfo.clearValue.depthStencil.stencil = uint32_t(stencilOp.value[0]);
+			stencilInfo.loadOp = stencilLoad;
+			stencilInfo.storeOp = stencilStore;
+			stencilInfo.resolveMode = VK_RESOLVE_MODE_NONE;
+		}
+		
+		VkUtils::imageLayoutBarrier(commandBuffer, *_depth.gpu, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, mip, 1, layer, 1);
+	}
+
+	vkCmdBeginRenderingKHR(commandBuffer, &info);
 	context->newRenderPass = true;
 }
 
@@ -314,8 +240,7 @@ void Framebuffer::resize(uint width, uint height) {
 	_width  = width;
 	_height = height;
 
-	// We want to preserve existing renderpasses.
-	GPU::clean(*this, false);
+	GPU::clean(*this);
 
 	// Resize the renderbuffer.
 	if(_hasDepth) {
@@ -460,7 +385,7 @@ bool Framebuffer::State::isEquivalent(const Framebuffer::State& other) const {
 
 Framebuffer::~Framebuffer() {
 	GPU::cancelAsyncOperation(_readTask);
-	GPU::clean(*this, true);
+	GPU::clean(*this);
 }
 
 Framebuffer * Framebuffer::_backbuffer = nullptr;
