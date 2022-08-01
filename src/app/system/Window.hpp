@@ -1,6 +1,7 @@
 #pragma once
 #include "system/Config.hpp"
 #include "core/Common.hpp"
+#include "core/System.hpp"
 
 struct GLFWwindow;
 struct ImGui_ImplVulkan_InitInfo;
@@ -61,6 +62,8 @@ public:
 
 	/** Destructor. Clean resources, delete the window and its context. */
 	~Window();
+
+	static bool showDirectoryPicker(const fs::path & startDir, fs::path & outPath);
 
 private:
 	/** Setup ImGui with the proper callbacks and style. */

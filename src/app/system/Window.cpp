@@ -18,6 +18,8 @@
 
 #include <GLFW/glfw3.h>
 
+#include <sr_gui/sr_gui.h>
+
 #include <cstring>
 
 Window::Window(const std::string & name, RenderingConfig & config, bool escapeQuit, bool hidden) :
@@ -96,6 +98,9 @@ _config(config), _allowEscape(escapeQuit) {
 		glfwTerminate();
 		return;
 	}
+
+	sr_gui_init();
+
 	// Create a swapchain associated to the window.
 	GPU::setupWindow(this);
 
@@ -225,6 +230,9 @@ Window::~Window() {
 	ImGui::DestroyContext();
 	// Close context and any other GLFW resources.
 	GPU::cleanup();
+
+	sr_gui_cleanup();
+
 	glfwDestroyWindow(_window);
 	glfwTerminate();
 }
@@ -353,4 +361,20 @@ void Window::setupImGui() {
 	style.WindowTitleAlign.x = 0.5f;
 	style.FramePadding.y	 = 4.0f;
 	style.ItemSpacing.y		 = 3.0f;
+}
+
+bool Window::showDirectoryPicker(const fs::path & startDir, fs::path & outPath) {
+
+	char* outPathStr = nullptr;
+	int res = sr_gui_ask_directory("Select directory", startDir.string().c_str(), &outPathStr);
+
+	if(res == SR_GUI_VALIDATED){
+		outPath = fs::path(outPathStr);
+		free(outPathStr);
+		return true;
+	}
+	if(outPathStr != nullptr){
+		free(outPathStr);
+	}
+	return false;
 }
