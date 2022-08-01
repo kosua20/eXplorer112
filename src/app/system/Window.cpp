@@ -232,6 +232,9 @@ Window::~Window() {
 void Window::setupImGui() {
 	ImGui::CreateContext();
 	ImGuiIO & io = ImGui::GetIO();
+	// General settings.
+	io.ConfigFlags = ImGuiConfigFlags_DockingEnable;
+	
 	// Load font.
 	size_t fontSize = 0;
 	const char * fontData = System::loadData( APP_RESOURCE_DIRECTORY / "Lato-Regular.ttf", fontSize);
