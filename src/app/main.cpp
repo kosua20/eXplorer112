@@ -437,7 +437,8 @@ int main(int argc, char ** argv) {
 										// Center the camera.
 										const glm::vec3 center = modelBox.getCentroid();
 										const glm::vec3 extent = modelBox.getSize();
-										camera.pose(center + glm::vec3(0.0, 0.0, extent[2]), center, glm::vec3(0.0, 1.0f, 0.0f));
+										const float maxExtent = glm::max(extent[0], glm::max(extent[1], extent[2]));
+										camera.pose(center + glm::vec3(0.0, 0.0, maxExtent), center, glm::vec3(0.0, 1.0f, 0.0f));
 										selectedMesh = -1;
 										selectedTexture = -1;
 									}
