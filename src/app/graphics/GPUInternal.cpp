@@ -138,7 +138,12 @@ VKAPI_ATTR VkBool32 VKAPI_CALL vkDebugCallback(VkDebugUtilsMessageSeverityFlagBi
 	(void)userData;
 
 	// Messages to ignore.
-	static const std::vector<int32_t> idsToIgnore = { 0x609a13b /* UNASSIGNED-CoreValidation-Shader-OutputNotConsumed */};
+	static const std::vector<int32_t> idsToIgnore = {
+		(int32_t)0x609a13b, /* UNASSIGNED-CoreValidation-Shader-OutputNotConsumed */
+		(int32_t)0x11b37e31, /* VUID-vkCmdBindPipeline-pipeline-06197*/
+		(int32_t)0x6c16bfb4, /* VUID-vkCmdBindPipeline-pipeline-06195 */
+		(int32_t)0xd6d77e1e, /* VUID-vkCmdBindPipeline-pipeline-06196 */
+	};
 	if(std::find(idsToIgnore.begin(), idsToIgnore.end(), callbackData->messageIdNumber) != idsToIgnore.end()){
 		return VK_FALSE;
 	}

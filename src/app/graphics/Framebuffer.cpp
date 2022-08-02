@@ -58,7 +58,7 @@ Framebuffer::Framebuffer(TextureShape shape, uint width, uint height, uint depth
 
 		}
 	}
-		populateLayoutState();
+	populateLayoutState();
 
 	// Create the framebuffer.
 	finalizeFramebuffer();
@@ -180,8 +180,8 @@ void Framebuffer::bind(uint layer, uint mip, const LoadOperation& colorOp, const
 
 	const size_t colorsCount = _colors.size();
 	std::vector<VkRenderingAttachmentInfoKHR> colorInfos(colorsCount);
-	VkRenderingAttachmentInfoKHR depthInfo;
-	VkRenderingAttachmentInfoKHR stencilInfo;
+	VkRenderingAttachmentInfoKHR depthInfo{};
+	VkRenderingAttachmentInfoKHR stencilInfo{};
 
 	for(uint cid = 0; cid < colorsCount; ++cid){
 		VkRenderingAttachmentInfoKHR& colorInfo = colorInfos[cid];
