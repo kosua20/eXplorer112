@@ -6,9 +6,6 @@
 
 #include <array>
 
-// Forward declarations.
-VK_DEFINE_HANDLE(VkImageView)
-
 /**
  \brief Represent a rendering target, of any size, format and type, backed by a GPU framebuffer.
  \details Framebuffer can use different shapes: 2D, cubemap, 2D array, cubemap array, but you can only render to one 2D layer at a time.
@@ -18,45 +15,6 @@ VK_DEFINE_HANDLE(VkImageView)
 class Framebuffer {
 
 public:
-
-	/** \brief Type of operation to perform when binding a framebuffer (starting a renderpass).
-	 *  \sa LoadOperation
-	 */
-	enum class Operation : uint {
-		LOAD, ///< Load existing data
-		CLEAR, ///< Clear existing data
-		DONTCARE ///< Anything can be done, usually because we will overwrite data everywhere.
-	};
-
-	/// \brief Detailed operation to perform when binding a framebuffer (starting a renderpass).
-	struct LoadOperation {
-
-		/// Default operation.
-		LoadOperation() {};
-
-		/** Specific operation
-		 * \param mod the operation to perform
-		 */
-		LoadOperation(Operation mod) : mode(mod) {};
-
-		/** Clear color operation.
-		 * \param val the color to clear with
-		 */
-		LoadOperation(const glm::vec4& val) : value(val), mode(Operation::CLEAR) {};
-
-		/** Clear depth operation.
-		 * \param val the depth to clear with
-		 */
-		LoadOperation(float val) : value(val), mode(Operation::CLEAR) {};
-
-		/** Clear stencil operation.
-		 * \param val the stencil value to clear with
-		 */
-		LoadOperation(uchar val) : value(float(val)), mode(Operation::CLEAR) {};
-
-		glm::vec4 value{1.0f}; ///< Clear value.
-		Operation mode = Operation::LOAD; ///< Operation.
-	};
 
 
 	/** Setup the framebuffer (attachments, renderbuffer, depth buffer, textures IDs,...)
@@ -129,12 +87,6 @@ public:
 	 */
 	void clear(const glm::vec4 & color, float depth);
 
-	/** Check if another framebuffer is compatible with this one (ie if the formats of all attachments are equal).
-	 * \param other the framebuffer to compare to
-	 * \return true if compatible
-	 */
-	bool isEquivalent(const Framebuffer& other) const;
-
 	/** Read back the value at a given pixel in the first layer and first level of the first color attachment.
 	 \param pos the position in pixels
 	 \return a float RGBA color.
@@ -160,12 +112,6 @@ public:
 		// _colors will never be modified after initialization, so this can be done.
 		return &_colors[i];
 	}
-
-	/** Query the format of one of the color attachments.
-	 \param i the color attachment index (or 0 by default)
-	 \return the texture format
-	*/
-	const Layout & format(uint i = 0) const;
 
 	/** Query the shape of the framebuffer.
 	 \return the texture shape used for all attachments.
@@ -209,23 +155,6 @@ public:
 	 */
 	uint attachments() const;
 
-	/// The framebuffer pipeline state.
-	struct State {
-		std::vector<Layout> colors; ///< Color attachment layouts.
-		Layout depth; ///< Depth-stencil layout.
-		bool hasDepth = false; ///< Does the framebuffer have a depth attachment.
-
-		/** Check if another state is compatible. 
-			\param other the state to compare to
-			\return true if both states are equivalent for a pipeline
-		 */
-		bool isEquivalent(const State& other) const;
-
-	};
-
-	/// \return the framebuffer pipeline state
-	const State& getState() const;
-
 	/**
 	 Query the window backbuffer.
 	 \return a reference to a placeholder representing the backbuffer
@@ -254,25 +183,12 @@ public:
 
 private:
 
-	/// \brief View on one layer of one level of the framebuffer.
-	struct Slice {
-		std::vector<VkImageView> attachments; ///< Views for all attachments.
-	};
-	
-	/** Populate the framebuffer pipeline state. */
-	void populateLayoutState();
-
-	/** Create all required framebuffer views and structures.*/
-	void finalizeFramebuffer();
-
 	/** Default constructor. */
 	Framebuffer() = default;
 
-	std::vector<std::vector<Slice>> _framebuffers; ///< Per-level per-layer framebuffer info.
 	std::vector<Texture> _colors; ///< The color textures.
 	Texture _depth = Texture("Depth"); ///< The depth texture.
-	State _state; ///< The framebuffer pipeline state.
-
+	
 	glm::vec4 _readColor = glm::vec4(0.0f); ///< Buffered read-back pixel color.
 	GPUAsyncTask _readTask = 0; ///< Read-back async task.
 
@@ -286,7 +202,6 @@ private:
 	bool _isBackbuffer = false; ///< Is the framebuffer used as backbuffer.
 
 	static Framebuffer * _backbuffer; ///< Current backbuffer framebuffer.
-	
-	friend class GPU; ///< Utilities will need to access GPU handle.
+
 	friend class Swapchain; ///< For backbuffer custom setup.
 };

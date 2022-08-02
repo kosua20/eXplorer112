@@ -1,6 +1,5 @@
 #include "graphics/GPU.hpp"
 #include "graphics/ShaderCompiler.hpp"
-#include "graphics/Framebuffer.hpp"
 #include "graphics/Swapchain.hpp"
 #include "graphics/SamplerLibrary.hpp"
 #include "resources/Texture.hpp"
@@ -408,16 +407,137 @@ void GPU::bindProgram(const Program & program){
 	}
 }
 
-void GPU::bindFramebuffer(const Framebuffer & framebuffer, uint layer, uint mip){
-	_state.pass.framebuffer = &framebuffer;
+void GPU::bindFramebuffer(uint layer, uint mip, const LoadOperation& depthOp, const LoadOperation& stencilOp, const LoadOperation& colorOp, const Texture* depthStencil, const Texture* color0, const Texture* color1, const Texture* color2, const Texture* color3, const Texture* color4, const Texture* color5, const Texture* color6, const Texture* color7){
+
+	GPU::unbindFramebufferIfNeeded();
+	
+	_state.pass.depthStencil = depthStencil;
+	_state.pass.colors.clear();
+	_state.pass.colors.reserve(8);
+
+	assert(depthStencil != nullptr || color0 != nullptr);
+	if(color0){
+		_state.pass.colors.push_back(color0);
+	}
+	if(color1){
+		assert(color0 != nullptr);
+		_state.pass.colors.push_back(color1);
+	}
+	if(color2){
+		assert(color1 != nullptr);
+		_state.pass.colors.push_back(color2);
+	}
+	if(color3){
+		assert(color2 != nullptr);
+		_state.pass.colors.push_back(color3);
+	}
+	if(color4){
+		assert(color3 != nullptr);
+		_state.pass.colors.push_back(color4);
+	}
+	if(color5){
+		assert(color4 != nullptr);
+		_state.pass.colors.push_back(color5);
+	}
+	if(color6){
+		assert(color5 != nullptr);
+		_state.pass.colors.push_back(color6);
+	}
+	if(color7){
+		assert(color6 != nullptr);
+		_state.pass.colors.push_back(color7);
+	}
 	_state.pass.mipStart = mip;
 	_state.pass.mipCount = 1;
 	_state.pass.layerStart = layer;
 	_state.pass.layerCount = 1;
 
+	GPUContext* context = GPU::getInternal();
+	VkCommandBuffer& commandBuffer = context->getRenderCommandBuffer();
+
+	const uint width = depthStencil ? depthStencil->width : color0->width;
+	const uint height = depthStencil ? depthStencil->height : color0->height;
+	const uint w = std::max<uint>(1u, width >> mip);
+	const uint h = std::max<uint>(1u, height >> mip);
+
+	static const std::array<VkAttachmentLoadOp, 3> ops = {VK_ATTACHMENT_LOAD_OP_LOAD, VK_ATTACHMENT_LOAD_OP_CLEAR, VK_ATTACHMENT_LOAD_OP_DONT_CARE};
+
+	const VkAttachmentLoadOp colorLoad = ops[uint(colorOp.mode)];
+	const VkAttachmentStoreOp colorStore = VK_ATTACHMENT_STORE_OP_STORE;
+	const VkAttachmentLoadOp 	depthLoad = ops[uint(depthOp.mode)];
+	const VkAttachmentStoreOp depthStore = VK_ATTACHMENT_STORE_OP_STORE; // could be DONT_CARE when depth is internal ?
+	const VkAttachmentLoadOp 	stencilLoad = ops[uint(stencilOp.mode)];
+	const VkAttachmentStoreOp stencilStore = VK_ATTACHMENT_STORE_OP_STORE;  // could be DONT_CARE when depth is internal ?
+
+	VkRenderingInfoKHR info = {};
+	info.sType = VK_STRUCTURE_TYPE_RENDERING_INFO_KHR;
+	info.renderArea.extent = {uint32_t(w), uint32_t(h)};
+	info.renderArea.offset = {0u, 0u};
+	info.layerCount = 1;
+	info.colorAttachmentCount = 0;
+	info.pColorAttachments = nullptr;
+	info.pDepthAttachment = nullptr;
+	info.pStencilAttachment = nullptr;
+	info.viewMask = 0;
+	info.flags = 0;
+
+	const size_t colorsCount = _state.pass.colors.size();
+	std::vector<VkRenderingAttachmentInfoKHR> colorInfos(colorsCount);
+	VkRenderingAttachmentInfoKHR depthInfo{};
+	VkRenderingAttachmentInfoKHR stencilInfo{};
+
+	for(uint cid = 0; cid < colorsCount; ++cid){
+		VkRenderingAttachmentInfoKHR& colorInfo = colorInfos[cid];
+		colorInfo.imageView = _state.pass.colors[cid]->gpu->views[mip].views[layer];
+		colorInfo.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO_KHR;
+		colorInfo.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+		colorInfo.clearValue.color.float32[0] = colorOp.value[0];
+		colorInfo.clearValue.color.float32[1] = colorOp.value[1];
+		colorInfo.clearValue.color.float32[2] = colorOp.value[2];
+		colorInfo.clearValue.color.float32[3] = colorOp.value[3];
+		colorInfo.loadOp = colorLoad;
+		colorInfo.storeOp = colorStore;
+		colorInfo.resolveMode = VK_RESOLVE_MODE_NONE;
+
+		VkUtils::imageLayoutBarrier(commandBuffer, *_state.pass.colors[cid]->gpu, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, mip, 1, layer, 1);
+	}
+
+	if(colorsCount != 0){
+		info.pColorAttachments = colorInfos.data();
+		info.colorAttachmentCount = colorsCount;
+	}
+
+	if(_state.pass.depthStencil){
+		const Texture* depth = _state.pass.depthStencil;
+		info.pDepthAttachment = &depthInfo;
+		depthInfo.imageView = depth->gpu->views[mip].views[layer];
+		depthInfo.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO_KHR;
+		depthInfo.imageLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+		depthInfo.clearValue.depthStencil.depth = depthOp.value[0];
+		depthInfo.loadOp = depthLoad;
+		depthInfo.storeOp = depthStore;
+		depthInfo.resolveMode = VK_RESOLVE_MODE_NONE;
+
+		if(depth->gpu->typedFormat == Layout::DEPTH24_STENCIL8 || depth->gpu->typedFormat == Layout::DEPTH32F_STENCIL8){
+			info.pStencilAttachment = &stencilInfo;
+			stencilInfo.imageView = depthInfo.imageView;
+			stencilInfo.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO_KHR;
+			stencilInfo.imageLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+			stencilInfo.clearValue.depthStencil.stencil = uint32_t(stencilOp.value[0]);
+			stencilInfo.loadOp = stencilLoad;
+			stencilInfo.storeOp = stencilStore;
+			stencilInfo.resolveMode = VK_RESOLVE_MODE_NONE;
+		}
+
+		VkUtils::imageLayoutBarrier(commandBuffer, *_state.pass.depthStencil->gpu, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, mip, 1, layer, 1);
+	}
+
+	vkCmdBeginRenderingKHR(commandBuffer, &info);
+	context->newRenderPass = true;
+
 }
 
-void GPU::saveFramebuffer(Framebuffer & framebuffer, const std::string & path) {
+void GPU::saveFramebuffer(const Texture & texture, const std::string & path) {
 	static const std::vector<Layout> hdrLayouts = {
 		Layout::R16F, Layout::RG16F, Layout::RGBA16F, Layout::R32F, Layout::RG32F, Layout::RGBA32F, Layout::A2_BGR10, Layout::A2_RGB10,
 		Layout::DEPTH_COMPONENT32F, Layout::DEPTH24_STENCIL8, Layout::DEPTH_COMPONENT16, Layout::DEPTH_COMPONENT24, Layout::DEPTH32F_STENCIL8,
@@ -425,10 +545,7 @@ void GPU::saveFramebuffer(Framebuffer & framebuffer, const std::string & path) {
 
 	GPU::unbindFramebufferIfNeeded();
 
-	const Texture& tex = *framebuffer.texture();
-	//const bool isHDR = std::find(hdrLayouts.begin(), hdrLayouts.end(), tex.gpu->typedFormat) != hdrLayouts.end();
-
-	GPU::downloadTextureAsync(tex, glm::uvec2(0), glm::uvec2(tex.width, tex.height), 1, [ path](const Texture& result){
+	GPU::downloadTextureAsync(texture, glm::uvec2(0), glm::uvec2(texture.width, texture.height), 1, [path](const Texture& result){
 		// Save the image to the disk.
 		const std::string ext = ".png";
 		const std::string finalPath = path + ext;
@@ -521,8 +638,38 @@ void GPU::setupTexture(Texture & texture, const Layout & format, bool drawable) 
 	}
 
 	// Create per mip view.
-	texture.gpu->levelViews.resize(texture.levels);
+	texture.gpu->views.resize(texture.levels);
+	// Slice format
+	VkImageViewType viewTypeSlice = VK_IMAGE_VIEW_TYPE_2D;
+	if((texture.shape & TextureShape::D3) != 0){
+		viewTypeSlice = VK_IMAGE_VIEW_TYPE_3D;
+	} else if((texture.shape & TextureShape::D1) != 0){
+		viewTypeSlice = VK_IMAGE_VIEW_TYPE_1D;
+	}
+	
 	for(uint mid = 0; mid < texture.levels; ++mid){
+
+		texture.gpu->views[mid].views.resize(layers);
+
+		for(uint lid = 0; lid < layers; ++lid){
+			VkImageViewCreateInfo viewInfoMip = {};
+			viewInfoMip.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+			viewInfoMip.image = texture.gpu->image;
+			viewInfoMip.viewType = viewTypeSlice;
+			viewInfoMip.format = texture.gpu->format;
+			// Remove the stencil bit when reading from the texture via the view.
+			viewInfoMip.subresourceRange.aspectMask = texture.gpu->aspect;//?(texture.gpu->aspect & ~VK_IMAGE_ASPECT_STENCIL_BIT);
+			viewInfoMip.subresourceRange.baseMipLevel = mid;
+			viewInfoMip.subresourceRange.levelCount = 1;
+			viewInfoMip.subresourceRange.baseArrayLayer = lid;
+			viewInfoMip.subresourceRange.layerCount = 1;
+
+			if(vkCreateImageView(_context.device, &viewInfoMip, nullptr, &(texture.gpu->views[mid].views[lid])) != VK_SUCCESS) {
+				Log::error("GPU: Unable to create image view.");
+				return;
+			}
+		}
+
 		VkImageViewCreateInfo viewInfoMip = {};
 		viewInfoMip.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
 		viewInfoMip.image = texture.gpu->image;
@@ -535,10 +682,16 @@ void GPU::setupTexture(Texture & texture, const Layout & format, bool drawable) 
 		viewInfoMip.subresourceRange.baseArrayLayer = 0;
 		viewInfoMip.subresourceRange.layerCount = imageInfo.arrayLayers;
 
-		if(vkCreateImageView(_context.device, &viewInfoMip, nullptr, &(texture.gpu->levelViews[mid])) != VK_SUCCESS) {
+		if(vkCreateImageView(_context.device, &viewInfoMip, nullptr, &(texture.gpu->views[mid].mipView)) != VK_SUCCESS) {
 			Log::error("GPU: Unable to create image view.");
 			return;
 		}
+
+	}
+
+	if(drawable){
+		VkCommandBuffer commandBuffer = _context.getUploadCommandBuffer();
+		VkUtils::textureLayoutBarrier(commandBuffer, texture, texture.gpu->defaultLayout);
 	}
 
 	++_metrics.textures;
@@ -663,7 +816,6 @@ void GPU::uploadTexture(const Texture & texture) {
 
 	++_metrics.uploads;
 }
-
 
 void GPU::downloadTextureSync(Texture & texture, int level) {
 	if(!texture.gpu) {
@@ -838,6 +990,59 @@ void GPU::generateMipMaps(const Texture & texture) {
 	// Transition to shader read.
 	VkUtils::textureLayoutBarrier(commandBuffer, texture, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 
+}
+
+
+void GPU::clearTexture(const Texture & texture, const glm::vec4& color){
+	// See https://www.khronos.org/registry/vulkan/specs/1.2-extensions/html/vkspec.html#clears
+	// for possibilities.
+	// End current render pass.
+	GPU::unbindFramebufferIfNeeded();
+
+	GPUContext* context = GPU::getInternal();
+	VkCommandBuffer& commandBuffer = context->getRenderCommandBuffer();
+
+	VkClearColorValue clearCol = {};
+	clearCol.float32[0] = color[0];
+	clearCol.float32[1] = color[1];
+	clearCol.float32[2] = color[2];
+	clearCol.float32[3] = color[3];
+
+	VkImageSubresourceRange rangeCol = {};
+	rangeCol.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+	rangeCol.baseArrayLayer = 0;
+	rangeCol.layerCount = (texture.shape == TextureShape::D3) ? 1u : texture.depth;
+	rangeCol.baseMipLevel = 0;
+	rangeCol.levelCount = texture.levels;
+
+	VkUtils::textureLayoutBarrier(commandBuffer, texture, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+	vkCmdClearColorImage(commandBuffer, texture.gpu->image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &clearCol, 1, &rangeCol);
+	VkUtils::textureLayoutBarrier(commandBuffer, texture, texture.gpu->defaultLayout);
+}
+
+void GPU::clearDepth(const Texture & texture, float depth){
+	// See https://www.khronos.org/registry/vulkan/specs/1.2-extensions/html/vkspec.html#clears
+	// for possibilities.
+	// End current render pass.
+	GPU::unbindFramebufferIfNeeded();
+
+	GPUContext* context = GPU::getInternal();
+	VkCommandBuffer& commandBuffer = context->getRenderCommandBuffer();
+
+	VkClearDepthStencilValue clearZ = {};
+	clearZ.depth = depth;
+	clearZ.stencil = 0u;
+
+	VkImageSubresourceRange rangeZ = {};
+	rangeZ.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
+	rangeZ.baseArrayLayer = 0;
+	rangeZ.layerCount = (texture.shape == TextureShape::D3) ? 1u : texture.depth;
+	rangeZ.baseMipLevel = 0;
+	rangeZ.levelCount = texture.levels;
+
+	VkUtils::textureLayoutBarrier(commandBuffer, texture, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+	vkCmdClearDepthStencilImage(commandBuffer, texture.gpu->image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &clearZ, 1, &rangeZ);
+	VkUtils::textureLayoutBarrier(commandBuffer, texture, texture.gpu->defaultLayout);
 }
 
 void GPU::setupBuffer(Buffer & buffer) {
@@ -1063,7 +1268,7 @@ void GPU::setupMesh(Mesh & mesh) {
 
 
 void GPU::bindGraphicsPipelineIfNeeded(){
-	if(_state.pass.framebuffer == nullptr){
+	if(_state.pass.depthStencil == nullptr && _state.pass.colors.empty()){
 		Log::error("GPU: We are not in a render pass.");
 		return;
 	}
@@ -1089,7 +1294,7 @@ void GPU::bindGraphicsPipelineIfNeeded(){
 
 
 void GPU::bindComputePipelineIfNeeded(){
-	if(_state.pass.framebuffer != nullptr){
+	if(_state.pass.depthStencil != nullptr || !_state.pass.colors.empty()){
 		Log::error("GPU: We are in a render pass.");
 		return;
 	}
@@ -1357,17 +1562,13 @@ void GPU::setColorState(bool writeRed, bool writeGreen, bool writeBlue, bool wri
 	_state.colorWriteMask.a = writeAlpha;
 }
 
-void GPU::blitDepth(const Framebuffer & src, const Framebuffer & dst) {
+void GPU::blitDepth(const Texture & src, const Texture & dst) {
 	GPU::unbindFramebufferIfNeeded();
 
 	VkCommandBuffer& commandBuffer = _context.getRenderCommandBuffer();
 
-	if(!src.depthBuffer() || !dst.depthBuffer()){
-		Log::warning("GPU: No depth buffer to blit.");
-		return;
-	}
-	const Texture& srcTex = *src.depthBuffer();
-	const Texture& dstTex = *dst.depthBuffer();
+	const Texture& srcTex = src;
+	const Texture& dstTex = dst;
 
 	const uint layerCount = srcTex.shape == TextureShape::D3 ? 1 : srcTex.depth;
 
@@ -1378,43 +1579,22 @@ void GPU::blitDepth(const Framebuffer & src, const Framebuffer & dst) {
 	++_metrics.blitCount;
 }
 
-void GPU::blit(const Framebuffer & src, const Framebuffer & dst, Filter filter) {
-	GPU::unbindFramebufferIfNeeded();
-
-	VkCommandBuffer& commandBuffer = _context.getRenderCommandBuffer();
-	const uint count = std::min(src.attachments(), dst.attachments());
-
-	const glm::uvec2 srcSize(src.width(), src.height());
-	const glm::uvec2 dstSize(dst.width(), dst.height());
-
-	for(uint cid = 0; cid < count; ++cid){
-		const Texture& srcTex = *src.texture(cid);
-		const Texture& dstTex = *dst.texture(cid);
-		const uint layerCount = srcTex.shape == TextureShape::D3 ? 1 : srcTex.depth;
-		VkUtils::blitTexture(commandBuffer, srcTex, dstTex, 0, 0, srcTex.levels, 0, 0, layerCount, glm::uvec2(0), srcSize, glm::uvec2(0), dstSize, filter);
-	}
-	_metrics.blitCount += count;
-}
-
-void GPU::blit(const Framebuffer & src, const Framebuffer & dst, size_t lSrc, size_t lDst, Filter filter) {
+void GPU::blit(const Texture & src, const Texture & dst, size_t lSrc, size_t lDst, Filter filter) {
 	GPU::blit(src, dst, lSrc, lDst, 0, 0, filter);
 }
 
-void GPU::blit(const Framebuffer & src, const Framebuffer & dst, size_t lSrc, size_t lDst, size_t mipSrc, size_t mipDst, Filter filter) {
+void GPU::blit(const Texture & src, const Texture & dst, size_t lSrc, size_t lDst, size_t mipSrc, size_t mipDst, Filter filter) {
 
 	GPU::unbindFramebufferIfNeeded();
 	VkCommandBuffer& commandBuffer = _context.getRenderCommandBuffer();
-	const uint count = uint(std::min(src.attachments(), dst.attachments()));
 
-	const glm::uvec2 srcSize(src.width(), src.height());
-	const glm::uvec2 dstSize(dst.width(), dst.height());
+	const glm::uvec2 srcSize(src.width, src.height);
+	const glm::uvec2 dstSize(dst.width, dst.height);
 
-	for(uint cid = 0; cid < count; ++cid){
-		const Texture& srcTex = *src.texture(cid);
-		const Texture& dstTex = *dst.texture(cid);
-		VkUtils::blitTexture(commandBuffer, srcTex, dstTex, uint(mipSrc), uint(mipDst), 1, uint(lSrc), uint(lDst), 1, glm::uvec2(0), srcSize, glm::uvec2(0), dstSize, filter);
-	}
-	_metrics.blitCount += count;
+	const Texture& srcTex = src;
+	const Texture& dstTex = dst;
+	VkUtils::blitTexture(commandBuffer, srcTex, dstTex, uint(mipSrc), uint(mipDst), 1, uint(lSrc), uint(lDst), 1, glm::uvec2(0), srcSize, glm::uvec2(0), dstSize, filter);
+	++_metrics.blitCount;
 }
 
 void GPU::blit(const Texture & src, Texture & dst, Filter filter) {
@@ -1438,25 +1618,10 @@ void GPU::blit(const Texture & src, Texture & dst, Filter filter) {
 	++_metrics.blitCount;
 }
 
-void GPU::blit(const Texture & src, Framebuffer & dst, Filter filter) {
-	// Prepare the destination.
-	if(src.shape != dst.shape()){
-		Log::error("GPU: The texture and framebuffer don't have the same shape.");
-		return;
-	}
-	const uint layerCount = src.shape == TextureShape::D3 ? 1 : src.depth;
-
-	GPU::unbindFramebufferIfNeeded();
-
-	const glm::uvec2 srcSize(src.width, src.height);
-	const glm::uvec2 dstSize(dst.width(), dst.height());
-	VkUtils::blitTexture(_context.getRenderCommandBuffer(), src, *dst.texture(), 0, 0, src.levels, 0, 0, layerCount, glm::uvec2(0), srcSize, glm::uvec2(0), dstSize, filter);
-	++_metrics.blitCount;
-}
 
 
 void GPU::unbindFramebufferIfNeeded(){
-	if(_state.pass.framebuffer == nullptr){
+	if(_state.pass.depthStencil == nullptr && _state.pass.colors.empty()){
 		return;
 	}
 	VkCommandBuffer& commandBuffer = _context.getRenderCommandBuffer();
@@ -1464,18 +1629,17 @@ void GPU::unbindFramebufferIfNeeded(){
 	++_metrics.renderPasses;
 	_context.hadRenderPass = true;
 
-	const Framebuffer& fb = *_state.pass.framebuffer;
-
-	const uint attachCount = fb.attachments();
+	const uint attachCount = _state.pass.colors.size();
 	for(uint cid = 0; cid < attachCount; ++cid ){
-		const Texture* color = fb.texture(cid);
+		const Texture* color = _state.pass.colors[cid];
 		VkUtils::imageLayoutBarrier(commandBuffer, *(color->gpu), color->gpu->defaultLayout, _state.pass.mipStart, _state.pass.mipCount, _state.pass.layerStart, _state.pass.layerCount);
 	}
-	const Texture* depth = fb.depthBuffer();
+	const Texture* depth = _state.pass.depthStencil;
 	if(depth != nullptr){
 		VkUtils::imageLayoutBarrier(commandBuffer, *(depth->gpu), depth->gpu->defaultLayout, _state.pass.mipStart, _state.pass.mipCount, _state.pass.layerStart, _state.pass.layerCount);
 	}
-	_state.pass.framebuffer = nullptr;
+	_state.pass.depthStencil = nullptr;
+	_state.pass.colors.clear();
 }
 
 void GPU::getState(GPUState& state) {
@@ -1530,36 +1694,26 @@ void GPU::clean(GPUTexture & tex){
 	rsc.frame = _context.frameIndex;
 	rsc.name = tex.name;
 
-	const uint mipCount = uint(tex.levelViews.size());
+	const uint mipCount = uint(tex.views.size());
 	for(uint mid = 0; mid < mipCount; ++mid){
 		_context.resourcesToDelete.emplace_back();
 		ResourceToDelete& rsc = _context.resourcesToDelete.back();
-		rsc.view = tex.levelViews[mid];
+		rsc.view = tex.views[mid].mipView;
 		rsc.frame = _context.frameIndex;
 		rsc.name = tex.name;
-	}
-	tex.levelViews.clear();
-	--_metrics.textures;
-}
 
-void GPU::clean(Framebuffer & framebuffer){
-
-	for(auto& slices : framebuffer._framebuffers){
-
-		for(auto& slice : slices){
-
-			// Delete the attachment views if the framebuffer owned them.
-			if(!framebuffer._isBackbuffer){
-				for(auto& view : slice.attachments){
-					_context.resourcesToDelete.emplace_back();
-					ResourceToDelete& rsc = _context.resourcesToDelete.back();
-					rsc.view = view;
-					rsc.frame = _context.frameIndex;
-					rsc.name = framebuffer.name();
-				}
-			}
+		const uint levelCount = uint(tex.views[mid].views.size());
+		for(uint lid = 0; lid < levelCount; ++lid){
+			_context.resourcesToDelete.emplace_back();
+			ResourceToDelete& rsc = _context.resourcesToDelete.back();
+			rsc.view = tex.views[mid].views[lid];
+			rsc.frame = _context.frameIndex;
+			rsc.name = tex.name;
 		}
+		tex.views[mid].views.clear();
 	}
+	tex.views.clear();
+	--_metrics.textures;
 }
 
 void GPU::clean(GPUMesh & mesh){

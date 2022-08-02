@@ -666,7 +666,7 @@ int main(int argc, char ** argv) {
 		ubo.at(0).shadingMode = shadingMode;
 		ubo.upload();
 
-		fb.bind(glm::vec4(0.25f, 0.25f, 0.25f, 1.0f), 1.0f, Framebuffer::Operation::DONTCARE);
+		fb.bind(glm::vec4(0.25f, 0.25f, 0.25f, 1.0f), 1.0f, LoadOperation::DONTCARE);
 		GPU::setViewport(0, 0, fb.width(), fb.height());
 
 		if(viewMode == ViewerMode::MODEL){
@@ -710,7 +710,7 @@ int main(int argc, char ** argv) {
 		}
 
 
-		Framebuffer::backbuffer()->bind(glm::vec4(0.2f, 0.2f, 0.2f, 1.0f), Framebuffer::Operation::DONTCARE, Framebuffer::Operation::DONTCARE);
+		Framebuffer::backbuffer()->bind(glm::vec4(0.2f, 0.2f, 0.2f, 1.0f), LoadOperation::DONTCARE, LoadOperation::DONTCARE);
 
 	}
 

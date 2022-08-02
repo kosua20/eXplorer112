@@ -274,9 +274,52 @@ enum class Layout : uint {
 
 STD_HASH(Layout);
 
+
+
+
+/// \brief Detailed operation to perform when binding a framebuffer (starting a renderpass).
+struct LoadOperation {
+
+	/** \brief Type of operation to perform when binding a framebuffer (starting a renderpass).
+	*  \sa LoadOperation
+	*/
+	enum Operation : uint {
+	   LOAD, ///< Load existing data
+	   CLEAR, ///< Clear existing data
+	   DONTCARE ///< Anything can be done, usually because we will overwrite data everywhere.
+	};
+
+	/// Default operation.
+	LoadOperation() {};
+
+	/** Specific operation
+	 * \param mod the operation to perform
+	 */
+	LoadOperation(Operation mod) : mode(mod) {};
+
+	/** Clear color operation.
+	 * \param val the color to clear with
+	 */
+	LoadOperation(const glm::vec4& val) : value(val), mode(CLEAR) {};
+
+	/** Clear depth operation.
+	 * \param val the depth to clear with
+	 */
+	LoadOperation(float val) : value(val), mode(CLEAR) {};
+
+	/** Clear stencil operation.
+	 * \param val the stencil value to clear with
+	 */
+	LoadOperation(uchar val) : value(float(val)), mode(CLEAR) {};
+
+	glm::vec4 value{1.0f}; ///< Clear value.
+	Operation mode = LOAD; ///< Operation.
+};
+
+
 class Program;
-class Framebuffer;
 class GPUMesh;
+class Texture;
 
 /**
  \brief Internal GPU state ; not all API options are exposed, only these that can be toggled in Rendu.
@@ -288,11 +331,17 @@ public:
 
 	/// \brief Current framebuffer information.
 	struct FramebufferInfos {
-		const Framebuffer* framebuffer = nullptr; ///< The current framebuffer.
+		std::vector<const Texture*> colors; // todo store gpu texture instead ? what about resize?
+		const Texture* depthStencil = nullptr;
+
 		uint mipStart = 0; ///< First mip to be used in the current render pass.
 		uint mipCount = 1; ///< Number of mips used in the current render pass.
 		uint layerStart = 0; ///< First layer to be used in the current render pass.
 		uint layerCount = 1; ///< Number of layers used in the current render pass.
+
+		FramebufferInfos();
+
+		bool isEquivalent(const FramebufferInfos& other) const;
 	};
 
 	/// Constructor.

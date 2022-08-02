@@ -174,7 +174,7 @@ bool Window::nextFrame() {
 		ImGui::Render();
 
 		// Draw ImGui.
-		Framebuffer::backbuffer()->bind(Framebuffer::Operation::LOAD, Framebuffer::Operation::LOAD, Framebuffer::Operation::LOAD);
+		Framebuffer::backbuffer()->bind(LoadOperation::LOAD, LoadOperation::LOAD, LoadOperation::LOAD);
 		ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), GPU::getInternal()->getRenderCommandBuffer());
 		
 	}

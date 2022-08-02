@@ -71,7 +71,7 @@ VkPipeline PipelineCache::getGraphicsPipeline(const GPUState & state){
 		if(!entry.mesh.isEquivalent(state.mesh->state)){
 			continue;
 		}
-		if(!entry.framebuffer.isEquivalent(state.pass.framebuffer->getState())){
+		if(!entry.pass.isEquivalent(state.pass)){
 			continue;
 		}
 		return entry.pipeline;
@@ -168,7 +168,7 @@ VkPipeline PipelineCache::createNewPipeline(const GPUState& state, const uint64_
 	Entry entry;
 	entry.pipeline = buildGraphicsPipeline(state);
 	entry.mesh = state.mesh->state;
-	entry.framebuffer = state.pass.framebuffer->getState();
+	entry.pass = state.pass;
 
 	auto it = _graphicPipelines[state.graphicsProgram].insert(std::make_pair(hash, entry));
 	return it->second.pipeline;
@@ -180,7 +180,7 @@ VkPipeline PipelineCache::buildGraphicsPipeline(const GPUState& state){
 	VkGraphicsPipelineCreateInfo pipelineInfo{};
 	pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
 	// Assert no null data.
-	assert(state.graphicsProgram); assert(state.mesh); assert(state.pass.framebuffer);
+	assert(state.graphicsProgram); assert(state.mesh);
 
 	std::vector<VkPipelineShaderStageCreateInfo> stages;
 	// Program
@@ -343,7 +343,7 @@ VkPipeline PipelineCache::buildGraphicsPipeline(const GPUState& state){
 	}
 	// Color blending
 	VkPipelineColorBlendStateCreateInfo colorState{};
-	const uint attachmentCount = state.pass.framebuffer->attachments();
+	const uint attachmentCount = state.pass.colors.size();
 	std::vector<VkPipelineColorBlendAttachmentState> attachmentStates(attachmentCount);
 	{
 		static const std::unordered_map<BlendEquation, VkBlendOp> eqs = {
@@ -406,9 +406,8 @@ VkPipeline PipelineCache::buildGraphicsPipeline(const GPUState& state){
 	VkPipelineRenderingCreateInfoKHR renderingInfo{};
 	std::vector<VkFormat> colorFormats(attachmentCount);
 	{
-		const Framebuffer& fb = *state.pass.framebuffer;
 		for(uint aid = 0; aid < attachmentCount; ++aid){
-			colorFormats[aid] = fb.texture(aid)->gpu->format;
+			colorFormats[aid] = state.pass.colors[aid]->gpu->format;
 		}
 
 		renderingInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO_KHR;
@@ -419,8 +418,8 @@ VkPipeline PipelineCache::buildGraphicsPipeline(const GPUState& state){
 		renderingInfo.depthAttachmentFormat = VK_FORMAT_UNDEFINED;
 		renderingInfo.stencilAttachmentFormat = VK_FORMAT_UNDEFINED;
 
-		if(fb.depthBuffer()){
-			const GPUTexture* depth = fb.depthBuffer()->gpu.get();
+		if(state.pass.depthStencil){
+			const GPUTexture* depth = state.pass.depthStencil->gpu.get();
 			renderingInfo.depthAttachmentFormat = depth->format;
 			if(depth->typedFormat == Layout::DEPTH24_STENCIL8 || depth->typedFormat == Layout::DEPTH32F_STENCIL8){
 				renderingInfo.stencilAttachmentFormat = depth->format;

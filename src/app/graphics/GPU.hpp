@@ -11,7 +11,6 @@
 #include <functional>
 
 // Forward declarations.
-class Framebuffer;
 class ScreenQuad;
 class Window;
 struct GPUContext;
@@ -25,7 +24,6 @@ class GPU {
 	friend class GPUTexture; ///< Access to deletion notifier for cached state update.
 	friend class GPUBuffer; ///< Access to deletion notifier for cached state update.
 	friend class GPUMesh; ///< Access to deletion notifier for cached state update.
-	friend class Framebuffer; ///< Access to deletion notifier for cached state update.
 	friend class Program; ///< Access to metrics.
 	friend class Swapchain; ///< Access to framebuffer cleanup.
 	friend class PipelineCache; ///< Access to metrics.
@@ -98,19 +96,18 @@ public:
 	static void bindProgram(const Program & program);
 
 	/** Bind a framebuffer as a draw destination.
-	 \param framebuffer the framebuffer to bind as draw destination
 	 \param layer the layer to bind
 	 \param mip the mip level to bind
 	 */
-	static void bindFramebuffer(const Framebuffer & framebuffer, uint layer, uint mip);
+	static void bindFramebuffer(uint layer, uint mip, const LoadOperation& depthOp, const LoadOperation& stencilOp, const LoadOperation& colorOp, const Texture* depth, const Texture* color0, const Texture* color1 = nullptr, const Texture* color2 = nullptr, const Texture* color3 = nullptr, const Texture* color4 = nullptr, const Texture* color5 = nullptr, const Texture* color6 = nullptr, const Texture* color7 = nullptr);
 
 	/** Save a given framebuffer content to the disk.
-	 \param framebuffer the framebuffer to save
+	 \param texture the framebuffer to save
 	 \param path the output image path
 	 \note The output image extension will be automatically added based on the framebuffer type and format.
 	 \warning Export of small size float framebuffers can create artifacts.
 	 */
-	static void saveFramebuffer(Framebuffer & framebuffer, const std::string & path);
+	static void saveFramebuffer(const Texture & texture, const std::string & path);
 
 	/** Create a GPU texture with a given layout and allocate it.
 	 \param texture the texture to setup on the GPU
@@ -161,6 +158,10 @@ public:
 	 */
 	static void generateMipMaps(const Texture & texture);
 
+	static void clearTexture(const Texture & texture, const glm::vec4& color);
+
+	static void clearDepth(const Texture & texture, float depth);
+	
 	/** Create and allocate a GPU buffer.
 	 \param buffer the buffer to setup on the GPU
 	 */
@@ -326,15 +327,8 @@ public:
 	 \note Depth is necessarily filtered using nearest neighbour.
 	 \warning This treat the current depth buffer setup as a 2D texture.
 	 */
-	static void blitDepth(const Framebuffer & src, const Framebuffer & dst);
+	static void blitDepth(const Texture & src, const Texture & dst);
 
-	/** Blit the content of a framebuffer into another one, resizing the content accordingly.
-	 \param src the source framebuffer
-	 \param dst the destination framebuffer
-	 \param filter the filtering to use for resizing
-	 \warning Only the first color attachment will be blit.
-	 */
-	static void blit(const Framebuffer & src, const Framebuffer & dst, Filter filter);
 
 	/** Blit the content of a framebuffer into another one, resizing the content accordingly.
 	 \param src the source framebuffer
@@ -343,7 +337,7 @@ public:
 	 \param lDst the dst layer to copy to
 	 \param filter the filtering to use for resizing
 	 */
-	static void blit(const Framebuffer & src, const Framebuffer & dst, size_t lSrc, size_t lDst, Filter filter);
+	static void blit(const Texture & src, const Texture & dst, size_t lSrc, size_t lDst, Filter filter);
 
 	/** Blit the content of a framebuffer into another one, resizing the content accordingly.
 	 \param src the source framebuffer
@@ -354,7 +348,7 @@ public:
 	 \param mipDst the dst mip level to copy to
 	 \param filter the filtering to use for resizing
 	 */
-	static void blit(const Framebuffer & src, const Framebuffer & dst, size_t lSrc, size_t lDst, size_t mipSrc, size_t mipDst, Filter filter);
+	static void blit(const Texture & src, const Texture & dst, size_t lSrc, size_t lDst, size_t mipSrc, size_t mipDst, Filter filter);
 	
 	/** Blit the content of a texture into another one, resizing the content accordingly.
 	 \param src the source texture
@@ -363,13 +357,6 @@ public:
 	 */
 	static void blit(const Texture & src, Texture & dst, Filter filter);
 
-	/** Blit the content of a texture into a framebuffer first attachment, resizing the content accordingly.
-	 \param src the source texture
-	 \param dst the destination framebuffer
-	 \param filter the filtering to use for resizing
-	 \note This can be used to easily blit a color attachment that is not the first one.
-	 */
-	static void blit(const Texture & src, Framebuffer & dst, Filter filter);
 
 	/** \return the opaque internal GPU context. */
 	static GPUContext* getInternal();
@@ -410,12 +397,6 @@ private:
 	 * \param buffer the object to delete
 	 */
 	static void clean(GPUBuffer & buffer);
-
-	/** Clean a framebuffer GPU object. 
-	 * \param framebuffer the object to delete
-	 * \param deleteRenderPasses should the render passes be deleted (we can skip it for swapchains)
-	 */
-	static void clean(Framebuffer & framebuffer);
 
 	/** Clean a shader program object. 
 	 * \param program the object to delete

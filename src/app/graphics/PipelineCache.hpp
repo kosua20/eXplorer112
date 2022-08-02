@@ -1,7 +1,6 @@
 #pragma once
 
 #include "core/Common.hpp"
-#include "graphics/Framebuffer.hpp"
 #include "graphics/GPUObjects.hpp"
 
 #include <unordered_map>
@@ -47,7 +46,7 @@ private:
 	struct Entry {
 		VkPipeline pipeline; ///< The native handle.
 		GPUMesh::State mesh; ///< The mesh layout.
-		Framebuffer::State framebuffer; ///< The framebuffer layout.
+		GPUState::FramebufferInfos pass; ///< The framebuffer layout.
 	};
 
 	/** Create a new pipeline based on a given state and store it in the cache for future use.
