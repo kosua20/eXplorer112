@@ -216,7 +216,6 @@ struct ModelScene {
 					tex.height = tex.images[0].height;
 					tex.depth = tex.levels = 1;
 					tex.shape = TextureShape::D2;
-					// TODO: handle compressed textures directly
 					tex.upload(Layout::SRGB8_ALPHA8, false);
 				}
 
@@ -437,8 +436,11 @@ int main(int argc, char ** argv) {
 										// Center the camera.
 										const glm::vec3 center = modelBox.getCentroid();
 										const glm::vec3 extent = modelBox.getSize();
+										// Keep the camera off the object.
 										const float maxExtent = glm::max(extent[0], glm::max(extent[1], extent[2]));
-										camera.pose(center + glm::vec3(0.0, 0.0, maxExtent), center, glm::vec3(0.0, 1.0f, 0.0f));
+										// Handle case where the object is a flat quad (leves, decals...).
+										glm::vec3 offset = std::abs(extent[0]) < 1.0f ? glm::vec3(1.0f, 0.0f, 0.0f) : glm::vec3(0.0f, 0.0f, 1.0f);
+										camera.pose(center + maxExtent * offset, center, glm::vec3(0.0, 1.0f, 0.0f));
 										selectedMesh = -1;
 										selectedTexture = -1;
 									}
