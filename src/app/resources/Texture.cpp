@@ -4,6 +4,7 @@
 #include "graphics/GPUInternal.hpp"
 #include "graphics/SamplerLibrary.hpp"
 #include <imgui/imgui_impl_vulkan.h>
+#include <dds-ktx/dds-ktx.h>
 
 Texture::Texture(const std::string & name) : _name(name) {
 }
@@ -16,14 +17,54 @@ void Texture::upload(const Layout & layout, bool updateMipmaps) {
 	}
 
 	Layout finalLayout = layout;
+
 	// Auto-cleverness for compressed images.
-	// For now, compressed images will only load the first mip level.
-	// This is because of our "load image, upload texture (n images)" approach.
-	// One option could be to :
-	// * load all the BC data in the first image.
-	// * call "populate compressed" on the texture (or do it when uploading), which will create all the needed images.
-	// * then upload and profit
 	if(!images.empty() && images[0].compressedFormat != Image::Compression::NONE){
+		const uint components = images[0].components;
+		const Image::Compression compression = images[0].compressedFormat;
+
+		// We need to cheat and uncompress all mip levels that are stored in the raw BC data blob stored in images[0].
+		const size_t ddsSize = images[0].pixels.size();
+		std::vector<char> compressedPixels(ddsSize);
+		std::memcpy(compressedPixels.data(), images[0].pixels.data(), ddsSize);
+		images[0].pixels.clear();
+
+		// Parse the header again.
+		// Query DDS header.
+		ddsktx_texture_info tc = {};
+		if(!ddsktx_parse(&tc, compressedPixels.data(), ddsSize, NULL)) {
+			Log::error("Unable to parse DDS header again.");
+			return;
+		}
+
+		width = tc.width;
+		height = tc.height;
+		levels = tc.num_mips;
+		depth = 1;
+		shape = TextureShape::D2;
+		// TODO: for array/3D/cubemap there is more to do here.
+		assert((tc.depth == 1) && (tc.num_layers == 1));
+		assert((tc.flags & (DDSKTX_TEXTURE_FLAG_VOLUME | DDSKTX_TEXTURE_FLAG_CUBEMAP)) == 0);
+		images.resize(levels * depth);
+
+		// Outer loop is on mip levels
+		for(uint mid = 0; mid < levels; ++mid){
+			const uint w = std::max(width >> mid, 1u);
+			const uint h = std::max(height >> mid, 1u);
+
+			for(uint lid = 0; lid < depth; ++lid){
+				Image& img = images[mid * depth + lid];
+				img = Image(w, h, components);
+				img.compressedFormat = compression;
+
+				ddsktx_sub_data subData;
+				ddsktx_get_sub(&tc, &subData, compressedPixels.data(), ddsSize, lid, 0, mid);
+				assert(((int)w == subData.width) && ((int)h == subData.height));
+				img.pixels.resize(subData.size_bytes);
+				std::memcpy(img.pixels.data(), subData.buff, subData.size_bytes);
+			}
+		}
+
 		static const std::unordered_map<Image::Compression, Layout> bcLayouts = {
 			{ Image::Compression::BC1, Layout::BC1 },
 			{ Image::Compression::BC2, Layout::BC2 },
