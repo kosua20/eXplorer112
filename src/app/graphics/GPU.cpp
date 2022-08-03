@@ -716,6 +716,7 @@ void GPU::uploadTexture(const Texture & texture) {
 
 	// Determine if we can do the transfer without an intermediate texture.
 	const Layout format = texture.gpu->typedFormat;
+	const bool isCompressed = format == Layout::BC1 || format == Layout::BC2 || format == Layout::BC3;
 	const bool is8UB = format == Layout::R8 || format == Layout::RG8 || format == Layout::RGBA8 || format == Layout::BGRA8 || format == Layout::SRGB8_ALPHA8 || format == Layout::SBGR8_ALPHA8;
 	//const bool is32F = format == Layout::R32F || format == Layout::RG32F || format == Layout::RGBA32F;
 
@@ -726,12 +727,13 @@ void GPU::uploadTexture(const Texture & texture) {
 		totalComponentCount += imgSize;
 	}
 
-	const size_t compSize = is8UB ? sizeof(unsigned char) : sizeof(float);
+	const size_t compSize = (is8UB || isCompressed) ? sizeof(unsigned char) : sizeof(float);
 	const size_t totalSize = totalComponentCount * compSize;
 
 	Texture transferTexture("tmpTexture");
 	const Texture* dstTexture = &texture;
 	size_t currentOffset = 0;
+	std::vector<size_t> imageOffsets(texture.images.size());
 
 	// Transfer the complete CPU image data to a staging buffer, handling conversion..
 	Buffer transferBuffer(totalSize, BufferType::CPUTOGPU);
@@ -739,15 +741,17 @@ void GPU::uploadTexture(const Texture & texture) {
 	// TODO: could handle float values as a special case converted on the CPU.
 	{
 		// Copy arrays.
-		size_t currentOffset = 0;
+		uint i = 0;
 		for(const auto & img: texture.images) {
+			imageOffsets[i] = currentOffset;
 			const size_t compCount = img.pixels.size() * compSize;
 			std::memcpy(transferBuffer.gpu->mapped + currentOffset, img.pixels.data(), compCount);
 			currentOffset += compCount;
+			++i;
 		}
-		// If destination is not 8UB, we need to use an intermediate 8UB texture and convert
+		// If destination is not 8UB or compressed, we need to use an intermediate 8UB texture and convert
 		// to destination format using blit.
-		if(!is8UB){
+		if(!is8UB && !isCompressed){
 			// Prepare the intermediate texture.
 			transferTexture.width = texture.width;
 			transferTexture.height = texture.height;
@@ -795,16 +799,24 @@ void GPU::uploadTexture(const Texture & texture) {
 		vkCmdCopyBufferToImage(commandBuffer, transferBuffer.gpu->buffer, dstTexture->gpu->image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
 
 		const uint imageCount = texture.shape == TextureShape::D3 ? d : layers;
-		// Support both 8-bits and 32-bits cases.
-		currentOffset += imageCount * w * h * destChannels * compSize;
 		currentImg += imageCount;
+
 		// We might have more levels allocated on the GPU than we had available on the CPU.
 		// Stop, these will be generated automatically.
 		if(currentImg >= texture.images.size()){
 			break;
 		}
 
+		// Support both 8-bits and 32-bits cases.
+		if(isCompressed){
+			currentOffset = imageOffsets[currentImg];
+		} else {
+			currentOffset += imageCount * w * h * destChannels * compSize;
+			assert(currentOffset == imageOffsets[currentImg]);
+		}
+
 	}
+
 	// If we used an intermediate texture, blit from it to the destination. This will handle format conversion.
 	if(dstTexture != &texture){
 		const glm::uvec2 size(texture.width, texture.height);

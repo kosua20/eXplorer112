@@ -269,7 +269,10 @@ enum class Layout : uint {
 	RGBA16I,
 	RGBA16UI,
 	RGBA32I,
-	RGBA32UI
+	RGBA32UI,
+	BC1,
+	BC2,
+	BC3
 };
 
 STD_HASH(Layout);

@@ -223,7 +223,10 @@ Layout VkUtils::convertFormat(const VkFormat& format){
 		{ VK_FORMAT_R16G16B16A16_SINT, Layout::RGBA16I },
 		{ VK_FORMAT_R16G16B16A16_UINT, Layout::RGBA16UI },
 		{ VK_FORMAT_R32G32B32A32_SINT, Layout::RGBA32I },
-		{ VK_FORMAT_R32G32B32A32_UINT, Layout::RGBA32UI }
+		{ VK_FORMAT_R32G32B32A32_UINT, Layout::RGBA32UI },
+		{ VK_FORMAT_BC1_RGBA_SRGB_BLOCK, Layout::BC1 },
+		{ VK_FORMAT_BC2_SRGB_BLOCK, Layout::BC2 },
+		{ VK_FORMAT_BC3_SRGB_BLOCK, Layout::BC3 }
 	};
 
 	return formatInfos.at(format);
@@ -572,7 +575,10 @@ unsigned int VkUtils::getGPULayout(Layout typedFormat, VkFormat & format) {
 		{Layout::RGBA16I, { VK_FORMAT_R16G16B16A16_SINT, 4 }},
 		{Layout::RGBA16UI, { VK_FORMAT_R16G16B16A16_UINT, 4 }},
 		{Layout::RGBA32I, { VK_FORMAT_R32G32B32A32_SINT, 4 }},
-		{Layout::RGBA32UI, { VK_FORMAT_R32G32B32A32_UINT, 4 }}
+		{Layout::RGBA32UI, { VK_FORMAT_R32G32B32A32_UINT, 4 }},
+		{Layout::BC1, { VK_FORMAT_BC1_RGBA_SRGB_BLOCK, 4 }},
+		{Layout::BC2, { VK_FORMAT_BC2_SRGB_BLOCK, 4 }},
+		{Layout::BC3, { VK_FORMAT_BC3_SRGB_BLOCK, 4 }}
 	};
 
 	if(formatInfos.count(typedFormat) > 0) {

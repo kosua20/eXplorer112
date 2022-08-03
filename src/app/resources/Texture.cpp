@@ -15,8 +15,25 @@ void Texture::upload(const Layout & layout, bool updateMipmaps) {
 		levels = getMaxMipLevel()+1;
 	}
 
+	Layout finalLayout = layout;
+	// Auto-cleverness for compressed images.
+	// For now, compressed images will only load the first mip level.
+	// This is because of our "load image, upload texture (n images)" approach.
+	// One option could be to :
+	// * load all the BC data in the first image.
+	// * call "populate compressed" on the texture (or do it when uploading), which will create all the needed images.
+	// * then upload and profit
+	if(!images.empty() && images[0].compressedFormat != Image::Compression::NONE){
+		static const std::unordered_map<Image::Compression, Layout> bcLayouts = {
+			{ Image::Compression::BC1, Layout::BC1 },
+			{ Image::Compression::BC2, Layout::BC2 },
+			{ Image::Compression::BC3, Layout::BC3 },
+		};
+		finalLayout = bcLayouts.at(images[0].compressedFormat);
+	}
+	
 	// Create texture.
-	GPU::setupTexture(*this, layout, false);
+	GPU::setupTexture(*this, finalLayout, false);
 	GPU::uploadTexture(*this);
 
 	// Generate mipmaps pyramid automatically.
