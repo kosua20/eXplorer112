@@ -93,16 +93,15 @@ bool Image::load(const fs::path & path) {
 		width = tc.width;
 		height = tc.height;
 
-		// Query first layer/face/level only.
-		ddsktx_sub_data subData;
-		ddsktx_get_sub(&tc, &subData, allCompressedData.data(), ddsSize, 0, 0, 0);
-
-		// If not compressed, just flip channels and copu.
+		// If not compressed, just flip channels and copy.
 		if(compressedFormat == Compression::NONE){
 
 			// Allocate memory.
 			const size_t linearSize = width *  height * components;
 			pixels.resize(linearSize);
+			// Query first layer/face/level only.
+			ddsktx_sub_data subData;
+			ddsktx_get_sub(&tc, &subData, allCompressedData.data(), ddsSize, 0, 0, 0);
 			// Flip BGRA8 data.
 			std::memcpy(pixels.data(), subData.buff, subData.size_bytes);
 			for(uint32_t pix = 0; pix < (uint32_t)subData.size_bytes; pix += 4){
@@ -110,8 +109,9 @@ bool Image::load(const fs::path & path) {
 				std::swap(pixels[pix], pixels[pix+2]);
 			}
 		} else {
-			pixels.resize(subData.size_bytes);
-			std::memcpy(pixels.data(), subData.buff, subData.size_bytes);
+			// Store everything, we will sort it out when uploading or uncompressing.
+			pixels.resize(ddsSize);
+			std::memcpy(pixels.data(), allCompressedData.data(), ddsSize);
 		}
 
 		return true;
@@ -141,8 +141,16 @@ bool Image::uncompress(){
 	if(compressedFormat == Compression::NONE){
 		return true;
 	}
-	std::vector<char> compressedPixels(pixels.size());
-	std::memcpy(compressedPixels.data(), pixels.data(), pixels.size());
+	// Query DDS header again.
+	ddsktx_texture_info tc = {};
+	if(!ddsktx_parse(&tc, pixels.data(), pixels.size(), NULL)) {
+		return false;
+	}
+	// Retrieve first image.
+	ddsktx_sub_data subData;
+	ddsktx_get_sub(&tc, &subData, pixels.data(), pixels.size(), 0, 0, 0);
+	std::vector<char> compressedPixels(subData.size_bytes);
+	std::memcpy(compressedPixels.data(), subData.buff, subData.size_bytes);
 
 	pixels.resize(width * height * components);
 	static const std::unordered_map<Compression, int> flags = {
@@ -159,7 +167,7 @@ bool Image::uncompress(){
 bool Image::save(const fs::path & path) const {
 	// Always save the decompressed data.
 	if(compressedFormat != Compression::NONE){
-		Log::error("Attemmpting to save a compressed texture.");
+		Log::error("Attempting to save a compressed texture.");
 		return false;
 	}
 	return stbi_write_png(path.string().c_str(), width, height, components, &pixels[0], components * width) != 0;
