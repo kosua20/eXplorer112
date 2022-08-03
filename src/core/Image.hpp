@@ -7,6 +7,13 @@ class Image {
 
 public:
 
+	enum class Compression {
+		NONE,
+		BC1,
+		BC2,
+		BC3
+	};
+
 	/** Default constructor. */
 	Image() = default;
 
@@ -24,6 +31,8 @@ public:
 	 \return a success/error flag
 	 */
 	bool load(const fs::path & path);
+
+	bool uncompress();
 
 	/** Save an image to disk.
 	 \param path the path to the image
@@ -53,8 +62,7 @@ public:
 	unsigned int height = 0;	 ///< The height of the image
 	unsigned int components = 0; ///< Number of components/channels
 	std::vector<unsigned char> pixels;	 ///< The pixels values of the image
-	std::vector<unsigned char> compressedPixels;
-	int compressedFormat = 0;
+	Compression compressedFormat = Compression::NONE;
 
 };
 

@@ -296,6 +296,7 @@ int main(int argc, const char** argv)
 					if(!image.load(selectedTexturePath)){
 						Log::error("Unsupported texture format for input file %s", selectedTexturePath.filename().c_str());
 					}
+					image.uncompress();
 
 				} else {
 					// Generate a dummy texture.
