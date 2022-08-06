@@ -51,28 +51,6 @@ Program* loadProgram(const std::string& vertName, const std::string& fragName){
 	return new Program(vertName + "_" + fragName, vertContent, fragContent);
 }
 
-void fixObjectForRendering(Obj& obj){
-	// Flip UVs.
-	for(glm::vec2& uv : obj.uvs){
-		uv[1] = 1.f - uv[1];
-	}
-	// Decrement 1-based indices.
-	for(Obj::Set& set : obj.faceSets){
-		for(Obj::Set::Face& f : set.faces){
-			f.v0 = f.v0 - 1;
-			f.v1 = f.v1 - 1;
-			f.v2 = f.v2 - 1;
-			f.t0 = f.t0 == Obj::Set::Face::INVALID ? f.t0 : (f.t0 - 1);
-			f.t1 = f.t1 == Obj::Set::Face::INVALID ? f.t1 : (f.t1 - 1);
-			f.t2 = f.t2 == Obj::Set::Face::INVALID ? f.t2 : (f.t2 - 1);
-			f.n0 = f.n0 == Obj::Set::Face::INVALID ? f.n0 : (f.n0 - 1);
-			f.n1 = f.n1 == Obj::Set::Face::INVALID ? f.n1 : (f.n1 - 1);
-			f.n2 = f.n2 == Obj::Set::Face::INVALID ? f.n2 : (f.n2 - 1);
-
-		}
-	}
-}
-
 struct GameFiles {
 
 	GameFiles(){}
@@ -114,7 +92,7 @@ struct GameFiles {
 };
 
 struct ModelScene {
-	Obj dff;
+	Object dff;
 	std::vector<Mesh> meshes;
 	std::vector<Texture> textures;
 	std::vector<uint> meshToTextures;
@@ -130,23 +108,21 @@ struct ModelScene {
 		textures.clear();
 		meshToTextures.clear();
 
-		dff = Obj();
+		dff = Object();
 	}
 
 	void load(const fs::path& dffPath, const GameFiles& files){
 
-		TexturesList usedTextures;
-		Dff::load(dffPath, dff, usedTextures);
-		fixObjectForRendering(dff);
+		Dff::load(dffPath, dff);
 
 		const glm::vec2 defaultUV = glm::vec2(0.5f);
 		const glm::vec3 defaultNormal = glm::vec3(0.0f, 0.0f, 1.0f);
 
-		for(const Obj::Set& set : dff.faceSets){
+		for(const Object::Set& set : dff.faceSets){
 
 			// Load geometry.
 			{
-				meshes.emplace_back(set.name);
+				meshes.emplace_back(dff.name + "_part_" + std::to_string(meshes.size()));
 				Mesh& mesh = meshes.back();
 
 				const size_t vertCount = set.faces.size() * 3;
@@ -157,7 +133,7 @@ struct ModelScene {
 				mesh.normals.resize(vertCount);
 
 				unsigned int ind = 0;
-				for(const Obj::Set::Face& f : set.faces){
+				for(const Object::Set::Face& f : set.faces){
 					mesh.positions[ind]   = dff.positions[f.v0];
 					mesh.positions[ind+1] = dff.positions[f.v1];
 					mesh.positions[ind+2] = dff.positions[f.v2];
@@ -165,13 +141,13 @@ struct ModelScene {
 					mesh.indices[ind+1] = ind+1;
 					mesh.indices[ind+2] = ind+2;
 
-					mesh.texcoords[ind+0] = (f.t0 != Obj::Set::Face::INVALID) ? dff.uvs[f.t0] : defaultUV;
-					mesh.texcoords[ind+1] = (f.t1 != Obj::Set::Face::INVALID) ? dff.uvs[f.t1] : defaultUV;
-					mesh.texcoords[ind+2] = (f.t2 != Obj::Set::Face::INVALID) ? dff.uvs[f.t2] : defaultUV;
+					mesh.texcoords[ind+0] = (f.t0 != Object::Set::Face::INVALID) ? dff.uvs[f.t0] : defaultUV;
+					mesh.texcoords[ind+1] = (f.t1 != Object::Set::Face::INVALID) ? dff.uvs[f.t1] : defaultUV;
+					mesh.texcoords[ind+2] = (f.t2 != Object::Set::Face::INVALID) ? dff.uvs[f.t2] : defaultUV;
 
-					mesh.normals[ind+0] = (f.n0 != Obj::Set::Face::INVALID) ? dff.normals[f.n0] : defaultNormal;
-					mesh.normals[ind+1] = (f.n1 != Obj::Set::Face::INVALID) ? dff.normals[f.n1] : defaultNormal;
-					mesh.normals[ind+2] = (f.n2 != Obj::Set::Face::INVALID) ? dff.normals[f.n2] : defaultNormal;
+					mesh.normals[ind+0] = (f.n0 != Object::Set::Face::INVALID) ? dff.normals[f.n0] : defaultNormal;
+					mesh.normals[ind+1] = (f.n1 != Object::Set::Face::INVALID) ? dff.normals[f.n1] : defaultNormal;
+					mesh.normals[ind+2] = (f.n2 != Object::Set::Face::INVALID) ? dff.normals[f.n2] : defaultNormal;
 
 					ind += 3;
 
@@ -181,7 +157,7 @@ struct ModelScene {
 			}
 			// Load texture if it has not already been loaded.
 			{
-				const std::string textureName = set.texture;
+				const std::string textureName = dff.materials[set.material].texture;
 				const uint textureCount = (uint)textures.size();
 
 				uint textureIndex = textureCount;
@@ -295,6 +271,8 @@ int main(int argc, char ** argv) {
 		MODEL, WORLD
 	};
 	ViewerMode viewMode = ViewerMode::MODEL;
+	float zoomPct = 100.f;
+	glm::vec2 centerPct(50.f, 50.0f);
 	int shadingMode = MODE_SHADING_LIGHT;
 	int albedoMode = MODE_ALBEDO_TEXTURE;
 	int selectedModel = -1;
@@ -570,6 +548,8 @@ int main(int argc, char ** argv) {
 
 						if(ImGui::Selectable(texName.c_str(), selectedTexture == row, selectableTableFlags)){
 							selectedTexture = row;
+							zoomPct = 100.f;
+							centerPct = glm::vec2(50.f, 50.0f);
 						}
 
 						ImGui::TableNextColumn();
@@ -586,11 +566,27 @@ int main(int argc, char ** argv) {
 
 		if(ImGui::Begin("Texture")){
 			if(selectedTexture >= 0){
+
+				ImGui::PushItemWidth(120);
+				ImGui::SliderFloat("Zoom (%)", &zoomPct, 0.0f, 1000.0f);
+				ImGui::SameLine();
+				ImGui::SliderFloat("X (%)", &centerPct[0], 0.0f, 100.0f);
+				ImGui::SameLine();
+				ImGui::SliderFloat("Y (%)", &centerPct[1], 0.0f, 100.0f);
+				ImGui::PopItemWidth();
+
 				// Adjust the texture display to the window size.
 				ImVec2 winSize = ImGui::GetContentRegionAvail();
 				winSize.x = std::max(winSize.x, 2.f);
 				winSize.y = std::max(winSize.y, 2.f);
-				ImGui::ImageButton(model.textures[selectedTexture], ImVec2(winSize.x, winSize.y), ImVec2(0.0,0.0), ImVec2(1.0,1.0), 0, ImVec4(1.0f, 0.0f, 1.0f, 1.0f));
+
+				const Texture& tex = model.textures[selectedTexture];
+				const glm::vec2 texCenter = centerPct / 100.f;
+				const glm::vec2 texScale(100.0f / std::max(zoomPct, 1.f));
+				const glm::vec2 miniUV = texCenter - texScale * 0.5f;
+				const glm::vec2 maxiUV = texCenter + texScale * 0.5f;
+
+				ImGui::ImageButton(tex, ImVec2(winSize.x, winSize.y), miniUV, maxiUV, 0, ImVec4(1.0f, 0.0f, 1.0f, 1.0f));
 			}
 		}
 		ImGui::End();
