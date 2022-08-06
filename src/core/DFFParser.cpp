@@ -568,7 +568,7 @@ bool parseClump(FILE* file, Model& model){
 			fread(values, sizeof(uint32_t), 4, file);
 			uint32_t frameIndex = values[0];
 			uint32_t geometryIndex = values[1];
-			uint32_t flags = values[2];
+			// uint32_t flags = values[2]; // Unused
 
 #ifdef LOG_DFF_CONTENT
 			Log::info("[dffparser] Atomic %d: frame %u, geometry %u, flags %u", i, frameIndex, geometryIndex, flags);
@@ -618,7 +618,7 @@ bool parse(const fs::path& path, Model& model){
 	return true;
 }
 
-void convertToObj(Model& model, Obj& outObject, const std::string& baseName, TexturesList& usedTextures){
+void convertToObj(Model& model, Object& outObject){
 
 	// Nothing to export.
 	if(model.pairings.empty()){
@@ -637,22 +637,14 @@ void convertToObj(Model& model, Obj& outObject, const std::string& baseName, Tex
 			}
 			return (a.v0 < b.v0) || (a.v0 == b.v0 && a.v1 < b.v1) || (a.v0 == b.v0 && a.v1 == b.v1 && a.v2 < b.v2);
 		});
-		// Flip texture coordinates.
-		for(auto& uvs : geom.uvs){
-			for(auto& uv : uvs){
-				uv[1] = 1.f - uv[1];
-			}
-		}
 	}
-
-
-	std::stringstream outputMtl;
 
 	// From all the pairs of frame/geometry, we need to build a valid set of objects, each with a texture.
 	int pairId = 0;
 	uint32_t vertexIndex = 0;
 	uint32_t uvIndex = 0;
 	uint32_t normalIndex = 0;
+	uint32_t colorIndex = 0;
 
 	for(const Dff::Model::Pair& pair : model.pairings){
 
@@ -676,11 +668,12 @@ void convertToObj(Model& model, Obj& outObject, const std::string& baseName, Tex
 
 		// Output vertices, normals and uvs if present.
 		const uint32_t vertCount = (uint32_t)set.positions.size();
-		const bool hasNormals = (uint32_t)set.normals.size() == vertCount;
 
+		const bool hasNormals = (uint32_t)set.normals.size() == vertCount;
+		// Always use the first set of UVs.
 		const bool hasUvs = !geom.uvs.empty() && ( (uint32_t) geom.uvs[0].size() == vertCount);
 		const bool hasColors = (uint32_t) geom.colors.size() == vertCount;
-
+		
 		outObject.positions.reserve( (uint32_t) outObject.positions.size() + vertCount);
 		for(size_t vid = 0; vid < vertCount; ++vid){
 			const glm::vec3 tpos = glm::vec3(totalFrame * glm::vec4(set.positions[vid], 1.f));
@@ -702,6 +695,13 @@ void convertToObj(Model& model, Obj& outObject, const std::string& baseName, Tex
 			}
 		}
 		// TODO: colors if needed
+		if(hasColors){
+			outObject.colors.reserve(outObject.colors.size() + vertCount);
+			for(size_t vid = 0; vid < vertCount; ++vid){
+				const Color& col = geom.colors[vid];
+				outObject.colors.emplace_back(col.r, col.g, col.b);
+			}
+		}
 
 		// Then triangles, split by material.
 		const size_t triCount = geom.faces.size();
@@ -712,41 +712,29 @@ void convertToObj(Model& model, Obj& outObject, const std::string& baseName, Tex
 
 			if(geom.faces[tid].id != materialId){
 				materialId = geom.faces[tid].id;
-				// New group.
-				const std::string matName = baseName + "_" + std::to_string(pairId) + "_" + std::to_string(materialId);
-				outputMtl << "newmtl " << matName << "\n";
 
 				const Dff::Material& material = geom.materials[geom.mappings[materialId]];
-				const float& amb = material.ambSpecDiff[0];
-				outputMtl << "Ka " << amb << " " << amb << " " << amb << "\n";
-				const float& diff = material.ambSpecDiff[2];
-				outputMtl << "Kd " << diff << " " << diff << " " << diff << "\n";
-				const float& spec = material.ambSpecDiff[1];
-				outputMtl << "Ks " << spec << " " << spec << " " << spec << "\n";
-				outputMtl << "Ns " << 100 << "\n";
 				std::string textureName;
 				if(!material.diffuseName.empty()){
 					textureName = TextUtilities::lowercase(material.diffuseName);
-					outputMtl << "map_Kd " << "textures/" << textureName << ".png\n";
-					usedTextures.insert(textureName);
 				}
 
+				// New material
+				Object::Material& newMaterial = outObject.materials.emplace_back();
+				newMaterial.texture = textureName;
 
-				Obj::Set& faceSet = outObject.faceSets.emplace_back();
+				Object::Set& faceSet = outObject.faceSets.emplace_back();
 				faceSet.faces.reserve(256);
-				faceSet.material = matName;
-				faceSet.name = matName;
-				faceSet.texture = textureName;
+				faceSet.material = outObject.materials.size()-1;
 			}
 
-			Obj::Set& faceSet = outObject.faceSets.back();
-			Obj::Set::Face& face = faceSet.faces.emplace_back();
+			Object::Set& faceSet = outObject.faceSets.back();
+			Object::Set::Face& face = faceSet.faces.emplace_back();
 
-			const uint32_t v0 = geom.faces[tid].v0 + 1u;
-			const uint32_t v1 = geom.faces[tid].v1 + 1u;
-			const uint32_t v2 = geom.faces[tid].v2 + 1u;
+			const uint32_t v0 = geom.faces[tid].v0;
+			const uint32_t v1 = geom.faces[tid].v1;
+			const uint32_t v2 = geom.faces[tid].v2;
 
-			// Remember: v/vt/vn
 			face.v0 = v0+vertexIndex;
 			face.v1 = v1+vertexIndex;
 			face.v2 = v2+vertexIndex;
@@ -762,18 +750,24 @@ void convertToObj(Model& model, Obj& outObject, const std::string& baseName, Tex
 				face.n1 = (v1+normalIndex);
 				face.n2 = (v2+normalIndex);
 			}
+
+			if(hasColors){
+				face.c0 = (v0+colorIndex);
+				face.c1 = (v1+colorIndex);
+				face.c2 = (v2+colorIndex);
+			}
 		}
 
 		vertexIndex += vertCount;
 		uvIndex += hasUvs ? vertCount : 0;
 		normalIndex += hasNormals ? vertCount : 0;
+		colorIndex += hasColors ? vertCount : 0;
 		++pairId;
 	}
 
-	outObject.materials = outputMtl.str();
 }
 
-bool load(const fs::path& path, Obj& outObject, TexturesList& usedTextures){
+bool load(const fs::path& path, Object& outObject){
 
 	Model model;
 	if(!parse(path, model)){
@@ -781,8 +775,9 @@ bool load(const fs::path& path, Obj& outObject, TexturesList& usedTextures){
 		return false;
 	}
 
-	const std::string itemName = path.filename().replace_extension().string();
-	convertToObj(model, outObject, itemName, usedTextures);
+	outObject.name = path.filename().replace_extension().string();
+
+	convertToObj(model, outObject);
 
 	return true;
 }

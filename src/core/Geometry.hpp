@@ -12,7 +12,9 @@ struct Color {
 	uint8_t a;
 };
 
-struct Obj {
+struct Object {
+	std::string name;
+	
 	std::vector<glm::vec3> positions;
 	std::vector<glm::vec3> normals;
 	std::vector<glm::uvec3> colors;
@@ -21,21 +23,25 @@ struct Obj {
 	struct Set {
 
 		struct Face {
-
 			static const uint32_t INVALID = 0xFFFF;
 
 			uint32_t v0 = 0, v1 = 0, v2 = 0;
 			uint32_t t0 = INVALID, t1 = INVALID, t2 = INVALID;
 			uint32_t n0 = INVALID, n1 = INVALID, n2 = INVALID;
+			uint32_t c0 = INVALID, c1 = INVALID, c2 = INVALID;
 		};
 
 		std::vector<Face> faces;
-		std::string material;
-		std::string name;
+		uint32_t material;
+	};
+
+	struct Material {
+		// For now, only diffuse texture.
 		std::string texture;
 	};
+
 	std::vector<Set> faceSets;
-	std::string materials;
+	std::vector<Material> materials;
 };
 
 struct ObjOffsets {
@@ -47,8 +53,8 @@ struct ObjOffsets {
 
 using TexturesList = std::unordered_set<std::string>;
 
-void writeMtlToStream(const Obj& obj, std::ofstream& mtlFile);
+void writeMtlToStream(const Object& obj, std::ofstream& mtlFile);
 
-void writeObjToStream(const Obj& obj, std::ofstream& objFile, ObjOffsets & offsets, const glm::mat4& frame);
+void writeObjToStream(const Object& obj, std::ofstream& objFile, ObjOffsets & offsets, const glm::mat4& frame);
 
-void writeObjToStream(const Obj& obj, std::ofstream& objFile);
+void writeObjToStream(const Object& obj, std::ofstream& objFile);

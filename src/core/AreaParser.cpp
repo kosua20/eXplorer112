@@ -65,7 +65,7 @@ glm::mat4 parseFrame(const char* val){
 	return res;
 }
 
-bool load(const fs::path& path, Obj& outObject, TexturesList& usedTextures ){
+bool load(const fs::path& path, Object& outObject){
 
 	pugi::xml_document areaFile;
 	if(!areaFile.load_file(path.c_str())){
@@ -78,10 +78,10 @@ bool load(const fs::path& path, Obj& outObject, TexturesList& usedTextures ){
 
 	// Parse shaders first
 	struct Shader {
-		std::string content;
-		std::string textureName;
-		bool used = false;
+		Object::Material material;
+		int index = -1;
 	};
+
 	std::unordered_map<std::string, Shader> shaders;
 
 	const auto& shaderList = areaScene.child("shaderlist");
@@ -95,13 +95,6 @@ bool load(const fs::path& path, Obj& outObject, TexturesList& usedTextures ){
 		TextUtilities::replace(shaderBaseName, "-", "_");
 		const std::string shaderFullName = areaName + "_" + shaderBaseName;
 		Shader& shaderDesc = shaders[shaderFullName];
-
-		std::stringstream mtlContent;
-		mtlContent << "newmtl " << shaderFullName << "\n";
-		mtlContent << "Ka " << 0.f << " " << 0.f << " " << 0.f << "\n";
-		mtlContent << "Kd " << 1.0f << " " << 1.0f << " " << 1.0f << "\n";
-		mtlContent << "Ks " << 1.0f << " " << 1.0f << " " << 1.0f << "\n";
-		mtlContent << "Ns " << 100 << "\n";
 
 		const auto textureRef = shader.child("shaderfunc").find_child_by_attribute("channel", "name", "color").child("texture");
 		if(textureRef){
@@ -123,26 +116,27 @@ bool load(const fs::path& path, Obj& outObject, TexturesList& usedTextures ){
 				}
 
 				textureName = TextUtilities::lowercase(textureName);
-				mtlContent << "map_Kd " << "textures/" << textureName << ".png\n";
-				shaderDesc.textureName = textureName;
+				shaderDesc.material.texture = textureName;
 
 			}
 		}
-
-		shaderDesc.content = mtlContent.str();
 	}
-
 
 	ObjOffsets offsets;
 	glm::mat4 areaFrame(1.0f);
+
 	const auto axisNode = areaScene.find_child_by_attribute("param", "name", "axis system");
 	if(axisNode){
 		areaFrame = parseFrame(axisNode.child_value());
 	}
 
+	outObject.name = areaName + "_groups";
+
 	const auto& groups = areaScene.children("group");
 	for(const auto& group : groups){
 		const char* groupName = group.attribute("name").value();
+
+
 		const auto frameNode = group.find_child_by_attribute("name", "localxform");
 		glm::mat4 frame(1.0f);
 		if(frameNode){
@@ -156,7 +150,7 @@ bool load(const fs::path& path, Obj& outObject, TexturesList& usedTextures ){
 		const auto userData = group.child("userdata").find_child_by_attribute("name", "3dsmax User Properties");
 		if(userData){
 			const char* userType = userData.child_value();
-			// Also encountered "transparent"
+			// Skipd decals for now (TODO: extract decals)
 			if(strcmp(userType, "\"decal\"") == 0){
 				continue;
 			} else if(strcmp(userType, "\"transparent\"") == 0){
@@ -209,7 +203,8 @@ bool load(const fs::path& path, Obj& outObject, TexturesList& usedTextures ){
 				outObject.positions.push_back(glm::vec3(frame * glm::vec4(pos, 1.0f)));
 
 				if(tIndex >= 0){
-					outObject.uvs.push_back(parseVec2(tokens[tIndex].c_str()));
+					const glm::vec2 flipUV = parseVec2(tokens[tIndex].c_str());
+					outObject.uvs.emplace_back(flipUV.x, 1.0f - flipUV.y);
 				}
 				if(nIndex >= 0){
 					const glm::vec3 nor = parseVec3(tokens[nIndex].c_str());
@@ -230,13 +225,15 @@ bool load(const fs::path& path, Obj& outObject, TexturesList& usedTextures ){
 				TextUtilities::replace(shaderBaseName, "-", "_");
 				const std::string shaderFullName = areaName + "_" + shaderBaseName;
 
-				Obj::Set& set = outObject.faceSets.emplace_back();
+				Shader& shader = shaders[shaderFullName];
+				if(shader.index < 0){
+					shader.index = outObject.materials.size();
+					outObject.materials.push_back(shader.material);
+				}
 
-				set.material = shaderFullName;
-				set.name = areaName + "_" + groupName + std::to_string(polymeshId);
+				Object::Set& set = outObject.faceSets.emplace_back();
+				set.material = shader.index;
 				set.faces.reserve(pCount);
-
-				shaders[set.material].used = true;
 
 				for(const auto& p : primList.children("p")){
 					const auto tokens = TextUtilities::split(p.child_value(), " ", true);
@@ -244,10 +241,10 @@ bool load(const fs::path& path, Obj& outObject, TexturesList& usedTextures ){
 						Log::error("Unexpected primitive index count");
 						continue;
 					}
-					Obj::Set::Face& f = set.faces.emplace_back();
-					const uint32_t v0 = std::stoul(tokens[0]) + 1u;
-					const uint32_t v1 = std::stoul(tokens[1]) + 1u;
-					const uint32_t v2 = std::stoul(tokens[2]) + 1u;
+					Object::Set::Face& f = set.faces.emplace_back();
+					const uint32_t v0 = std::stoul(tokens[0]);
+					const uint32_t v1 = std::stoul(tokens[1]);
+					const uint32_t v2 = std::stoul(tokens[2]);
 					f.v0 = v0 + offsets.v;
 					f.v1 = v1 + offsets.v;
 					f.v2 = v2 + offsets.v;
@@ -275,15 +272,6 @@ bool load(const fs::path& path, Obj& outObject, TexturesList& usedTextures ){
 
 	}
 
-	// Only output used materials (some unused have erroneous texture names).
-	for(const auto& shader : shaders){
-		if(!shader.second.used){
-			continue;
-		}
-		outObject.materials.append(shader.second.content);
-		outObject.materials.append("\n");
-		usedTextures.insert(shader.second.textureName);
-	}
 	return true;
 }
 

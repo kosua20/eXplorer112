@@ -4,6 +4,6 @@
 
 namespace Dff {
 
-bool load(const fs::path& path, Obj& outObject, TexturesList& usedTextures);
+bool load(const fs::path& path, Object& outObject);
 
 }
