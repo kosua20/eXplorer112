@@ -149,7 +149,7 @@ void Swapchain::setup(uint32_t width, uint32_t height){
 	std::vector<VkImage> colorImages;
 	VK_RET(vkGetSwapchainImagesKHR(_context->device, _swapchain, &_imageCount, nullptr));
 	colorImages.resize(_imageCount);
-	Log::info("GPU: wapchain using %u images, requested %u.", _imageCount, _minImageCount );
+	Log::info("GPU: swapchain using %u images of size %ux%u, requested %u.", _imageCount, extent.width, extent.height,_minImageCount );
 	// Retrieve the images themselves.
 	VK_RET(vkGetSwapchainImagesKHR(_context->device, _swapchain, &_imageCount, colorImages.data()));
 
