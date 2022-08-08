@@ -1,0 +1,31 @@
+
+#include "engine.glsl"
+
+
+
+layout(local_size_x=1, local_size_y=1, local_size_z=1) in;
+
+layout(std140, set = 0, binding = 1) readonly buffer MeshesInfos {
+	MeshInfos meshInfos[];
+};
+
+layout(std140, set = 0, binding = 2) readonly buffer InstancesInfos {
+	MeshInstanceInfos instanceInfos[];
+};
+
+layout(set = 0, binding = 3) writeonly buffer CommandBuffer {
+	DrawCommand drawCommands[];
+};
+
+void main(){
+
+	uint mid = gl_GlobalInvocationID.x;
+
+	MeshInfos infos = meshInfos[mid];
+
+	drawCommands[mid].indexCount = infos.indexCount;
+	drawCommands[mid].instanceCount = 1; // TODO: use proper instance count
+	drawCommands[mid].firstIndex = infos.firstIndex;
+	drawCommands[mid].vertexOffset = int(infos.vertexOffset);
+	drawCommands[mid].firstInstance = 0u;
+}

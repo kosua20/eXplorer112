@@ -3,6 +3,7 @@
 #include "core/TextUtilities.hpp"
 #include "core/Common.hpp"
 #include "core/DFFParser.hpp"
+#include "core/WorldParser.hpp"
 
 #include "system/Window.hpp"
 #include "graphics/GPU.hpp"
@@ -51,17 +52,24 @@ Program* loadProgram(const std::string& vertName, const std::string& fragName){
 	return new Program(vertName + "_" + fragName, vertContent, fragContent);
 }
 
+Program* loadProgram(const std::string& computeName){
+	std::vector<fs::path> names;
+	const std::string compContent = System::getStringWithIncludes(APP_RESOURCE_DIRECTORY / "shaders" / (computeName + ".comp"), names);
+
+	return new Program(computeName, compContent);
+}
+
 struct GameFiles {
 
 	GameFiles(){}
 
 	GameFiles(const fs::path& installPath){
 
-		const fs::path resourcePath = installPath / "resources";
-		modelsPath = resourcePath / "models";
-		texturesPath = resourcePath / "textures";
-		templatesPath = resourcePath / "templates";
-		zonesPath = resourcePath / "zones";
+		resourcesPath = installPath / "resources";
+		modelsPath = resourcesPath / "models";
+		texturesPath = resourcesPath / "textures";
+		templatesPath = resourcesPath / "templates";
+		zonesPath = resourcesPath / "zones";
 		worldsPath = zonesPath / "world";
 
 		System::listAllFilesOfType(worldsPath, ".world", worldsList);
@@ -78,6 +86,7 @@ struct GameFiles {
 	}
 
 
+	fs::path resourcesPath;
 	fs::path modelsPath;
 	fs::path texturesPath;
 	fs::path templatesPath;
@@ -172,8 +181,7 @@ struct ModelScene {
 				// If not found, create a new texture.
 				if(textureIndex == textureCount){
 
-					textures.emplace_back(textureName.empty() ? "tex" : textureName);
-					Texture& tex = textures.back();
+					Texture& tex = textures.emplace_back(textureName.empty() ? "tex" : textureName);
 
 					for(const fs::path& texturePath : files.texturesList){
 						const std::string existingName = texturePath.filename().replace_extension().string();
@@ -199,6 +207,197 @@ struct ModelScene {
 
 			}
 		}
+	}
+};
+
+struct WorldScene {
+
+	struct MeshInfos {
+		glm::vec4 bboxMin;
+		glm::vec4 bboxMax;
+		uint indexCount;
+		uint instanceCount;
+		uint firstIndex;
+		uint vertexOffset;
+		uint firstInstanceIndex;
+		uint pad0, pad1, pad2;
+	};
+
+	struct MeshInstanceInfos {
+		glm::mat4 frame;
+	};
+
+	World world;
+	Mesh globalMesh{ "global" };
+	std::vector<Texture> textures;
+
+	std::unique_ptr<StructuredBuffer<MeshInfos>> meshInfosBuffer; // TODO: store material ID (or info directly)
+	std::unique_ptr<StructuredBuffer<MeshInstanceInfos>> meshInstanceInfosBuffer;
+
+
+	void clean(){
+		globalMesh.clean();
+		meshInfosBuffer.reset();
+		meshInstanceInfosBuffer.reset();
+		for(Texture& tex : textures){
+			tex.clean();
+		}
+		textures.clear();
+		world = World();
+	}
+
+	void load(const fs::path& worldPath, const GameFiles& files){
+		// Load the world and setup all the GPU data.
+		world.load(worldPath, files.resourcesPath);
+
+		const size_t instanceCount = world.instances().size();
+		const size_t objectCount = world.objects().size();
+
+		struct MeshExtInfos {
+			BoundingBox bbox;
+			uint object;
+			uint material;
+			uint indexCount;
+			uint firstIndex;
+			uint vertexOffset;
+
+			MeshExtInfos(const BoundingBox& _bbox, uint _object, uint _material, uint _indexCount, uint _firstIndex, uint _vertexOffset) :
+				bbox(_bbox), object(_object), material(_material),
+					indexCount(_indexCount),
+					firstIndex(_firstIndex),
+					vertexOffset(_vertexOffset) { }
+		};
+
+		uint meshesCount = 0;
+		std::vector<MeshExtInfos> meshInfos;
+		std::vector<uint> objectFirstMeshIndex;
+
+		for(uint oid = 0u; oid < objectCount; ++oid){
+			const Object& obj = world.objects()[oid];
+
+			// Book keeping for later.
+			objectFirstMeshIndex.push_back(meshesCount);
+			meshesCount += obj.faceSets.size();
+
+			// Copy attributes.
+			const uint vertexOffset = globalMesh.positions.size();
+
+			Log::check(!obj.positions.empty(), "Object with no positions.");
+			globalMesh.positions.insert(globalMesh.positions.end(), obj.positions.begin(), obj.positions.end());
+			globalMesh.texcoords.insert(globalMesh.texcoords.end(), obj.uvs.begin(), obj.uvs.end());
+			globalMesh.normals.insert(globalMesh.normals.end(), obj.normals.begin(), obj.normals.end());
+
+			Log::check((obj.positions.size() == obj.uvs.size()) && (obj.positions.size() == obj.normals.size()), "Discrepancy between positions and other attributes.");
+
+			// Total index count fo the object.
+			size_t totalIndexSize = 0;
+			for(const Object::Set& set : obj.faceSets){
+				totalIndexSize += set.faces.size() * 3;
+			}
+			globalMesh.indices.reserve(globalMesh.indices.size() + totalIndexSize);
+			// Pack each mesh.
+			for(const Object::Set& set : obj.faceSets){
+				// Build index buffer.
+				const uint indexOffset = globalMesh.indices.size();
+
+				for(const Object::Set::Face& f : set.faces){
+#ifdef DEBUG
+					if(f.t0 != f.v0 || f.t1 != f.v1 || f.t2 != f.v2 ||
+					   f.n0 != f.v0 || f.n1 != f.v1 || f.n2 != f.v2 ){
+						Log::error("Discrepancy between position indices and other attribute indices.");
+					}
+#endif
+					globalMesh.indices.push_back(f.v0);
+					globalMesh.indices.push_back(f.v1);
+					globalMesh.indices.push_back(f.v2);
+
+				}
+				// Generate extra infos.
+				BoundingBox bbox = BoundingBox();
+				if(!set.faces.empty()) {
+					bbox.minis = bbox.maxis = obj.positions[set.faces[0].v0];
+				}
+				for(const Object::Set::Face& f : set.faces){
+					bbox.merge(obj.positions[f.v0]);
+					bbox.merge(obj.positions[f.v1]);
+					bbox.merge(obj.positions[f.v2]);
+
+				}
+
+				meshInfos.emplace_back(bbox, (uint)oid, (uint)set.material, set.faces.size() * 3, indexOffset, vertexOffset);
+			}
+		}
+
+		globalMesh.upload();
+
+		// For each mesh of each object, how many instances and which ones?
+		std::vector<std::vector<uint>> instancesReferencingMesh(meshesCount);
+		for(uint iid = 0; iid < instanceCount; ++iid){
+			const World::Instance& instance = world.instances()[iid];
+			const uint firstMeshIndex = objectFirstMeshIndex[instance.object];
+			const uint nextObjectIndex = instance.object + 1u;
+			const uint afterLastMeshIndex = nextObjectIndex < objectCount ? objectFirstMeshIndex[nextObjectIndex] : meshesCount;
+			for(uint mid = firstMeshIndex; mid < afterLastMeshIndex; ++mid){
+				instancesReferencingMesh[mid].push_back(iid);
+			}
+		}
+		uint totalMeshInstancesCount = 0;
+		for(const auto& meshInstances : instancesReferencingMesh){
+			totalMeshInstancesCount += meshInstances.size();
+		}
+		// Build a list of unrolled frames.
+		meshInstanceInfosBuffer = std::make_unique<StructuredBuffer<MeshInstanceInfos>>(totalMeshInstancesCount, BufferType::STORAGE);
+		meshInfosBuffer = std::make_unique<StructuredBuffer<MeshInfos>>(meshesCount, BufferType::STORAGE);
+		uint currentMeshInstanceIndex = 0;
+		uint currentMeshIndex = 0;
+		for(const auto& instanceIndices : instancesReferencingMesh){
+
+			const MeshExtInfos& infos = meshInfos[currentMeshIndex];
+			MeshInfos& gpuInfos = meshInfosBuffer->at(currentMeshIndex);
+			gpuInfos.bboxMin = glm::vec4(infos.bbox.minis, 1.f);
+			gpuInfos.bboxMax = glm::vec4(infos.bbox.maxis, 1.f);
+			gpuInfos.indexCount = infos.indexCount;
+			gpuInfos.firstIndex = infos.firstIndex;
+			gpuInfos.vertexOffset = infos.vertexOffset;
+			gpuInfos.instanceCount = instanceIndices.size();
+			gpuInfos.firstInstanceIndex = currentMeshInstanceIndex;
+			
+			for(const auto& iid : instanceIndices){
+				meshInstanceInfosBuffer->at(currentMeshInstanceIndex).frame = world.instances()[iid].frame;
+				++currentMeshInstanceIndex;
+			}
+
+
+			++currentMeshIndex;
+		}
+		meshInstanceInfosBuffer->upload();
+		meshInfosBuffer->upload();
+
+		// Load all textures.
+		/*textures.reserve(world.textures().size());
+		for(const std::string& textureName : world.textures()){
+			Texture& tex = textures.emplace_back(textureName.empty() ? "tex" : textureName);
+
+			for(const fs::path& texturePath : files.texturesList){
+				const std::string existingName = texturePath.filename().replace_extension().string();
+				if(existingName == textureName){
+					tex.images.resize(1);
+					tex.images[0].load(texturePath);
+					break;
+				}
+			}
+			if(tex.images.empty()){
+				tex.images.emplace_back();
+				Image::generateDefaultImage(tex.images[0]);
+			}
+			// Update texture parameters.
+			tex.width = tex.images[0].width;
+			tex.height = tex.images[0].height;
+			tex.depth = tex.levels = 1;
+			tex.shape = TextureShape::D2;
+			tex.upload(Layout::SRGB8_ALPHA8, false);
+		}
+		 */
 	}
 };
 
@@ -248,6 +447,10 @@ int main(int argc, char ** argv) {
 	programPool.push_back(texturedObject);
 	Program* coloredObject = loadProgram("object_basic_color", "object_basic_color");
 	programPool.push_back(coloredObject);
+	Program* drawArgsCompute = loadProgram("draw_arguments_all");
+	programPool.push_back(drawArgsCompute);
+	Program* texturedInstancedObject = loadProgram("object_basic_texture_instanced", "object_basic_texture_instanced");
+	programPool.push_back(texturedInstancedObject);
 
 
 	struct FrameData {
@@ -257,13 +460,15 @@ int main(int argc, char ** argv) {
 		int shadingMode = 0;
 		int albedoMode = 0;
 	};
-	UniformBuffer<FrameData> ubo(1, 64);
+	UniformBuffer<FrameData> frameInfos(1, 64);
 	glm::vec2 renderingRes = config.resolutionRatio * config.screenResolution;
 	Framebuffer fb(renderingRes[0], renderingRes[1], {Layout::RGBA8, Layout::DEPTH_COMPONENT32F}, "sceneFb");
+	std::unique_ptr<Buffer> drawCommands = nullptr;
 
 	// Data loading.
 
 	ModelScene model;
+	WorldScene world;
 
 	// GUi state
 	Mesh boundingBox("bbox");
@@ -275,6 +480,7 @@ int main(int argc, char ** argv) {
 	glm::vec2 centerPct(50.f, 50.0f);
 	int shadingMode = MODE_SHADING_LIGHT;
 	int albedoMode = MODE_ALBEDO_TEXTURE;
+	int selectedWorld = -1;
 	int selectedModel = -1;
 	int selectedMesh = -1;
 	int selectedTexture = -1;
@@ -374,6 +580,7 @@ int main(int argc, char ** argv) {
 
 				if (ImGui::BeginTabItem("Models")){
 					viewMode = ViewerMode::MODEL;
+					selectedWorld = -1;
 
 					const unsigned int modelsCount = (uint)gameFiles.modelsList.size();
 					ImGui::Text("Found %u models", modelsCount);
@@ -435,7 +642,8 @@ int main(int argc, char ** argv) {
 					ImGui::EndTabItem();
 				}
 
-				if(ImGui::BeginTabItem("Worlds")){
+				if(ImGui::BeginTabItem("Worlds", nullptr, ImGuiTabItemFlags_SetSelected)){
+
 					viewMode = ViewerMode::WORLD;
 					selectedModel = -1;
 					
@@ -453,13 +661,25 @@ int main(int argc, char ** argv) {
 							ImGui::PushID(row);
 							ImGui::TableNextColumn();
 
+
 							const fs::path& worldPath = gameFiles.worldsList[row];
 							std::string worldName = worldPath.filename();
-							const std::string worldParent = worldPath.parent_path().filename();
 
-							ImGui::Text("%s", worldName.c_str());
+							if(selectedWorld == row){
+								worldName = "* " + worldName;
+							}
+
+							if(ImGui::Selectable(worldName.c_str(), selectedWorld == row, selectableTableFlags)){
+								if(selectedWorld != row){
+									selectedWorld = row;
+									world.clean();
+									world.load(worldPath, gameFiles);
+									drawCommands = std::make_unique<Buffer>(world.meshInfosBuffer->size() * sizeof(GPU::DrawCommand), BufferType::INDIRECT);
+								}
+							}
+
 							ImGui::TableNextColumn();
-							ImGui::Text("%s", worldParent.c_str());
+							ImGui::Text("");
 
 							ImGui::PopID();
 						}
@@ -472,7 +692,6 @@ int main(int argc, char ** argv) {
 			}
 
 		}
-			
 		ImGui::End();
 
 		if(ImGui::Begin("Inspector")){
@@ -591,7 +810,6 @@ int main(int argc, char ** argv) {
 		}
 		ImGui::End();
 
-
 		if(ImGui::Begin("Settings")) {
 			int ratioPercentage = std::round(config.resolutionRatio * 100.0f);
 
@@ -646,7 +864,6 @@ int main(int argc, char ** argv) {
 				camera.ratio(renderRes[0]/renderRes[1]);
 			}
 		}
-
 		ImGui::End();
 
 #ifdef DEBUG
@@ -658,17 +875,19 @@ int main(int argc, char ** argv) {
 		/// Rendering.
 		const glm::mat4 vp		   = camera.projection() * camera.view();
 
-		ubo.at(0).vp = vp;
-		ubo.at(0).ivp = glm::transpose(glm::inverse(vp));
-		ubo.at(0).color = glm::vec4(1.0f);
-		ubo.at(0).albedoMode = albedoMode;
-		ubo.at(0).shadingMode = shadingMode;
-		ubo.upload();
+		frameInfos.at(0).vp = vp;
+		frameInfos.at(0).ivp = glm::transpose(glm::inverse(vp));
+		frameInfos.at(0).color = glm::vec4(1.0f);
+		frameInfos.at(0).albedoMode = albedoMode;
+		frameInfos.at(0).shadingMode = shadingMode;
+		frameInfos.upload();
+
 
 		fb.bind(glm::vec4(0.25f, 0.25f, 0.25f, 1.0f), 1.0f, LoadOperation::DONTCARE);
-		GPU::setViewport(0, 0, fb.width(), fb.height());
 
 		if(viewMode == ViewerMode::MODEL){
+			fb.bind(LoadOperation::LOAD, LoadOperation::LOAD, LoadOperation::DONTCARE);
+			GPU::setViewport(0, 0, fb.width(), fb.height());
 
 			GPU::setPolygonState(PolygonMode::FILL);
 			GPU::setDepthState(true, TestFunction::LESS, true);
@@ -676,7 +895,7 @@ int main(int argc, char ** argv) {
 			GPU::setCullState(true);
 
 			texturedObject->use();
-			texturedObject->buffer(ubo, 0);
+			texturedObject->buffer(frameInfos, 0);
 
 			for(unsigned int i = 0; i < model.meshes.size(); ++i){
 				texturedObject->texture(model.textures[model.meshToTextures[i]], 0);
@@ -685,12 +904,12 @@ int main(int argc, char ** argv) {
 
 			if(showWireframe){
 				// Temporarily force the mode.
-				ubo.at(0).shadingMode = MODE_SHADING_NONE;
-				ubo.at(0).albedoMode = MODE_ALBEDO_UNIFORM;
-				ubo.upload();
+				frameInfos.at(0).shadingMode = MODE_SHADING_NONE;
+				frameInfos.at(0).albedoMode = MODE_ALBEDO_UNIFORM;
+				frameInfos.upload();
 
 				texturedObject->use();
-				texturedObject->buffer(ubo, 0);
+				texturedObject->buffer(frameInfos, 0);
 				GPU::setPolygonState(PolygonMode::LINE);
 				for(unsigned int i = 0; i < model.meshes.size(); ++i){
 					if(selectedMesh == -1 || selectedMesh == (int)i){
@@ -701,12 +920,43 @@ int main(int argc, char ** argv) {
 
 			if(selectedMesh >= 0){
 				coloredObject->use();
-				coloredObject->buffer(ubo, 0);
+				coloredObject->buffer(frameInfos, 0);
 				GPU::setPolygonState(PolygonMode::LINE);
 				GPU::setCullState(false);
 				GPU::drawMesh(boundingBox);
 			}
-		}
+		} else {
+
+			if(selectedWorld >= 0){
+				// TODO: Populate drawCommands (for each instance, output draw arguments (everything is in mesh infos)
+				// by using a compute shader (that will later perform culling).
+				drawArgsCompute->use();
+				drawArgsCompute->buffer(frameInfos, 0);
+				drawArgsCompute->buffer(*world.meshInfosBuffer, 1);
+				drawArgsCompute->buffer(*world.meshInstanceInfosBuffer, 2);
+				drawArgsCompute->buffer(*drawCommands, 3);
+				GPU::dispatch(world.meshInfosBuffer->size(), 1, 1);
+
+				fb.bind(LoadOperation::LOAD, LoadOperation::LOAD, LoadOperation::DONTCARE);
+				GPU::setViewport(0, 0, fb.width(), fb.height());
+				GPU::setPolygonState(PolygonMode::FILL);
+				GPU::setDepthState(true, TestFunction::LESS, true);
+				GPU::setBlendState(false);
+				GPU::setCullState(true);
+
+				// TODO: program to which we bind: the global vertex buffer, the global index buffer, the instance mesh infos buffer
+				//		the program fetch infos from this last buffer based on drawIndex + instance index, if we are filtering instances we need to provide an indirection.
+				// we can also fetch info from the mesh infos buffer if need be (material index for instance).
+				texturedInstancedObject->use();
+				texturedInstancedObject->buffer(frameInfos, 0);
+				texturedInstancedObject->buffer(*world.meshInfosBuffer, 1);
+				texturedInstancedObject->buffer(*world.meshInstanceInfosBuffer, 2);
+
+				// TODO: execute indirect draw
+				GPU::drawIndirectMesh(world.globalMesh, *drawCommands);
+			}
+
+	 }
 
 
 		Framebuffer::backbuffer()->bind(glm::vec4(0.2f, 0.2f, 0.2f, 1.0f), LoadOperation::DONTCARE, LoadOperation::DONTCARE);
