@@ -6,7 +6,7 @@
 
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtx/euler_angles.hpp>
-
+#include <unordered_map>
 
 World::Instance::Instance(uint _object, const glm::mat4& _frame) : frame(_frame), object(_object){
 
@@ -135,14 +135,15 @@ bool World::load(const fs::path& path, const fs::path& resourcePath){
 
 	ObjectReferenceList referencedObjects;
 
+	/// Instances parsing.
 	const auto& entities = world.child("World").child("scene").child("entities");
-
 	for(const auto& entity : entities.children("entity")){
 		processEntity(entity, glm::mat4(1.0f), false, referencedObjects);
 
 		// TODO: Interesting types to investigate: FX?
 	}
 
+	/// Templates parsing.
 	for(const auto& instance : entities.children("instance")){
 		if(!isEntityVisible(instance)){
 			continue;
@@ -167,20 +168,18 @@ bool World::load(const fs::path& path, const fs::path& resourcePath){
 		}
 	}
 
+	/// Objects loading.
 	// Create objects from reference list.
 	_objects.resize(referencedObjects.size());
 	for(const auto& objRef : referencedObjects){
 		const fs::path objPath = resourcePath / objRef.first;
 		const std::string modelName = objPath.filename().replace_extension().string();
 		Log::info("Retrieving model %s", modelName.c_str());
-
-		if(!Dff::load(objPath, _objects[objRef.second])){
-			continue;
-		}
+		Dff::load(objPath, _objects[objRef.second]);
 	}
 
+	/// Areas loading.
 	const auto& areas = world.child("World").child("scene").child("areas");
-
 	for(const auto& area : areas.children()){
 
 		const char* areaPathStr = area.attribute("sourceName").value();
@@ -194,13 +193,68 @@ bool World::load(const fs::path& path, const fs::path& resourcePath){
 		Log::info("Area: %s", areaName.c_str());
 
 		if(!Area::load(areaPath, _objects.emplace_back())){
+			_objects.pop_back();
 			continue;
 		}
 
 		_instances.emplace_back(_objects.size()-1, glm::mat4(1.0f));
-
 	}
 
+	/// Empty objects cleanup.
+	// Remove empty objects, and update instance indices.
+	const uint objCount = _objects.size();
+	std::vector<uint> indicesToDelete;
+	std::vector<bool> shouldBeDeleted(objCount, false);
+	std::vector<bool> isSwappable(objCount, true);
+	std::unordered_map<uint, uint> indicesToReplace;
+
+	for(uint oid = 0; oid < objCount; ++oid){
+		const Object& obj = _objects[oid];
+		if(!obj.name.empty() && !obj.positions.empty()){
+			continue;
+		}
+		shouldBeDeleted[oid] = true;
+		isSwappable[oid] = false;
+		indicesToDelete.push_back(oid);
+	}
+
+	int lastSwappable = (int)objCount-1;
+	for(uint iid : indicesToDelete){
+
+		for(; lastSwappable > (int)iid; --lastSwappable){
+			if(isSwappable[lastSwappable]){
+				break;
+			}
+		}
+		if(lastSwappable == (int)iid){
+			// Unable to find another element to replace, we are after the last valid element, nothing else to do.
+			break;
+		}
+		indicesToReplace[lastSwappable] = iid;
+		// Swap the two elements.
+		std::swap(_objects[lastSwappable], _objects[iid]);
+		std::swap(isSwappable[lastSwappable], isSwappable[iid]);
+		--lastSwappable;
+	}
+
+	_objects.resize(objCount - indicesToDelete.size());
+
+	// Erase instances that reference empty objects.
+	auto newInstancesEnd = std::remove_if(_instances.begin(), _instances.end(), [&shouldBeDeleted](const Instance& instance){
+		return shouldBeDeleted[instance.object];
+	});
+	_instances.erase(newInstancesEnd, _instances.end());
+
+	// Update indices of other instances.
+	for(Instance& instance : _instances){
+		auto elem = indicesToReplace.find(instance.object);
+		if(elem == indicesToReplace.end()){
+			continue;
+		}
+		instance.object = elem->second;
+	}
+
+	/// Extract list of textures.
 	// In the future, this could become a list of materials, by merging between objects.
 	for(const Object& object : _objects){
 		for(const Object::Material& material : object.materials){
