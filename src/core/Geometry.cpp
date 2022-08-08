@@ -1,4 +1,5 @@
 #include "core/Geometry.hpp"
+#include "core/Common.hpp"
 
 void writeMtlToStream(const Object& obj, std::ofstream& mtlFile){
 

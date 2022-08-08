@@ -1,6 +1,6 @@
 -- On Linux We have to query the dependencies of gtk+3 for NFD, and convert them to a list of libraries, we do this on the host for now.
 if os.ishost("linux") then
-	gtkList, code = os.outputof("pkg-config --libs gtk+-3.0")
+	gtkList, code = os.outputof("pkg-config --libs libnotify gtk+-3.0")
 	gtkLibs = string.explode(string.gsub(gtkList, "-l", ""), " ")
 end
 
@@ -72,8 +72,8 @@ project("viEwer")
 		links({"X11", "Xi", "Xrandr", "Xxf86vm", "Xinerama", "Xcursor", "Xext", "Xrender", "Xfixes", "xcb", "Xau", "Xdmcp", "rt", "m", "pthread", "dl", gtkLibs})
 	
 	filter("system:windows")
-		links({"comctl32"})
-
+		links({"comctl32", "runtimeobject"})
+		
 	-- Vulkan dependencies
 	filter("system:macosx or linux")
 		links({"glslang", "MachineIndependent", "GenericCodeGen", "OGLCompiler", "SPIRV", "SPIRV-Tools-opt", "SPIRV-Tools","OSDependent" })

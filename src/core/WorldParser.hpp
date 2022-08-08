@@ -2,6 +2,7 @@
 
 #include "core/System.hpp"
 #include "core/Geometry.hpp"
+#include "core/Common.hpp"
 #include <map>
 
 class World {
