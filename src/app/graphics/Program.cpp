@@ -455,10 +455,10 @@ void Program::buffer(const Buffer& buffer, uint slot){
 	if(existingBuff != _staticBuffers.end()) {
 		StaticBufferState& refBuff = existingBuff->second;
 		assert(refBuff.count == 1);
-		if((refBuff.buffers[0] != buffer.gpu->buffer) || (refBuff.size != buffer.size)){
+		if((refBuff.buffers[0] != buffer.gpu->buffer) || (refBuff.size != buffer.sizeInBytes())){
 			refBuff.buffers[0] = buffer.gpu->buffer;
 			refBuff.offsets[0] = 0;
-			refBuff.size = uint(buffer.size);
+			refBuff.size = uint(buffer.sizeInBytes());
 			_dirtySets[BUFFERS_SET] = true;
 		}
 	}
@@ -473,10 +473,10 @@ void Program::bufferArray(const std::vector<const Buffer * >& buffers, uint slot
 
 		for(uint did = 0; did < buffCount; ++did){
 			const Buffer& buffer = *buffers[did];
-			if((refBuff.buffers[did] != buffer.gpu->buffer) || (refBuff.size != buffer.size)){
+			if((refBuff.buffers[did] != buffer.gpu->buffer) || (refBuff.size != buffer.sizeInBytes())){
 				refBuff.buffers[did] = buffer.gpu->buffer;
 				refBuff.offsets[did] = 0;
-				refBuff.size = uint(buffer.size);
+				refBuff.size = uint(buffer.sizeInBytes());
 				refBuff.lastSet = did;
 				_dirtySets[BUFFERS_SET] = true;
 			}

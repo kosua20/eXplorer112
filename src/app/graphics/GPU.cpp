@@ -40,6 +40,8 @@ GPUContext* GPU::getInternal(){
 
 bool GPU::setup(const std::string & appName) {
 
+	//static_assert(sizeof(VkDrawIndexedIndirectCommand) == sizeof(DrawCommand));
+
 	if(volkInitialize() != VK_SUCCESS){
 		Log::error("GPU: Could not load Vulkan");
 		return false;
@@ -118,7 +120,7 @@ bool GPU::setup(const std::string & appName) {
 		// Ask for anisotropy and tessellation.
 		VkPhysicalDeviceFeatures features;
 		vkGetPhysicalDeviceFeatures(device, &features);
-		const bool hasFeatures = features.samplerAnisotropy && features.tessellationShader && features.imageCubeArray;
+		const bool hasFeatures = features.samplerAnisotropy && features.tessellationShader && features.imageCubeArray && features.multiDrawIndirect && features.fillModeNonSolid;
 
 		if(supportExtensions && hasFeatures){
 			// Prefere a discrete GPU if possible.
@@ -200,7 +202,7 @@ bool GPU::setupWindow(Window * window){
 	features.tessellationShader = VK_TRUE;
 	features.imageCubeArray = VK_TRUE;
 	features.fillModeNonSolid = VK_TRUE;
-
+	features.multiDrawIndirect = VK_TRUE;
 	deviceInfo.pEnabledFeatures = &features;
 
 	VkPhysicalDeviceDynamicRenderingFeaturesKHR dynamicRenderingFeature { };
@@ -208,6 +210,11 @@ bool GPU::setupWindow(Window * window){
 	dynamicRenderingFeature.dynamicRendering = VK_TRUE;
 	deviceInfo.pNext = &dynamicRenderingFeature;
 
+	VkPhysicalDeviceShaderDrawParametersFeatures shaderDrawParamsFeature { };
+	shaderDrawParamsFeature.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_DRAW_PARAMETER_FEATURES;
+	shaderDrawParamsFeature.shaderDrawParameters = VK_TRUE;
+	dynamicRenderingFeature.pNext = &shaderDrawParamsFeature;
+	
 	// Extensions.
 	auto extensions = deviceExtensions;
 	// If portability is available, we have to enabled it.
@@ -865,7 +872,7 @@ void GPU::downloadTextureSync(Texture & texture, int level) {
 	std::shared_ptr<Buffer> dstBuffer;
 	const glm::uvec2 imgRange = VkUtils::copyTextureRegionToBuffer(commandBuffer, texture, dstBuffer, firstLevel, levelCount, 0, layersCount, glm::uvec2(0), size);
 	VkUtils::endSyncOperations(commandBuffer, _context);
-	GPU::flushBuffer(*dstBuffer, dstBuffer->size, 0);
+	GPU::flushBuffer(*dstBuffer, dstBuffer->sizeInBytes(), 0);
 
 	// Prepare images.
 	texture.allocateImages(texture.gpu->channels, firstLevel, levelCount);
@@ -1070,7 +1077,8 @@ void GPU::setupBuffer(Buffer & buffer) {
 		{ BufferType::UNIFORM, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT },
 		{ BufferType::CPUTOGPU, VK_BUFFER_USAGE_TRANSFER_SRC_BIT },
 		{ BufferType::GPUTOCPU, VK_BUFFER_USAGE_TRANSFER_DST_BIT },
-		{ BufferType::STORAGE, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT}
+		{ BufferType::STORAGE, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT},
+		{ BufferType::INDIRECT, VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT}
 	};
 	const VkBufferUsageFlags type = types.at(buffer.type);
 
@@ -1080,14 +1088,15 @@ void GPU::setupBuffer(Buffer & buffer) {
 		{ BufferType::UNIFORM, VMA_MEMORY_USAGE_CPU_TO_GPU  },
 		{ BufferType::CPUTOGPU, VMA_MEMORY_USAGE_CPU_ONLY },
 		{ BufferType::GPUTOCPU, VMA_MEMORY_USAGE_GPU_TO_CPU },
-		{ BufferType::STORAGE, VMA_MEMORY_USAGE_GPU_ONLY }
+		{ BufferType::STORAGE, VMA_MEMORY_USAGE_GPU_ONLY },
+		{ BufferType::INDIRECT, VMA_MEMORY_USAGE_GPU_ONLY }
 	};
 
 	const VmaMemoryUsage usage = usages.at(buffer.type);
 
 	VkBufferCreateInfo bufferInfo = {};
 	bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-	bufferInfo.size = buffer.size;
+	bufferInfo.size = buffer.sizeInBytes();
 	bufferInfo.usage = type;
 	bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 
@@ -1119,7 +1128,7 @@ void GPU::uploadBuffer(const Buffer & buffer, size_t size, uchar * data, size_t 
 		Log::warning("GPU: No data to upload.");
 		return;
 	}
-	if(offset + size > buffer.size) {
+	if(offset + size > buffer.sizeInBytes()) {
 		Log::warning("GPU: Not enough allocated space to upload.");
 		return;
 	}
@@ -1152,7 +1161,7 @@ void GPU::downloadBufferSync(const Buffer & buffer, size_t size, uchar * data, s
 		Log::error("GPU: Uninitialized GPU buffer.");
 		return;
 	}
-	if(offset + size > buffer.size) {
+	if(offset + size > buffer.sizeInBytes()) {
 		Log::warning("GPU: Not enough available data to download.");
 		return;
 	}
@@ -1342,6 +1351,23 @@ void GPU::drawMesh(const Mesh & mesh) {
 
 	vkCmdDrawIndexed(_context.getRenderCommandBuffer(), static_cast<uint32_t>(mesh.gpu->count), 1, 0, 0, 0);
 	++_metrics.drawCalls;
+}
+
+void GPU::drawIndirectMesh(const Mesh & mesh, const Buffer& args) {
+	_state.mesh = mesh.gpu.get();
+
+	bindGraphicsPipelineIfNeeded();
+	_state.graphicsProgram->update();
+
+	vkCmdBindVertexBuffers(_context.getRenderCommandBuffer(), 0, uint32_t(mesh.gpu->state.offsets.size()), mesh.gpu->state.buffers.data(), mesh.gpu->state.offsets.data());
+	vkCmdBindIndexBuffer(_context.getRenderCommandBuffer(), mesh.gpu->indexBuffer->gpu->buffer, 0, VK_INDEX_TYPE_UINT32);
+	++_metrics.meshBindings;
+	// TODO: workaround for MoltenVK.
+	for(uint i = 0; i < args.sizeInBytes() / sizeof(DrawCommand); ++i){
+		vkCmdDrawIndexedIndirect(_context.getRenderCommandBuffer(), args.gpu->buffer, i, 1, sizeof(DrawCommand));
+		++_metrics.drawCalls;
+	}
+
 }
 
 void GPU::drawTesselatedMesh(const Mesh & mesh, uint patchSize){
@@ -1808,7 +1834,7 @@ void GPU::processAsyncTasks(bool forceAll){
 		}
 
 		// Make sure the buffer is flushed.
-		GPU::flushBuffer(*tsk.dstBuffer, tsk.dstBuffer->size, 0);
+		GPU::flushBuffer(*tsk.dstBuffer, tsk.dstBuffer->sizeInBytes(), 0);
 
 		// Copy from the buffer to each image of the destination.
 		size_t currentOffset = 0;

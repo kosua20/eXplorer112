@@ -201,6 +201,20 @@ public:
 	 */
 	static void drawMesh(const Mesh & mesh);
 
+	struct DrawCommand {
+		uint32_t indexCount;
+		uint32_t instanceCount;
+		uint32_t firstIndex;
+		int32_t  vertexOffset;
+		uint32_t firstInstance = 0;
+		uint32_t pad0, pad1, pad2;
+	};
+
+	/** Draw indexed geometry.
+	 \param mesh the mesh to draw
+	 */
+	static void drawIndirectMesh(const Mesh & mesh, const Buffer& args);
+
 	/** Draw tessellated geometry.
 	 \param mesh the mesh to tessellate and render
 	 \param patchSize number of vertices to use in a patch

@@ -38,7 +38,8 @@ enum class BufferType : uint {
 	UNIFORM, ///< Uniform data.
 	CPUTOGPU, ///< Transfer.
 	GPUTOCPU, ///< Transfer.
-	STORAGE ///< Compute storage.
+	STORAGE, ///< Compute storage.
+	INDIRECT, ///< Indirect command
 };
 
 STD_HASH(BufferType);

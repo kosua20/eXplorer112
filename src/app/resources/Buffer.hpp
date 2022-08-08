@@ -71,9 +71,13 @@ protected:
 	*/
 	Buffer(BufferType atype);
 
+	size_t size; ///< Buffer size in bytes.
+	
 public:
 
-	size_t size; ///< Buffer size in bytes.
+
+	size_t sizeInBytes() const { return size; }
+
 	std::unique_ptr<GPUBuffer> gpu; ///< The GPU data (optional).
 
 };
@@ -82,6 +86,97 @@ template<typename T>
 void Buffer::upload(const std::vector<T>& data, size_t offset){
 	upload(sizeof(T) * data.size(), (unsigned char*)data.data(), offset);
 }
+
+/**
+\brief Represents a buffer containing uniform data, stored on the CPU and GPU.
+Depending on the update frequency of the CPU data, the buffer will maintain one or multiple copies of the data on the GPU.
+\ingroup Resources
+*/
+template<typename T>
+class StructuredBuffer : public Buffer {
+public:
+
+   /** Constructor.
+	\param count the number of elements
+	*/
+	StructuredBuffer(size_t count, BufferType type);
+
+   /** Accessor.
+	\param i the location of the item to retrieve
+	\return a reference to the item
+	*/
+   T & operator[](size_t i){
+	   return data[i];
+   }
+
+   /** Accessor.
+	\param i the location of the item to retrieve
+	\return a reference to the item
+	*/
+   const T & operator[](size_t i) const {
+	   return data[i];
+   }
+
+   /** Accessor.
+	\param i the location of the item to retrieve
+	\return a reference to the item
+	*/
+   T & at(size_t i){
+	   return data[i];
+   }
+
+   /** Accessor.
+	\param i the location of the item to retrieve
+	\return a reference to the item
+	*/
+   const T & at(size_t i) const {
+	   return data[i];
+   }
+
+   /** \return the CPU size of the buffer. */
+   size_t size() const {
+	   return data.size();
+   }
+
+   /** Send the buffer data to the GPU.
+	Previously uploaded content will potentially be erased.
+	*/
+   void upload();
+
+   /** Copy assignment operator (disabled).
+	\return a reference to the object assigned to
+	*/
+   StructuredBuffer & operator=(const StructuredBuffer &) = delete;
+
+   /** Copy constructor (disabled). */
+	StructuredBuffer(const StructuredBuffer &) = delete;
+
+   /** Move assignment operator .
+	\return a reference to the object assigned to
+	*/
+	StructuredBuffer & operator=(StructuredBuffer &&) = default;
+
+   /** Move constructor. */
+	StructuredBuffer(StructuredBuffer &&) = default;
+
+   /** Destructor. */
+   ~StructuredBuffer() = default;
+
+   std::vector<T> data; ///< The CPU data.
+
+};
+
+template <typename T>
+StructuredBuffer<T>::StructuredBuffer(size_t count, BufferType type) :
+   Buffer(count * sizeof(T), type) {
+   data.resize(count);
+}
+
+template <typename T>
+void StructuredBuffer<T>::upload() {
+   Buffer::upload(data, 0);
+}
+
 
 
 class UniformBufferBase : public Buffer {
