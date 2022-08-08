@@ -134,7 +134,6 @@ bool load(const fs::path& path, Object& outObject){
 
 	const auto& groups = areaScene.children("group");
 	for(const auto& group : groups){
-		const char* groupName = group.attribute("name").value();
 
 
 		const auto frameNode = group.find_child_by_attribute("name", "localxform");

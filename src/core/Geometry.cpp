@@ -24,7 +24,7 @@ void writeMtlToStream(const Object& obj, std::ofstream& mtlFile){
 
 }
 
-void writeObjToStream(const Object& obj, std::ofstream& objFile, ObjOffsets & offsets, const glm::mat4& frame){
+void writeObjToStream(const Object& obj, std::ofstream& objFile, ObjOffsets& offsets, const glm::mat4& frame){
 
 	for(const auto& pos : obj.positions){
 		const glm::vec3 posf = glm::vec3(frame * glm::vec4(pos, 1.0f));
