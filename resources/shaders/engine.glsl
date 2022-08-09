@@ -37,6 +37,5 @@ struct DrawCommand {
 	uint firstIndex;
 	int  vertexOffset;
 	uint firstInstance;
-	uint pad0, pad1, pad2;
 };
 

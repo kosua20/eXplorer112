@@ -29,7 +29,7 @@ unsigned int GPUTexture::getChannelsCount(const Layout& format){
 }
 
 bool GPUTexture::isSRGB(const Layout& format){
-	return format == Layout::SRGB8_ALPHA8 || format == Layout::SBGR8_ALPHA8 || format == Layout::BC1 || format == Layout::BC2 || format == Layout::BC3;
+	return format == Layout::SRGB8_ALPHA8 || format == Layout::SBGR8_ALPHA8 || format == Layout::BC1 || format == Layout::BC2 || format == Layout::BC3;
 }
 
 GPUBuffer::GPUBuffer(BufferType atype){

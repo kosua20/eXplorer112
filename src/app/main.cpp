@@ -414,7 +414,7 @@ int main(int argc, char ** argv) {
 #endif
 
 	Window window("eXperience112 viewer", config, allowEscapeQuit);
-	const std::string iniPath = APP_RESOURCE_DIRECTORY / "imgui.ini";
+	const std::string iniPath = (APP_RESOURCE_DIRECTORY / "imgui.ini").string();
 	ImGui::GetIO().IniFilename = iniPath.c_str();
 
 	// Try to load configuration.
@@ -433,8 +433,8 @@ int main(int argc, char ** argv) {
 	double remainingTime = 0;
 
 	ControllableCamera camera;
-	camera.speed() = 20.0f;
-	camera.projection(config.screenResolution[0] / config.screenResolution[1], glm::pi<float>() * 0.4f, 1.f, 1000.0f);
+	camera.speed() = 100.0f;
+	camera.projection(config.screenResolution[0] / config.screenResolution[1], glm::pi<float>() * 0.4f, 10.f, 10000.0f);
 	camera.pose(glm::vec3(0.0f, 0.0f, 100.0f), glm::vec3(0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
 	camera.ratio(config.screenResolution[0] / config.screenResolution[1]);
 
@@ -601,8 +601,8 @@ int main(int argc, char ** argv) {
 								ImGui::TableNextColumn();
 
 								const fs::path& modelPath = gameFiles.modelsList[row];
-								std::string modelName = modelPath.filename();
-								const std::string modelParent = modelPath.parent_path().filename();
+								std::string modelName = modelPath.filename().string();
+								const std::string modelParent = modelPath.parent_path().filename().string();
 
 								if(selectedModel == row){
 									modelName = "* " + modelName;
@@ -663,7 +663,7 @@ int main(int argc, char ** argv) {
 
 
 							const fs::path& worldPath = gameFiles.worldsList[row];
-							std::string worldName = worldPath.filename();
+							std::string worldName = worldPath.filename().string();
 
 							if(selectedWorld == row){
 								worldName = "* " + worldName;
@@ -928,8 +928,7 @@ int main(int argc, char ** argv) {
 		} else {
 
 			if(selectedWorld >= 0){
-				// TODO: Populate drawCommands (for each instance, output draw arguments (everything is in mesh infos)
-				// by using a compute shader (that will later perform culling).
+				// Populate drawCommands by using a compute shader (that will later perform culling).
 				drawArgsCompute->use();
 				drawArgsCompute->buffer(frameInfos, 0);
 				drawArgsCompute->buffer(*world.meshInfosBuffer, 1);
@@ -944,15 +943,11 @@ int main(int argc, char ** argv) {
 				GPU::setBlendState(false);
 				GPU::setCullState(true);
 
-				// TODO: program to which we bind: the global vertex buffer, the global index buffer, the instance mesh infos buffer
-				//		the program fetch infos from this last buffer based on drawIndex + instance index, if we are filtering instances we need to provide an indirection.
-				// we can also fetch info from the mesh infos buffer if need be (material index for instance).
 				texturedInstancedObject->use();
 				texturedInstancedObject->buffer(frameInfos, 0);
 				texturedInstancedObject->buffer(*world.meshInfosBuffer, 1);
 				texturedInstancedObject->buffer(*world.meshInstanceInfosBuffer, 2);
 
-				// TODO: execute indirect draw
 				GPU::drawIndirectMesh(world.globalMesh, *drawCommands);
 			}
 

@@ -207,7 +207,6 @@ public:
 		uint32_t firstIndex;
 		int32_t  vertexOffset;
 		uint32_t firstInstance = 0;
-		uint32_t pad0, pad1, pad2;
 	};
 
 	/** Draw indexed geometry.
