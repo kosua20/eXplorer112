@@ -34,5 +34,5 @@ void main(){
 
 	gl_Position = engine.vp * instance.frame * vec4(v, 1.0);
 	Out.uv = uv;
-	Out.n = n; // For now no transformation
+	Out.n = inverse(transpose(mat3(instance.frame))) * n; // For now no transformation
 }

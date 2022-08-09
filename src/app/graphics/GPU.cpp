@@ -365,6 +365,7 @@ void GPU::createGraphicsProgram(Program& program, const std::string & vertexCont
 		ShaderCompiler::compile(vertexContent, ShaderType::VERTEX, program.stage(ShaderType::VERTEX), true, compilationLog);
 		if(!compilationLog.empty()) {
 			Log::error("GPU: Vertex shader (for %s) failed to compile:\n%s", program.name().c_str(), compilationLog.c_str() );
+			assert(false);
 		}
 	}
 	// If fragment program code is given, compile it.
@@ -372,6 +373,7 @@ void GPU::createGraphicsProgram(Program& program, const std::string & vertexCont
 		ShaderCompiler::compile(fragmentContent, ShaderType::FRAGMENT, program.stage(ShaderType::FRAGMENT), true, compilationLog);
 		if(!compilationLog.empty()) {
 			Log::error("GPU: Fragment shader (for %s) failed to compile:\n%s", program.name().c_str(), compilationLog.c_str() );
+			assert(false);
 		}
 	}
 	// If tessellation control program code is given, compile it.
@@ -379,6 +381,7 @@ void GPU::createGraphicsProgram(Program& program, const std::string & vertexCont
 		ShaderCompiler::compile(tessControlContent, ShaderType::TESSCONTROL, program.stage(ShaderType::TESSCONTROL), true, compilationLog);
 		if(!compilationLog.empty()) {
 			Log::error("GPU: Tessellation control shader (for %s) failed to compile:\n%s", program.name().c_str(), compilationLog.c_str() );
+			assert(false);
 		}
 	}
 	// If tessellation evaluation program code is given, compile it.
@@ -386,6 +389,7 @@ void GPU::createGraphicsProgram(Program& program, const std::string & vertexCont
 		ShaderCompiler::compile(tessEvalContent, ShaderType::TESSEVAL, program.stage(ShaderType::TESSEVAL), true, compilationLog);
 		if(!compilationLog.empty()) {
 			Log::error("GPU: Tessellation evaluation shader (for %s) failed to compile:\n%s", program.name().c_str(), compilationLog.c_str() );
+			assert(false);
 		}
 	}
 	++_metrics.programs;
@@ -401,6 +405,7 @@ void GPU::createComputeProgram(Program& program, const std::string & computeCont
 		ShaderCompiler::compile(computeContent, ShaderType::COMPUTE, program.stage(ShaderType::COMPUTE), true, compilationLog);
 		if(!compilationLog.empty()) {
 			Log::error("GPU: Compute control shader (for %s) failed to compile:\n%s", program.name().c_str(), compilationLog.c_str() );
+			assert(false);
 		}
 	}
 	++_metrics.programs;

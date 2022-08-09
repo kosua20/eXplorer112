@@ -24,7 +24,7 @@ void main(){
 	MeshInfos infos = meshInfos[mid];
 
 	drawCommands[mid].indexCount = infos.indexCount;
-	drawCommands[mid].instanceCount = 1;//infos.instanceCount; // TODO: use proper instance count
+	drawCommands[mid].instanceCount = infos.instanceCount;
 	drawCommands[mid].firstIndex = infos.firstIndex;
 	drawCommands[mid].vertexOffset = int(infos.vertexOffset);
 	drawCommands[mid].firstInstance = 0u;
