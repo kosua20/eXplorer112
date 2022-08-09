@@ -1359,14 +1359,20 @@ void GPU::drawIndirectMesh(const Mesh & mesh, const Buffer& args) {
 	bindGraphicsPipelineIfNeeded();
 	_state.graphicsProgram->update();
 
-	vkCmdBindVertexBuffers(_context.getRenderCommandBuffer(), 0, uint32_t(mesh.gpu->state.offsets.size()), mesh.gpu->state.buffers.data(), mesh.gpu->state.offsets.data());
-	vkCmdBindIndexBuffer(_context.getRenderCommandBuffer(), mesh.gpu->indexBuffer->gpu->buffer, 0, VK_INDEX_TYPE_UINT32);
+	VkCommandBuffer& cmdBuffer = _context.getRenderCommandBuffer();
+
+	vkCmdBindVertexBuffers(cmdBuffer, 0, uint32_t(mesh.gpu->state.offsets.size()), mesh.gpu->state.buffers.data(), mesh.gpu->state.offsets.data());
+	vkCmdBindIndexBuffer(cmdBuffer, mesh.gpu->indexBuffer->gpu->buffer, 0, VK_INDEX_TYPE_UINT32);
 	++_metrics.meshBindings;
-	// TODO: workaround for MoltenVK.
-	for(uint i = 0; i < args.sizeInBytes() / sizeof(DrawCommand); ++i){
-		vkCmdDrawIndexedIndirect(_context.getRenderCommandBuffer(), args.gpu->buffer, i, 1, sizeof(DrawCommand));
-		++_metrics.drawCalls;
+
+	const Program::State& progState = _state.graphicsProgram->getState();
+	const uint32_t drawCommandCount = args.sizeInBytes() / sizeof(DrawCommand);
+
+	for(uint32_t did = 0; did < drawCommandCount; ++did){
+		vkCmdPushConstants(cmdBuffer, progState.layout, (VkShaderStageFlags)progState.pushConstantsStages, 0, sizeof(uint32_t), &did);
+		vkCmdDrawIndexedIndirect(cmdBuffer, args.gpu->buffer, 0, drawCommandCount, sizeof(DrawCommand));
 	}
+	++_metrics.drawCalls;
 
 }
 
