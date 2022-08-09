@@ -80,15 +80,15 @@ void Program::reflect(){
 
 		Log::info( "Stage: %u", id);
 		for(const auto& buffer : stage.buffers){
-			Log::info( "* Buffer: (%u, %u)", buffer.set, buffer.binding);
+			Log::info( "* Buffer %s: (%u, %u)", buffer.name.c_str(), buffer.set, buffer.binding);
 			for(const auto& member : buffer.members){
 				const auto& loc = member.locations[0];
-				Log::info( "\t%s at (%u, %u) off %u of type %s", member.name.c_str(), loc.set, loc.binding, loc.offset, typeNames.at(member.type).c_str());
+				Log::info( "\t%s at (%u) off %u of type %s", member.name.c_str(), loc.binding, loc.offset, typeNames.at(member.type).c_str());
 			}
 		}
 
-		for(const auto& sampler : stage.samplers){
-			Log::info( "* Sampler %s at (%u, %u)", sampler.name.c_str(), sampler.set, sampler.binding);
+		for(const auto& image : stage.images){
+			Log::info( "* Image %s at (%u, %u)", image.name.c_str(), image.set, image.binding);
 		}
 		++id;
 	}
@@ -96,7 +96,7 @@ void Program::reflect(){
 #endif
 
 	// Merge all uniforms
-
+	uint stageIndex = 0;
 	for(const auto& stage : _stages){
 		for(const auto& buffer : stage.buffers){
 			const uint set = buffer.set;
@@ -165,6 +165,21 @@ void Program::reflect(){
 			}
 			_textures[image.binding].mip = Program::ALL_MIPS;
 		}
+
+		// Push constants
+		static const std::unordered_map<ShaderType, VkShaderStageFlagBits> stageBits = {
+			{ShaderType::VERTEX, VK_SHADER_STAGE_VERTEX_BIT},
+			{ShaderType::FRAGMENT, VK_SHADER_STAGE_FRAGMENT_BIT},
+			{ShaderType::TESSCONTROL, VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT},
+			{ShaderType::TESSEVAL, VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT},
+			{ShaderType::COMPUTE, VK_SHADER_STAGE_COMPUTE_BIT},
+		};
+
+		if(stage.pushConstants.size > 0){
+			_pushConstants.size = std::max(stage.pushConstants.size, _pushConstants.size);
+			_pushConstants.mask = _pushConstants.mask | stageBits.at(ShaderType(stageIndex));
+		}
+		++stageIndex;
 	}
 
 	GPUContext* context = GPU::getInternal();
@@ -233,6 +248,20 @@ void Program::reflect(){
 	layoutInfo.pSetLayouts = _state.setLayouts.data();
 	layoutInfo.pushConstantRangeCount = 0;
 	layoutInfo.pPushConstantRanges = nullptr;
+
+	_state.pushConstantsStages = 0;
+
+	// Push constants
+	VkPushConstantRange pushConstantRange = {};
+	if(_pushConstants.size > 0){
+		_state.pushConstantsStages = _pushConstants.mask;
+		pushConstantRange.size = _pushConstants.size;
+		pushConstantRange.offset = 0;
+		pushConstantRange.stageFlags = _pushConstants.mask;
+		layoutInfo.pushConstantRangeCount = 1;
+		layoutInfo.pPushConstantRanges = &pushConstantRange;
+	}
+
 	if(vkCreatePipelineLayout(context->device, &layoutInfo, nullptr, &_state.layout) != VK_SUCCESS){
 		Log::error("GPU: Unable to create pipeline layout.");
 	}
@@ -418,6 +447,7 @@ void Program::clean() {
 	// Clear CPU infos.
 	_uniforms.clear();
 	_textures.clear();
+	_pushConstants.clear();
 	//_dynamicBuffers.clear();
 	_staticBuffers.clear();
 	_state.setLayouts.clear();
@@ -543,6 +573,7 @@ const glm::uvec3 & Program::size() const {
 void Program::Stage::reset(){
 	images.clear();
 	buffers.clear();
+	pushConstants.clear();
 	module = VK_NULL_HANDLE;
 }
 

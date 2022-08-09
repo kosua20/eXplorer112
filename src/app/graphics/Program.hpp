@@ -83,11 +83,20 @@ public:
 	struct BufferDef {
 		std::vector<UniformDef> members; ///< Uniforms in buffer.
 		std::string name; ///< Buffer name.
-		uint binding; ///< Buffer binding location.
-		uint size; ///< Buffer size.
-		uint set; ///< Buffer binding set.
-		uint count; ///< Number of similar buffers for this binding point.
+		uint binding = 0; ///< Buffer binding location.
+		uint size = 0; ///< Buffer size.
+		uint set = 0; ///< Buffer binding set.
+		uint count = 0; ///< Number of similar buffers for this binding point.
 		bool storage; ///< Is this a storage buffer.
+	};
+
+	struct ConstantsDef {
+		uint size = 0;
+		uint mask = 0;
+
+		void clear(){
+			size = 0; mask = 0;
+		}
 	};
 
 	using Uniforms = std::unordered_map<std::string, UniformDef>; ///< List of named uniforms.
@@ -230,6 +239,7 @@ public:
 	struct State {
 		std::vector<VkDescriptorSetLayout> setLayouts; ///< Descriptor sets layouts.
 		VkPipelineLayout layout = VK_NULL_HANDLE; ///< Layout handle (pre-created).
+		uint pushConstantsStages = 0;
 	};
 
 	/// \return the program state for a pipeline
@@ -241,6 +251,7 @@ public:
 	struct Stage {
 		std::vector<ImageDef> images; ///< Image definitions.
 		std::vector<BufferDef> buffers; ///< Buffers definitions.
+		ConstantsDef pushConstants;
 		VkShaderModule module = VK_NULL_HANDLE; ///< Native shader data.
 		glm::uvec3 size = glm::uvec3(0); ///< Local group size.
 		/// Reset the stage state.
@@ -297,6 +308,7 @@ private:
 	//std::unordered_map<int, DynamicBufferState> _dynamicBuffers; ///< Dynamic uniform buffer definitions (set 0).
 	std::unordered_map<int, TextureState> _textures; ///< Dynamic image-sampler definitions (set 2).
 	std::unordered_map<int, StaticBufferState> _staticBuffers; ///< Static uniform buffer definitions (set 0).
+	ConstantsDef _pushConstants;
 
 	std::array<bool, 3> _dirtySets; ///< Marks which descriptor sets are dirty.
 	std::array<DescriptorSet, 3> _currentSets; ///< Descriptor sets.

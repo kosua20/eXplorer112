@@ -275,6 +275,10 @@ void ShaderCompiler::reflect(glslang::TProgram & program, Program::Stage & stage
 
 	for(size_t uid = 0; uid < uboCount; ++uid){
 		const glslang::TObjectReflection& ubo = program.getUniformBlock(int(uid));
+		if(ubo.getType()->getQualifier().layoutPushConstant){
+			stage.pushConstants.size = ubo.size;
+			continue;
+		}
 		Program::BufferDef& def = stage.buffers[ubo.index];
 		def.binding = ubo.getBinding();
 		def.name = ubo.name;
@@ -339,13 +343,15 @@ void ShaderCompiler::reflect(glslang::TProgram & program, Program::Stage & stage
 		
 		// Else, buffer.
 		// If we are in a storage buffer or generic UBO, we won't be accessed on the CPU individually.
-		Program::BufferDef& containingBuffer = stage.buffers[uniform.index];
-		if(true /*containingBuffer.set != UNIFORMS_SET*/ ){
-			continue;
-		}
+		//Program::BufferDef& containingBuffer = stage.buffers[uniform.index];
+		//if(true /*containingBuffer.set != UNIFORMS_SET*/ ){
+		//	continue;
+		//}
+		
 		// Else, uniform buffer containing custom uniforms that we want to set individually from the GPU.
 		// Arrays containing basic types are not expanded automatically.
-		if(type.isArray()){
+		/*
+		 if(type.isArray()){
 			if(type.isUnsizedArray() || type.getArraySizes()->getNumDims() > 1){
 				Log::warning("GPU: Unsupported unsized/multi-level array in shader.");
 				continue;
@@ -385,7 +391,7 @@ void ShaderCompiler::reflect(glslang::TProgram & program, Program::Stage & stage
 			location.offset = uniform.offset;
 			def.locations.emplace_back(location);
 		}
-
+		 */
 	}
 
 	// We need to merge buffers that are at the same binding point (arrays of UBOs/SBOs).
