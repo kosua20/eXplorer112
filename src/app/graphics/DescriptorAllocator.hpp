@@ -26,6 +26,9 @@ public:
 	 */
 	DescriptorSet allocateSet(VkDescriptorSetLayout& setLayout);
 
+
+    DescriptorSet allocateBindlessSet(VkDescriptorSetLayout& setLayout);
+
 	/** Mark an allocated descriptor set as unused
 	 \param set the set to free
 	 */
@@ -52,11 +55,12 @@ private:
 	 \param combined should images and samplers be represented by combined descriptors or separate sampled image/sampler descriptors.
 	 \return descriptor pool info
 	 */
-	DescriptorPool createPool(uint count, bool combined);
+	DescriptorPool createPool(uint count, bool combinedImages, bool imagesOnly);
 
 	GPUContext* _context = nullptr; ///< The GPU context.
 	std::deque<DescriptorPool> _pools; ///< Available pools.
 	DescriptorPool _imguiPool; ///< ImGui dedicated pool.
+	DescriptorPool _bindlessPool; ///< ImGui dedicated pool.
 
 	uint _maxPoolCount = 2; ///< Maximum number of pools to create.
 	uint _currentPoolCount = 0; ///< Current number of created pools.

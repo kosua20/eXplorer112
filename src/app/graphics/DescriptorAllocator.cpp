@@ -2,15 +2,16 @@
 #include "graphics/GPUInternal.hpp"
 
 #define DEFAULT_SET_COUNT 1000
+#define BINDLESS_SET_COUNT 4096
 
 void DescriptorAllocator::init(GPUContext* context, uint poolCount){
 	_context = context;
 	_currentPoolCount = 0;
 	_maxPoolCount = poolCount;
 	
-	_pools.push_back(createPool(DEFAULT_SET_COUNT, false));
-	_imguiPool = createPool(DEFAULT_SET_COUNT, true);
-
+	_pools.push_back(createPool(DEFAULT_SET_COUNT, false, false));
+	_imguiPool = createPool(DEFAULT_SET_COUNT, true, false);
+	_bindlessPool = createPool(BINDLESS_SET_COUNT, false, true);
 }
 
 DescriptorSet DescriptorAllocator::allocateSet(VkDescriptorSetLayout& setLayout){
@@ -48,7 +49,7 @@ DescriptorSet DescriptorAllocator::allocateSet(VkDescriptorSetLayout& setLayout)
 	}
 	// Finally, if all pools are in use, create a new one.
 	if(!found){
-		DescriptorPool newPool = createPool(DEFAULT_SET_COUNT, false);
+		DescriptorPool newPool = createPool(DEFAULT_SET_COUNT, false, false);
 		_pools.push_back(newPool);
 	}
 
@@ -66,6 +67,34 @@ DescriptorSet DescriptorAllocator::allocateSet(VkDescriptorSetLayout& setLayout)
 	Log::error( "Allocation failed.");
 	return DescriptorSet();
 
+}
+
+
+DescriptorSet DescriptorAllocator::allocateBindlessSet(VkDescriptorSetLayout& setLayout){
+	VkDescriptorSetAllocateInfo allocInfo{};
+	allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+	allocInfo.descriptorSetCount = 1;
+	allocInfo.pSetLayouts = &setLayout;
+	allocInfo.descriptorPool = _bindlessPool.handle;
+
+	VkDescriptorSetVariableDescriptorCountAllocateInfoEXT countInfos{};
+	countInfos.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_VARIABLE_DESCRIPTOR_COUNT_ALLOCATE_INFO_EXT;
+	countInfos.descriptorSetCount = 1;
+	uint32_t maxBinding = 128;
+	countInfos.pDescriptorCounts = &maxBinding;
+	allocInfo.pNext = &countInfos;
+
+	DescriptorSet set;
+	if(vkAllocateDescriptorSets(_context->device, &allocInfo, &set.handle) == VK_SUCCESS) {
+		// Success.
+		_bindlessPool.allocated += 1;
+		_bindlessPool.lastFrame = _context->frameIndex;
+		set.pool = _bindlessPool.id;
+		return set;
+	}
+
+	Log::error( "Allocation failed.");
+	return DescriptorSet();
 }
 
 void DescriptorAllocator::freeSet(const DescriptorSet& set){
@@ -86,6 +115,11 @@ void DescriptorAllocator::freeSet(const DescriptorSet& set){
 			pool.lastFrame = _context->frameIndex;
 		}
 	}
+
+	if(set.pool == _bindlessPool.id){
+		_bindlessPool.allocated -= 1;
+		_bindlessPool.lastFrame = _context->frameIndex;
+	}
 }
 
 void DescriptorAllocator::clean(){
@@ -95,38 +129,35 @@ void DescriptorAllocator::clean(){
 	_pools.clear();
 	vkDestroyDescriptorPool(_context->device, _imguiPool.handle, nullptr);
 	_imguiPool.handle = VK_NULL_HANDLE;
+	vkDestroyDescriptorPool(_context->device, _bindlessPool.handle, nullptr);
+	_bindlessPool.handle = VK_NULL_HANDLE;
 }
 
 
-DescriptorAllocator::DescriptorPool DescriptorAllocator::createPool(uint count, bool combined){
+DescriptorAllocator::DescriptorPool DescriptorAllocator::createPool(uint count, bool combinedImages, bool imagesOnly){
 	if(_currentPoolCount > _maxPoolCount){
 		return DescriptorPool();
 	}
 	++_currentPoolCount;
 
-	std::vector<VkDescriptorPoolSize> poolSizes =
-	{
-		{ VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, count },
-	//	{ VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER, count },
-	//	{ VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER, count },
-		{ VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, count },
-		{ VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, count },
-		{ VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, count },
-	//	{ VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC, count },
-	//	{ VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, count }
-	};
+	std::vector<VkDescriptorPoolSize> poolSizes;
 
-	if(combined){
-		poolSizes.emplace_back();
-		poolSizes.back().type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-		poolSizes.back().descriptorCount = count;
+	if(!imagesOnly){
+		poolSizes = {
+			{ VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, count },
+			{ VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, count },
+			{ VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, count },
+			{ VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, count },
+		};
+	}
+
+	if(combinedImages){
+		poolSizes.push_back({ VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, count });
 	} else {
-		poolSizes.emplace_back();
-		poolSizes.back().type = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
-		poolSizes.back().descriptorCount = count;
-		poolSizes.emplace_back();
-		poolSizes.back().type = VK_DESCRIPTOR_TYPE_SAMPLER;
-		poolSizes.back().descriptorCount = count;
+		if(!imagesOnly){
+			poolSizes.push_back({ VK_DESCRIPTOR_TYPE_SAMPLER, count });
+		}
+		poolSizes.push_back({ VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, count });
 	}
 
 	DescriptorPool pool;
@@ -137,6 +168,9 @@ DescriptorAllocator::DescriptorPool DescriptorAllocator::createPool(uint count, 
 	VkDescriptorPoolCreateInfo poolInfo = {};
 	poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
 	poolInfo.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
+	if(imagesOnly){
+		poolInfo.flags |= VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT_EXT;
+	}
 	poolInfo.maxSets = uint32_t(count * poolSizes.size());
 	poolInfo.poolSizeCount = uint32_t(poolSizes.size());
 	poolInfo.pPoolSizes = poolSizes.data();

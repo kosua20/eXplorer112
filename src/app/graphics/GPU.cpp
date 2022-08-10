@@ -2,6 +2,7 @@
 #include "graphics/ShaderCompiler.hpp"
 #include "graphics/Swapchain.hpp"
 #include "graphics/SamplerLibrary.hpp"
+#include "graphics/TextureLibrary.hpp"
 #include "resources/Texture.hpp"
 #include "core/Image.hpp"
 #include "system/Window.hpp"
@@ -26,7 +27,7 @@
 #include <set>
 
 const std::vector<const char*> validationLayers = { "VK_LAYER_KHRONOS_validation" /*, "VK_LAYER_LUNARG_api_dump"*/ };
-const std::vector<const char*> deviceExtensions = { VK_KHR_SWAPCHAIN_EXTENSION_NAME, VK_KHR_CREATE_RENDERPASS_2_EXTENSION_NAME,  VK_KHR_DEPTH_STENCIL_RESOLVE_EXTENSION_NAME,  VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME };
+const std::vector<const char*> deviceExtensions = { VK_KHR_SWAPCHAIN_EXTENSION_NAME, VK_KHR_CREATE_RENDERPASS_2_EXTENSION_NAME,  VK_KHR_DEPTH_STENCIL_RESOLVE_EXTENSION_NAME,  VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME, VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME };
 
 GPUContext _context;
 
@@ -214,7 +215,16 @@ bool GPU::setupWindow(Window * window){
 	shaderDrawParamsFeature.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_DRAW_PARAMETER_FEATURES;
 	shaderDrawParamsFeature.shaderDrawParameters = VK_TRUE;
 	dynamicRenderingFeature.pNext = &shaderDrawParamsFeature;
+
+	VkPhysicalDeviceDescriptorIndexingFeatures descriptorIndexingFeature{  };
+	descriptorIndexingFeature.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_FEATURES_EXT;
+	descriptorIndexingFeature.descriptorBindingPartiallyBound = VK_TRUE;
+	descriptorIndexingFeature.runtimeDescriptorArray = VK_TRUE;
+	descriptorIndexingFeature.descriptorBindingVariableDescriptorCount = VK_TRUE;
+	descriptorIndexingFeature.descriptorBindingSampledImageUpdateAfterBind = VK_TRUE;
 	
+	shaderDrawParamsFeature.pNext = &descriptorIndexingFeature;
+
 	// Extensions.
 	auto extensions = deviceExtensions;
 	// If portability is available, we have to enabled it.
@@ -305,6 +315,7 @@ void GPU::setupDefaults(){
 
 	// Create static samplers.
 	_context.samplerLibrary.init();
+	_context.textureLibrary.init();
 
 	// Create basic vertex array for screenquad.
 	{
@@ -1725,6 +1736,7 @@ void GPU::cleanup(){
 	_context.pipelineCache.clean();
 	_context.descriptorAllocator.clean();
 	_context.samplerLibrary.clean();
+	_context.textureLibrary.clean();
 
 	assert(_context.resourcesToDelete.empty());
 
@@ -1789,7 +1801,7 @@ void GPU::clean(Program & program){
 	if(layoutCount > 0){
 		// Skip the static samplers.
 		for(size_t lid = 0; lid < layoutCount; ++lid){
-			if(lid == SAMPLERS_SET){
+			if(lid == SAMPLERS_SET || lid == BINDLESS_SET){
 				continue;
 			}
 			VkDescriptorSetLayout& setLayout = program._state.setLayouts[lid];
@@ -1873,6 +1885,11 @@ void GPU::processAsyncTasks(bool forceAll){
 
 const Texture * GPU::getDefaultTexture(TextureShape shape){
 	return &(_defaultTextures.at(shape));
+}
+
+void GPU::registerTextures(const std::vector<Texture>& textures){
+	GPUContext* context = GPU::getInternal();
+	context->textureLibrary.update(textures);
 }
 
 GPUState GPU::_state;

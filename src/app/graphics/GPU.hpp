@@ -123,6 +123,8 @@ public:
 
 	static const Texture * getDefaultTexture(TextureShape shape);
 
+	static void registerTextures(const std::vector<Texture>& textures);
+	
 	/** Download a texture images current data from the GPU.
 	 \param texture the texture to download
 	 \warning The CPU images of the texture will be overwritten.

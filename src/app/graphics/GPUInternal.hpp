@@ -6,6 +6,7 @@
 #include "graphics/QueryAllocator.hpp"
 #include "graphics/PipelineCache.hpp"
 #include "graphics/SamplerLibrary.hpp"
+#include "graphics/TextureLibrary.hpp"
 #include "resources/Buffer.hpp"
 
 #include <deque>
@@ -86,6 +87,7 @@ struct GPUContext {
 	std::unordered_map<GPUQuery::Type, QueryAllocator> queryAllocators; ///< Per-type query buffered allocators.
 	PipelineCache pipelineCache; ///< Pipeline cache and creation.
 	SamplerLibrary samplerLibrary; ///< List of static samplers shared by all programs.
+	TextureLibrary textureLibrary; ///< List of static samplers shared by all programs.
 
 	std::deque<ResourceToDelete> resourcesToDelete; ///< List of resources waiting for deletion.
 	std::deque<AsyncTextureTask> textureTasks; ///< List of async tasks waiting for completion.
