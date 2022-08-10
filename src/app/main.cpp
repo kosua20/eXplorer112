@@ -401,6 +401,10 @@ struct WorldScene {
 			tex.shape = TextureShape::D2;
 			tex.upload(Layout::SRGB8_ALPHA8, false);
 		}
+
+		GPU::registerTextures(textures);
+
+
 	}
 };
 
