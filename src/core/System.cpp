@@ -26,7 +26,7 @@ char * System::loadData(const fs::path& path, size_t & size) {
 
 	std::ifstream inputFile(path, std::ios::binary | std::ios::ate);
 	if(inputFile.bad() || inputFile.fail()) {
-		Log::warning("Resources: Unable to load file at path %s.", path.c_str());
+		Log::warning("Resources: Unable to load file at path %s.", path.string().c_str());
 		size = 0;
 		return nullptr;
 	}
@@ -42,7 +42,7 @@ char * System::loadData(const fs::path& path, size_t & size) {
 std::string System::loadString(const fs::path & path) {
 	std::ifstream inputFile(path);
 	if(inputFile.bad() || inputFile.fail()) {
-		Log::warning("Resources: Unable to load file at path %s.", path.c_str());
+		Log::warning("Resources: Unable to load file at path %s.", path.string().c_str());
 		return "";
 	}
 	std::stringstream buffer;
@@ -58,7 +58,7 @@ void System::saveData(const fs::path & path, char * rawContent, size_t size) {
 	std::ofstream outputFile(path, std::ios::binary);
 
 	if(!outputFile.is_open()) {
-		Log::warning("Resources: Unable to save file at path %s.", path.c_str());
+		Log::warning("Resources: Unable to save file at path %s.", path.string().c_str());
 		return;
 	}
 	outputFile.write(rawContent, size);
@@ -68,7 +68,7 @@ void System::saveData(const fs::path & path, char * rawContent, size_t size) {
 void System::saveString(const fs::path & path, const std::string & content) {
 	std::ofstream outputFile(path);
 	if(outputFile.bad() || outputFile.fail()) {
-		Log::warning("Resources: Unable to load file at path %s.", path.c_str());
+		Log::warning("Resources: Unable to load file at path %s.", path.string().c_str());
 		return;
 	}
 	outputFile << content;

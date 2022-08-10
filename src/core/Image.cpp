@@ -44,7 +44,7 @@ bool Image::load(const fs::path & path) {
 		std::vector<char> allCompressedData;
 
 		{
-			FILE* f = fopen( path.string().c_str(), "rb");
+			FILE* f = fopen( path.c_str(), "rb");
 			if(f == nullptr){
 				return false;
 			}

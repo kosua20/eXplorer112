@@ -69,7 +69,7 @@ bool load(const fs::path& path, Object& outObject){
 
 	pugi::xml_document areaFile;
 	if(!areaFile.load_file(path.c_str())){
-		Log::error("Unable to load area file at path %s", path.c_str());
+		Log::error("Unable to load area file at path %s", path.string().c_str());
 		return false;
 	}
 	

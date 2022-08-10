@@ -129,7 +129,7 @@ bool World::load(const fs::path& path, const fs::path& resourcePath){
 	pugi::xml_document world;
 	pugi::xml_parse_result res = world.load_file(path.c_str());
 	if(!res){
-		Log::error("Unable to load world file at path %s:%llu %s", path.c_str(), res.offset, res.description());
+		Log::error("Unable to load world file at path %s:%llu %s", path.string().c_str(), res.offset, res.description());
 		return false;
 	}
 
@@ -157,7 +157,7 @@ bool World::load(const fs::path& path, const fs::path& resourcePath){
 
 		pugi::xml_document templateDef;
 		if(!templateDef.load_file(xmlPath.c_str())){
-			Log::error("Unable to load template file at path %s", xmlPath.c_str());
+			Log::error("Unable to load template file at path %s", xmlPath.string().c_str());
 			continue;
 		}
 

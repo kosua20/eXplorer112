@@ -50,7 +50,7 @@ int main(int argc, const char** argv)
 #ifdef SCENE_FILE
 		const fs::path worldPath = worldsPath / SCENE_FILE;
 #endif
-		Log::info("Processing world %s", worldPath.c_str());
+		Log::info("Processing world %s", worldPath.string().c_str());
 
 
 
@@ -108,7 +108,7 @@ int main(int argc, const char** argv)
 				const std::string existingName = texturePath.filename().replace_extension().string();
 				if(existingName == textureName){
 					if(found){
-						Log::warning("Conflict for texture %s, paths: %s and %s", textureName.c_str(), selectedTexturePath.c_str(), texturePath.c_str());
+						Log::warning("Conflict for texture %s, paths: %s and %s", textureName.c_str(), selectedTexturePath.string().c_str(), texturePath.string().c_str());
 					} else {
 						found = true;
 						selectedTexturePath = texturePath;
@@ -123,7 +123,7 @@ int main(int argc, const char** argv)
 				if(found){
 					// Copy the file.
 					if(!image.load(selectedTexturePath)){
-						Log::error("Unsupported texture format for input file %s", selectedTexturePath.filename().c_str());
+						Log::error("Unsupported texture format for input file %s", selectedTexturePath.filename().string().c_str());
 					}
 					image.uncompress();
 
@@ -133,7 +133,7 @@ int main(int argc, const char** argv)
 				}
 				// Save image to disk as PNG.
 				if(!image.save(destinationPath)){
-					Log::error("Unsupported texture format for output file %s", destinationPath.filename().c_str());
+					Log::error("Unsupported texture format for output file %s", destinationPath.filename().string().c_str());
 				}
 			}
 
