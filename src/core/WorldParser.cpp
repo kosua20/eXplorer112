@@ -254,15 +254,28 @@ bool World::load(const fs::path& path, const fs::path& resourcePath){
 		instance.object = elem->second;
 	}
 
-	/// Extract list of textures.
-	// In the future, this could become a list of materials, by merging between objects.
-	for(const Object& object : _objects){
-		for(const Object::Material& material : object.materials){
-			if(material.texture.empty()){
-				continue;
+	/// Extract list unique materials.
+	for(Object& object : _objects){
+		for(Object::Set& set : object.faceSets){
+			const Object::Material& material = object.materials[set.material];
+
+			const size_t matCount = _materials.size();
+			uint mid = 0u;
+			for(; mid < matCount; ++mid){
+				if(_materials[mid] == material){
+					break;
+				}
 			}
-			_textures.insert(material.texture);
+			if(mid == matCount){
+				// Could not find an existing equivalent material.
+				_materials.push_back(material);
+			}
+			// Point to global material.
+			set.material = mid;
 		}
+		// Remove local materials.
+		object.materials.clear();
+
 	}
 	return true;
 }

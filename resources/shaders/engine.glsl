@@ -24,7 +24,8 @@ struct MeshInfos {
 	uint firstIndex;
 	uint vertexOffset;
 	uint firstInstanceIndex;
-	uint pad0, pad1, pad2;
+	uint materialIndex;
+	uint pad0, pad1;
 };
 
 struct MeshInstanceInfos {

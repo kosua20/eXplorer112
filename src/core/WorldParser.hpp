@@ -22,7 +22,7 @@ public:
 
 	const std::vector<Instance>& instances() const {  return _instances; };
 	
-	const TexturesList& textures() const {  return _textures; };
+	const std::vector<Object::Material>& materials() const {  return _materials; };
 
 
 private:
@@ -34,6 +34,6 @@ private:
 
 	std::vector<Object> _objects;
 	std::vector<Instance> _instances;
-	TexturesList _textures;
+	std::vector<Object::Material> _materials;
 
 };

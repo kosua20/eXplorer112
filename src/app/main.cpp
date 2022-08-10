@@ -220,7 +220,8 @@ struct WorldScene {
 		uint firstIndex;
 		uint vertexOffset;
 		uint firstInstanceIndex;
-		uint pad0, pad1, pad2;
+		uint materialIndex;
+		uint pad0, pad1;
 	};
 
 	struct MeshInstanceInfos {
@@ -231,7 +232,7 @@ struct WorldScene {
 	Mesh globalMesh{ "global" };
 	std::vector<Texture> textures;
 
-	std::unique_ptr<StructuredBuffer<MeshInfos>> meshInfosBuffer; // TODO: store material ID (or info directly)
+	std::unique_ptr<StructuredBuffer<MeshInfos>> meshInfosBuffer;
 	std::unique_ptr<StructuredBuffer<MeshInstanceInfos>> meshInstanceInfosBuffer;
 
 
@@ -262,10 +263,9 @@ struct WorldScene {
 			uint vertexOffset;
 
 			MeshExtInfos(const BoundingBox& _bbox, uint _object, uint _material, uint _indexCount, uint _firstIndex, uint _vertexOffset) :
-				bbox(_bbox), object(_object), material(_material),
-					indexCount(_indexCount),
-					firstIndex(_firstIndex),
-					vertexOffset(_vertexOffset) { }
+					bbox(_bbox), object(_object), material(_material),
+					indexCount(_indexCount), firstIndex(_firstIndex), vertexOffset(_vertexOffset)
+			{ }
 		};
 
 		uint meshesCount = 0;
@@ -328,7 +328,6 @@ struct WorldScene {
 			}
 		}
 
-		globalMesh.upload();
 
 		// For each mesh of each object, how many instances and which ones?
 		std::vector<std::vector<uint>> instancesReferencingMesh(meshesCount);
@@ -361,6 +360,7 @@ struct WorldScene {
 			gpuInfos.vertexOffset = infos.vertexOffset;
 			gpuInfos.instanceCount = instanceIndices.size();
 			gpuInfos.firstInstanceIndex = currentMeshInstanceIndex;
+			gpuInfos.materialIndex = infos.material;
 			
 			for(const auto& iid : instanceIndices){
 				meshInstanceInfosBuffer->at(currentMeshInstanceIndex).frame = world.instances()[iid].frame;
@@ -370,12 +370,16 @@ struct WorldScene {
 
 			++currentMeshIndex;
 		}
+
+		// Send data to the GPU.
+		globalMesh.upload();
 		meshInstanceInfosBuffer->upload();
 		meshInfosBuffer->upload();
 
 		// Load all textures.
-		/*textures.reserve(world.textures().size());
-		for(const std::string& textureName : world.textures()){
+		textures.reserve(world.materials().size());
+		for(const Object::Material& material : world.materials()){
+			const std::string textureName = material.texture;
 			Texture& tex = textures.emplace_back(textureName.empty() ? "tex" : textureName);
 
 			for(const fs::path& texturePath : files.texturesList){
@@ -397,7 +401,6 @@ struct WorldScene {
 			tex.shape = TextureShape::D2;
 			tex.upload(Layout::SRGB8_ALPHA8, false);
 		}
-		 */
 	}
 };
 
@@ -447,11 +450,11 @@ int main(int argc, char ** argv) {
 	programPool.push_back(texturedObject);
 	Program* coloredObject = loadProgram("object_basic_color", "object_basic_color");
 	programPool.push_back(coloredObject);
-	Program* drawArgsCompute = loadProgram("draw_arguments_all");
-	programPool.push_back(drawArgsCompute);
+
 	Program* texturedInstancedObject = loadProgram("object_basic_texture_instanced", "object_basic_texture_instanced");
 	programPool.push_back(texturedInstancedObject);
-
+	Program* drawArgsCompute = loadProgram("draw_arguments_all");
+	programPool.push_back(drawArgsCompute);
 
 	struct FrameData {
 		glm::mat4 vp{1.0f};
@@ -576,10 +579,10 @@ int main(int argc, char ** argv) {
 		// Begin GUI setup.
 		if(ImGui::Begin("Files")){
 
-			if (ImGui::BeginTabBar("#FilesTabBar")){
+			if(ImGui::BeginTabBar("#FilesTabBar")){
 
-				if (ImGui::BeginTabItem("Models")){
 					viewMode = ViewerMode::MODEL;
+				if(ImGui::BeginTabItem("Models")){
 					selectedWorld = -1;
 
 					const unsigned int modelsCount = (uint)gameFiles.modelsList.size();

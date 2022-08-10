@@ -1,4 +1,3 @@
-#extension GL_ARB_shader_draw_parameters : enable
 
 #include "engine.glsl"
 
@@ -7,8 +6,7 @@ layout(location = 0) in vec3 v;///< Position.
 layout(location = 1) in vec3 n;///< Normal.
 layout(location = 2) in vec2 uv;///< UV.
 
-layout(push_constant) uniform constants
-{
+layout(push_constant) uniform constants {
 	uint DrawIndex;
 };
 

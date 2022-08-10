@@ -86,16 +86,21 @@ int main(int argc, const char** argv)
 			writeObjToStream(object, outputObj, offsets, frame);
 		}
 		// Write materials only once.
-		for(const Object& object : world.objects()){
-			writeMtlToStream(object, outputMtl);
-		}
+		writeMtlsToStream(world.materials(), outputMtl);
 
 		outputObj.close();
 		outputMtl.close();
 
 		// Try to find each texture.
-		for(const std::string& textureName : world.textures()){
-			
+		std::unordered_set<std::string> textureNames;
+		for(const Object::Material& material : world.materials()){
+			if(material.texture.empty()){
+				continue;
+			}
+			textureNames.insert(material.texture);
+		}
+
+		for(const std::string& textureName : textureNames){
 			bool found = false;
 			fs::path selectedTexturePath;
 

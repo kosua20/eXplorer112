@@ -1,15 +1,15 @@
 #include "core/Geometry.hpp"
 #include "core/Common.hpp"
 
-void writeMtlToStream(const Object& obj, std::ofstream& mtlFile){
+void writeMtlsToStream(const std::vector<Object::Material>& materials, std::ofstream& mtlFile){
 
 	uint materialId = 0;
-	for(const Object::Material& mat : obj.materials){
+	for(const Object::Material& mat : materials){
 		const float amb = 1.0f;
 		const float diff = 1.0f;
 		const float spec = 1.0f;
 
-		const std::string matName = obj.name + "_mat_" + std::to_string(materialId);
+		const std::string matName = "mat_" + std::to_string(materialId);
 		mtlFile << "newmtl " << matName << "\n";
 		mtlFile << "Ka " << amb << " " << amb << " " << amb << "\n";
 		mtlFile << "Kd " << diff << " " << diff << " " << diff << "\n";
@@ -47,7 +47,7 @@ void writeObjToStream(const Object& obj, std::ofstream& objFile, ObjOffsets& off
 	uint setIndex = 0;
 	for(const Object::Set& set : obj.faceSets){
 		const std::string setName = obj.name + "_obj_" + std::to_string(setIndex);
-		const std::string matName = obj.name + "_mat_" + std::to_string(set.material);
+		const std::string matName = "mat_" + std::to_string(set.material);
 		objFile << "o " << setName << "\n";
 		objFile << "usemtl " << matName << "\n";
 

@@ -38,6 +38,10 @@ struct Object {
 	struct Material {
 		// For now, only diffuse texture.
 		std::string texture;
+
+		bool operator ==(const Material& b){
+			return this->texture == b.texture;
+		}
 	};
 
 	std::vector<Set> faceSets;
@@ -50,10 +54,7 @@ struct ObjOffsets {
 	uint32_t n = 0u;
 };
 
-
-using TexturesList = std::unordered_set<std::string>;
-
-void writeMtlToStream(const Object& obj, std::ofstream& mtlFile);
+void writeMtlsToStream(const std::vector<Object::Material>& materials, std::ofstream& mtlFile);
 
 void writeObjToStream(const Object& obj, std::ofstream& objFile, ObjOffsets & offsets, const glm::mat4& frame);
 
