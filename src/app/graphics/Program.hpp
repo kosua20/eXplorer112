@@ -21,6 +21,7 @@ VK_DEFINE_HANDLE(VkDescriptorSetLayout)
 #define SAMPLERS_SET 1
 #define IMAGES_SET 2
 #define BUFFERS_SET 0
+#define BINDLESS_SET 3
 
 /**
  \brief Represents a group of shaders used for rendering.
@@ -282,7 +283,7 @@ private:
 		TextureShape shape = TextureShape::D2; ///< Texture shape.
 		std::vector<const Texture*> textures = { nullptr }; ///< The source texture.
 		std::vector<VkImageView> views = { VK_NULL_HANDLE }; ///< Texture view.
-		uint count = 1; ///< Number of images bound at this slot..
+		uint count = 1; ///< Number of images bound at this slot.
 		uint mip = 0xFFFF; ///< The corresponding mip.
 		bool storage = false; ///< Is the image used as storage.
 	};
@@ -309,9 +310,10 @@ private:
 	std::unordered_map<int, TextureState> _textures; ///< Dynamic image-sampler definitions (set 2).
 	std::unordered_map<int, StaticBufferState> _staticBuffers; ///< Static uniform buffer definitions (set 0).
 	ConstantsDef _pushConstants;
+	bool _useBindless = false;
 
-	std::array<bool, 3> _dirtySets; ///< Marks which descriptor sets are dirty.
-	std::array<DescriptorSet, 3> _currentSets; ///< Descriptor sets.
+	std::array<bool, 4> _dirtySets; ///< Marks which descriptor sets are dirty.
+	std::array<DescriptorSet, 4> _currentSets; ///< Descriptor sets.
 	std::vector<uint32_t> _currentOffsets; ///< Offsets in the descriptor set for dynamic uniform buffers.
 
 	bool _reloaded = false; ///< Has the program been reloaded.

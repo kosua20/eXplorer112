@@ -328,11 +328,15 @@ void ShaderCompiler::reflect(glslang::TProgram & program, Program::Stage & stage
 				def.shape = def.shape | TextureShape::Array;
 			}
 			if(type.isArray()){
-				if(type.isUnsizedArray() || type.getArraySizes()->getNumDims() > 1){
+				if( type.getArraySizes()->getNumDims() > 1){
 					Log::warning("GPU: Unsupported unsized/multi-level array of textures in shader.");
 					continue;
 				}
-				def.count = static_cast<uint>(type.getArraySizes()->getDimSize(0));
+				if(type.isUnsizedArray()){
+					def.count = 0;
+				} else {
+					def.count = static_cast<uint>(type.getArraySizes()->getDimSize(0));
+				}
 				// Remove brackets from the name.
 				const std::string::size_type lastOpeningBracket = def.name.find_last_of('[');
 				const std::string finalName = def.name.substr(0, lastOpeningBracket);

@@ -109,6 +109,10 @@ void Program::reflect(){
 					Log::error( "Low frequency UBOs should be in set %u, skipping.", BUFFERS_SET);
 					continue;
 				}
+				// Detect and skip push constants.
+				if(buffer.binding == 0 && buffer.name.empty()){
+					continue;
+				}
 				if(_staticBuffers.count(buffer.binding) != 0){
 					if(_staticBuffers.at(buffer.binding).name != buffer.name){
 						Log::warning("GPU: Program %s: Buffer already created, collision between stages for set %u at binding %u.", name().c_str(), buffer.set, buffer.binding);
@@ -138,6 +142,12 @@ void Program::reflect(){
 
 		for(const auto& image : stage.images){
 			const uint set = image.set;
+
+			// Special case for bindless texture table.
+			if(set == BINDLESS_SET){
+				_useBindless = true;
+				continue;
+			}
 
 			if(set != IMAGES_SET){
 				Log::error( "Program %s: : Image should be in set %u only, ignoring.", name().c_str(), IMAGES_SET);
@@ -242,9 +252,16 @@ void Program::reflect(){
 		_state.setLayouts[SAMPLERS_SET] = context->samplerLibrary.getLayout();
 	}
 
+	uint32_t layoutCount = _state.setLayouts.size()-1;
+	// Bindless
+	if(_useBindless){
+		_state.setLayouts[BINDLESS_SET] = context->textureLibrary.getLayout();
+		++layoutCount;
+	} // else null handle or empty layout?
+
 	VkPipelineLayoutCreateInfo layoutInfo{};
 	layoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-	layoutInfo.setLayoutCount = uint32_t(_state.setLayouts.size());
+	layoutInfo.setLayoutCount = layoutCount;
 	layoutInfo.pSetLayouts = _state.setLayouts.data();
 	layoutInfo.pushConstantRangeCount = 0;
 	layoutInfo.pPushConstantRanges = nullptr;
@@ -423,6 +440,11 @@ void Program::update(){
 		vkCmdBindDescriptorSets(commandBuffer, bindPoint, _state.layout, BUFFERS_SET, 1, &_currentSets[BUFFERS_SET].handle, 0, nullptr);
 	}
 
+	if(_useBindless){
+		const VkDescriptorSet texturesHandle = context->textureLibrary.getSetHandle();
+		vkCmdBindDescriptorSets(commandBuffer, bindPoint, _state.layout, BINDLESS_SET, 1, &texturesHandle, 0, nullptr);
+	}
+
 }
 
 bool Program::reloaded() const {
@@ -450,13 +472,14 @@ void Program::clean() {
 	_pushConstants.clear();
 	//_dynamicBuffers.clear();
 	_staticBuffers.clear();
+	_useBindless = false;
 	_state.setLayouts.clear();
 	_state.layout = VK_NULL_HANDLE;
 	_dirtySets.fill(false);
 
 	for(uint i = 0; i < _currentSets.size(); ++i){
 		// Skip the shared static samplers set.
-		if(i == SAMPLERS_SET){
+		if(i == SAMPLERS_SET || i == BINDLESS_SET){
 			continue;
 		}
 		GPU::getInternal()->descriptorAllocator.freeSet(_currentSets[i]);
