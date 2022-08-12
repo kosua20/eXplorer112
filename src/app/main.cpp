@@ -278,10 +278,10 @@ struct WorldScene {
 
 			// Book keeping for later.
 			objectFirstMeshIndex.push_back(meshesCount);
-			meshesCount += obj.faceSets.size();
+			meshesCount += (uint)obj.faceSets.size();
 
 			// Copy attributes.
-			const uint vertexOffset = globalMesh.positions.size();
+			const uint vertexOffset = (uint)globalMesh.positions.size();
 
 			Log::check(!obj.positions.empty(), "Object with no positions.");
 			globalMesh.positions.insert(globalMesh.positions.end(), obj.positions.begin(), obj.positions.end());
@@ -299,7 +299,7 @@ struct WorldScene {
 			// Pack each mesh.
 			for(const Object::Set& set : obj.faceSets){
 				// Build index buffer.
-				const uint indexOffset = globalMesh.indices.size();
+				const uint indexOffset = (uint)globalMesh.indices.size();
 
 				for(const Object::Set::Face& f : set.faces){
 #ifdef DEBUG
@@ -325,7 +325,7 @@ struct WorldScene {
 
 				}
 
-				meshInfos.emplace_back(bbox, (uint)oid, (uint)set.material, set.faces.size() * 3, indexOffset, vertexOffset);
+				meshInfos.emplace_back(bbox, (uint)oid, (uint)set.material, (uint)set.faces.size() * 3u, indexOffset, vertexOffset);
 			}
 		}
 
@@ -343,7 +343,7 @@ struct WorldScene {
 		}
 		uint totalMeshInstancesCount = 0;
 		for(const auto& meshInstances : instancesReferencingMesh){
-			totalMeshInstancesCount += meshInstances.size();
+			totalMeshInstancesCount += (uint)meshInstances.size();
 		}
 		// Build a list of unrolled frames.
 		meshInstanceInfosBuffer = std::make_unique<StructuredBuffer<MeshInstanceInfos>>(totalMeshInstancesCount, BufferType::STORAGE);
@@ -359,7 +359,7 @@ struct WorldScene {
 			gpuInfos.indexCount = infos.indexCount;
 			gpuInfos.firstIndex = infos.firstIndex;
 			gpuInfos.vertexOffset = infos.vertexOffset;
-			gpuInfos.instanceCount = instanceIndices.size();
+			gpuInfos.instanceCount = (uint)instanceIndices.size();
 			gpuInfos.firstInstanceIndex = currentMeshInstanceIndex;
 			gpuInfos.materialIndex = infos.material;
 			
@@ -470,7 +470,7 @@ int main(int argc, char ** argv) {
 	};
 	UniformBuffer<FrameData> frameInfos(1, 64);
 	glm::vec2 renderingRes = config.resolutionRatio * config.screenResolution;
-	Framebuffer fb(renderingRes[0], renderingRes[1], {Layout::RGBA8, Layout::DEPTH_COMPONENT32F}, "sceneFb");
+	Framebuffer fb(uint(renderingRes[0]), uint(renderingRes[1]), {Layout::RGBA8, Layout::DEPTH_COMPONENT32F}, "sceneFb");
 	std::unique_ptr<Buffer> drawCommands = nullptr;
 
 	// Data loading.
@@ -819,7 +819,7 @@ int main(int argc, char ** argv) {
 		ImGui::End();
 
 		if(ImGui::Begin("Settings")) {
-			int ratioPercentage = std::round(config.resolutionRatio * 100.0f);
+			int ratioPercentage = int(std::round(config.resolutionRatio * 100.0f));
 
 			ImGui::Text("Rendering at %ux%upx", fb.width(), fb.height());
 			if(ImGui::InputInt("Rendering ratio %", &ratioPercentage, 10, 25)) {
@@ -830,7 +830,7 @@ int main(int argc, char ** argv) {
 				renderRes = (renderRes / config.resolutionRatio) * newRatio;
 
 				config.resolutionRatio = newRatio;
-				fb.resize(renderRes[0], renderRes[1]);
+				fb.resize(uint(renderRes[0]), uint(renderRes[1]));
 				camera.ratio(renderRes[0]/renderRes[1]);
 			}
 
@@ -942,7 +942,7 @@ int main(int argc, char ** argv) {
 				drawArgsCompute->buffer(*world.meshInfosBuffer, 1);
 				drawArgsCompute->buffer(*world.meshInstanceInfosBuffer, 2);
 				drawArgsCompute->buffer(*drawCommands, 3);
-				GPU::dispatch(world.meshInfosBuffer->size(), 1, 1);
+				GPU::dispatch((uint)world.meshInfosBuffer->size(), 1, 1);
 
 				fb.bind(LoadOperation::LOAD, LoadOperation::LOAD, LoadOperation::DONTCARE);
 				GPU::setViewport(0, 0, fb.width(), fb.height());
