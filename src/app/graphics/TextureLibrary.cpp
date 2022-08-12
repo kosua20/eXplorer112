@@ -40,7 +40,7 @@ void TextureLibrary::init(){
 }
 
 void TextureLibrary::update(const std::vector<Texture>& textures){
-	const uint32_t count = std::min((uint32_t)BINDLESS_IMAGES_COUNT, (uint32_t)textures.size());
+	const uint32_t count = std::min((uint32_t)BINDLESS_SET_MAX_SIZE, (uint32_t)textures.size());
 	if(textures.size() > count){
 		Log::error("Too many textures for the bindless set (%u > %u), clamping.", textures.size(), count);
 	}
