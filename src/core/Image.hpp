@@ -26,6 +26,8 @@ public:
 	 */
 	Image(unsigned int awidth, unsigned int aheight, unsigned int acomponents, char value = 0);
 
+	void clone( Image& dst ) const;
+
 	/** Load an image from disk. Will contain the image raw data as [0,255] chars.
 	 \param path the path to the image
 	 \return a success/error flag

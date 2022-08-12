@@ -33,6 +33,15 @@ Image::Image(unsigned int awidth, unsigned int aheight, unsigned int acomponents
 	pixels.resize(width * height * components, value);
 }
 
+void Image::clone( Image& dst ) const {
+
+	dst.width = width;		
+	dst.height = height;	
+	dst.components = components; 
+	dst.compressedFormat = compressedFormat;
+	dst.pixels = pixels;
+}
+
 
 bool Image::load(const fs::path & path) {
 	pixels.clear();
