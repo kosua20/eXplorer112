@@ -4,6 +4,7 @@
 #include "graphics/GPUObjects.hpp"
 
 #include <deque>
+#define BINDLESS_IMAGES_COUNT 128
 
 struct GPUContext;
 

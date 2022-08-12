@@ -80,7 +80,7 @@ DescriptorSet DescriptorAllocator::allocateBindlessSet(VkDescriptorSetLayout& se
 	VkDescriptorSetVariableDescriptorCountAllocateInfoEXT countInfos{};
 	countInfos.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_VARIABLE_DESCRIPTOR_COUNT_ALLOCATE_INFO_EXT;
 	countInfos.descriptorSetCount = 1;
-	uint32_t maxBinding = 128;
+	uint32_t maxBinding = BINDLESS_IMAGES_COUNT;
 	countInfos.pDescriptorCounts = &maxBinding;
 	allocInfo.pNext = &countInfos;
 
