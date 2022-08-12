@@ -179,7 +179,8 @@ void ImGui::Image(const Texture & texture, const ImVec2& size, const ImVec2& uv0
 bool ImGui::ImageButton(const Texture & texture, const ImVec2& size, const ImVec2& uv0,  const ImVec2& uv1, int frame_padding, const ImVec4& bg_col, const ImVec4& tint_col){
 	if(texture.gpu->imgui == VK_NULL_HANDLE){
 		GPUContext* context = GPU::getInternal();
-		texture.gpu->imgui = ImGui_ImplVulkan_AddTexture(context->samplerLibrary.getDefaultSampler(), texture.gpu->view, texture.gpu->defaultLayout);
+		// Always take a 2D view.
+		texture.gpu->imgui = ImGui_ImplVulkan_AddTexture(context->samplerLibrary.getDefaultSampler(), texture.gpu->views[0].views[0], texture.gpu->defaultLayout);
 	}
 	return ImGui::ImageButton((ImTextureID)texture.gpu->imgui, size, uv0, uv1, frame_padding, bg_col, tint_col);
 }
