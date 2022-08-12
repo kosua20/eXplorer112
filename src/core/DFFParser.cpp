@@ -590,7 +590,7 @@ bool parseClump(FILE* file, Model& model){
 
 bool parse(const fs::path& path, Model& model){
 
-	FILE* file = fopen( path.c_str(), "rb");
+	FILE* file = fopen( path.string().c_str(), "rb");
 
 	if(file == nullptr){
 		Log::error("[dffparser] Unable to open file at path \"%s\"", path.string().c_str());

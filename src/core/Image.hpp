@@ -8,7 +8,7 @@ class Image {
 public:
 
 	enum class Compression {
-		NONE,
+		NONE = 0,
 		BC1,
 		BC2,
 		BC3
