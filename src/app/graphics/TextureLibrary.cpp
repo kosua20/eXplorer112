@@ -12,7 +12,7 @@ void TextureLibrary::init(){
 	VkDescriptorSetLayoutBinding binding{};
 	binding.binding = 0;
 	binding.descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
-	binding.descriptorCount = BINDLESS_IMAGES_COUNT;
+	binding.descriptorCount = BINDLESS_SET_MAX_SIZE;
 	binding.stageFlags = VK_SHADER_STAGE_ALL;
 	binding.pImmutableSamplers = nullptr;
 
@@ -40,8 +40,11 @@ void TextureLibrary::init(){
 }
 
 void TextureLibrary::update(const std::vector<Texture>& textures){
-
 	const uint32_t count = std::min((uint32_t)BINDLESS_IMAGES_COUNT, (uint32_t)textures.size());
+	if(textures.size() > count){
+		Log::error("Too many textures for the bindless set (%u > %u), clamping.", textures.size(), count);
+	}
+
 	std::vector<VkDescriptorImageInfo> imageInfos(count);
 	std::vector<VkWriteDescriptorSet> writes(count);
 

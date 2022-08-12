@@ -4,7 +4,8 @@
 #include "graphics/GPUObjects.hpp"
 
 #include <deque>
-#define BINDLESS_IMAGES_COUNT 128
+
+#define BINDLESS_SET_MAX_SIZE 64
 
 struct GPUContext;
 

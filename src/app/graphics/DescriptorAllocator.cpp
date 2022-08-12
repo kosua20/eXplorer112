@@ -2,7 +2,6 @@
 #include "graphics/GPUInternal.hpp"
 
 #define DEFAULT_SET_COUNT 1000
-#define BINDLESS_SET_COUNT 4096
 
 void DescriptorAllocator::init(GPUContext* context, uint poolCount){
 	_context = context;
@@ -11,7 +10,7 @@ void DescriptorAllocator::init(GPUContext* context, uint poolCount){
 	
 	_pools.push_back(createPool(DEFAULT_SET_COUNT, false, false));
 	_imguiPool = createPool(DEFAULT_SET_COUNT, true, false);
-	_bindlessPool = createPool(BINDLESS_SET_COUNT, false, true);
+	_bindlessPool = createPool(4 * BINDLESS_SET_MAX_SIZE, false, true);
 }
 
 DescriptorSet DescriptorAllocator::allocateSet(VkDescriptorSetLayout& setLayout){
@@ -80,7 +79,7 @@ DescriptorSet DescriptorAllocator::allocateBindlessSet(VkDescriptorSetLayout& se
 	VkDescriptorSetVariableDescriptorCountAllocateInfoEXT countInfos{};
 	countInfos.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_VARIABLE_DESCRIPTOR_COUNT_ALLOCATE_INFO_EXT;
 	countInfos.descriptorSetCount = 1;
-	uint32_t maxBinding = BINDLESS_IMAGES_COUNT;
+	uint32_t maxBinding = BINDLESS_SET_MAX_SIZE;
 	countInfos.pDescriptorCounts = &maxBinding;
 	allocInfo.pNext = &countInfos;
 
