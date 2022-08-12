@@ -302,6 +302,77 @@ int main(int argc, char ** argv) {
 					ImGui::EndTabItem();
 				}
 
+				if(ImGui::BeginTabItem("Areas")){
+					if(viewMode != ViewerMode::AREA){
+						selectedItem = -1;
+						selectedMesh = -1;
+						selectedTexture = -1;
+						viewMode = ViewerMode::AREA;
+					}
+
+					const unsigned int itemsCount = (uint)gameFiles.areasList.size();
+					ImGui::Text("Found %u areas", itemsCount);
+
+					if(ImGui::BeginTable("#AreasTable", 2, tableFlags)){
+						// Header
+						ImGui::TableSetupScrollFreeze(0, 1); // Make top row always visible
+						ImGui::TableSetupColumn("Name", ImGuiTableColumnFlags_None);
+						ImGui::TableSetupColumn("Directory", ImGuiTableColumnFlags_None);
+						ImGui::TableHeadersRow();
+
+						ImGuiListClipper clipper;
+						clipper.Begin(itemsCount);
+						while (clipper.Step()) {
+							for (int row = clipper.DisplayStart; row < clipper.DisplayEnd; row++){
+								ImGui::PushID(row);
+								ImGui::TableNextColumn();
+
+								const fs::path& itemPath = gameFiles.areasList[row];
+								std::string itemName = itemPath.filename().string();
+								// Log two levels of hierarchy.
+								const fs::path& parentPath = itemPath.parent_path();
+								std::string itemParent = parentPath.parent_path().filename().string();
+								itemParent += "/" + parentPath.filename().string();
+
+								if(selectedItem == row){
+									itemName = "* " + itemName;
+								}
+
+								if(ImGui::Selectable(itemName.c_str(), selectedItem == row, selectableTableFlags)){
+									if(selectedItem != row){
+										selectedItem = row;
+										scene.clean();
+										scene.loadFile(itemPath, gameFiles);
+
+										const size_t meshCount = scene.meshInfosBuffer->size();
+										drawCommands = std::make_unique<Buffer>(meshCount * sizeof(GPU::DrawCommand), BufferType::INDIRECT);
+
+										// Compute the total bounding box.
+										BoundingBox modelBox = scene.globalMesh.computeBoundingBox();
+										// Center the camera.
+										const glm::vec3 center = modelBox.getCentroid();
+										const glm::vec3 extent = modelBox.getSize();
+										// Keep the camera off the object.
+										const float maxExtent = glm::max(extent[0], glm::max(extent[1], extent[2]));
+										// Handle case where the object is a flat quad (leves, decals...).
+										glm::vec3 offset = std::abs(extent[0]) < 1.0f ? glm::vec3(1.0f, 0.0f, 0.0f) : glm::vec3(0.0f, 0.0f, 1.0f);
+										camera.pose(center + maxExtent * offset, center, glm::vec3(0.0, 1.0f, 0.0f));
+										selectedMesh = -1;
+										selectedTexture = -1;
+									}
+								}
+								ImGui::TableNextColumn();
+								ImGui::Text("%s", itemParent.c_str());
+
+								ImGui::PopID();
+							}
+						}
+
+						ImGui::EndTable();
+					}
+					ImGui::EndTabItem();
+				}
+
 				if(ImGui::BeginTabItem("Worlds", nullptr)){
 					if(viewMode != ViewerMode::WORLD){
 						selectedItem = -1;
