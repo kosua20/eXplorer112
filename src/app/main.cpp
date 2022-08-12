@@ -200,6 +200,7 @@ struct ModelScene {
 					tex.height = tex.images[0].height;
 					tex.depth = tex.levels = 1;
 					tex.shape = TextureShape::D2;
+					tex.uncompress();
 					tex.upload(Layout::SRGB8_ALPHA8, false);
 				}
 

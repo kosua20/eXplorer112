@@ -17,6 +17,8 @@ public:
 	 */
 	Texture(const std::string & name);
 
+	void uncompress();
+	
 	/** Send to the GPU.
 	 \param layout the data layout and type to use for the texture
 	 \param updateMipmaps generate the mipmaps automatically
