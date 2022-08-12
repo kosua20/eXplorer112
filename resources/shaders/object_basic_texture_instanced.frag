@@ -16,7 +16,11 @@ layout(std140, set = 0, binding = 1) readonly buffer MeshesInfos {
 	MeshInfos meshInfos[];
 };
 
-layout(set = 3, binding = 0) uniform texture2D textures[]; ///< Color textures.
+layout(std140, set = 0, binding = 3) readonly buffer MaterialsInfos {
+	MaterialInfos materialInfos[];
+};
+
+layout(set = 3, binding = 0) uniform texture2DArray textures[]; ///< Color textures.
 
 layout(location = 0) out vec4 fragColor; ///< Color.
 
@@ -33,8 +37,8 @@ void main(){
 
 	vec3 albedo = engine.color.rgb;
 	if(engine.albedoMode == MODE_ALBEDO_TEXTURE){
-		uint texIndex = min(127, meshInfos[DrawIndex].materialIndex);
-		vec4 color = texture(sampler2D(textures[texIndex], sRepeatLinearLinear), In.uv);
+		MaterialInfos material =  materialInfos[meshInfos[DrawIndex].materialIndex];
+		vec4 color = texture(sampler2DArray(textures[material.texture.index], sRepeatLinearLinear), vec3(In.uv,material.texture.layer) );
 		if(color.a < 0.05){
 			discard;
 		}

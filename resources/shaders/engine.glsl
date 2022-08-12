@@ -32,6 +32,16 @@ struct MeshInstanceInfos {
 	mat4 frame;
 };
 
+struct TextureInfos {
+	uint index;
+	uint layer;
+	uint pad0, pad1;
+};
+
+struct MaterialInfos {
+	TextureInfos texture;
+};
+
 struct DrawCommand {
 	uint indexCount;
 	uint instanceCount;

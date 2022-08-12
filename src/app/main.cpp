@@ -229,19 +229,35 @@ struct WorldScene {
 		glm::mat4 frame;
 	};
 
+	struct TextureInfos
+	{
+		uint index;
+		uint layer;
+		uint pad0, pad1;
+	};
+
+	struct MaterialInfos
+	{
+		TextureInfos texture;
+	};
+
 	World world;
 	Mesh globalMesh{ "global" };
 	std::vector<Texture> textures;
 
 	std::unique_ptr<StructuredBuffer<MeshInfos>> meshInfosBuffer;
 	std::unique_ptr<StructuredBuffer<MeshInstanceInfos>> meshInstanceInfosBuffer;
+	std::unique_ptr<StructuredBuffer<MaterialInfos>> materialInfosBuffer;
 
 
 	void clean(){
 		globalMesh.clean();
+
 		meshInfosBuffer.reset();
 		meshInstanceInfosBuffer.reset();
-		for(Texture& tex : textures){
+		materialInfosBuffer.reset();
+
+		for(Texture& tex : textures ){
 			tex.clean();
 		}
 		textures.clear();
@@ -372,39 +388,125 @@ struct WorldScene {
 			++currentMeshIndex;
 		}
 
+		const std::vector<Object::Material>& materials = world.materials();
+		materialInfosBuffer = std::make_unique<StructuredBuffer<MaterialInfos>>(materials.size(), BufferType::STORAGE);
+		
+		// Load all textures.
+		std::vector<Texture> textures2D;
+		textures2D.reserve(materials.size());
+
+		struct TextureArrayInfos {
+			uint width = 0;
+			uint height = 0;
+			Image::Compression format = Image::Compression::NONE;
+			std::vector<uint> textures; // Indices in textures2D
+		};
+		std::vector<TextureArrayInfos> arraysToCreate;
+		
+		for(const Object::Material& material : materials){
+			const std::string textureName = material.texture.empty() ? "tex" : material.texture;
+			
+			uint mid = 0;
+			// Do we have the texture already.
+			for( ; mid < textures2D.size(); ++mid){
+				if(textures2D[mid].name() == textureName)
+					break;
+			}
+			// Else emplace the texture.
+			if(mid == textures2D.size()){
+				Texture& tex = textures2D.emplace_back(textureName);
+
+				for( const fs::path& texturePath : files.texturesList){
+					const std::string existingName = texturePath.filename().replace_extension().string();
+					if(existingName == textureName){
+						tex.images.resize(1);
+						tex.images[0].load(texturePath);
+						break;
+					}
+				}
+				if(tex.images.empty()){
+					tex.images.emplace_back();
+					Image::generateDefaultImage(tex.images[0]);
+				}
+				// Update texture parameters.
+				tex.width = tex.images[0].width;
+				tex.height = tex.images[0].height;
+				tex.depth = tex.levels = 1;
+				tex.shape = TextureShape::D2;
+				// Split BC slices if needed.
+				tex.uncompress();
+			}
+
+			// Now that we have the 2D texture, we need to find a compatible texture array to insert it in.
+			const Texture& tex = textures2D[mid];
+
+			uint arrayIndex = 0;
+			for(TextureArrayInfos& textureArray : arraysToCreate){
+				if(textureArray.width == tex.width
+				   && textureArray.height == tex.height
+				   && textureArray.format == tex.images[0].compressedFormat){
+					// We found one! update the infos.
+					materialInfosBuffer->at(mid).texture.index = arrayIndex;
+					// Is the texture already in there
+					uint localIndex = 0;
+					for(uint texId : textureArray.textures){
+						if(texId == mid){
+							break;
+						}
+						++localIndex;
+					}
+					// Else add it to the list.
+					if(localIndex == textureArray.textures.size()){
+						textureArray.textures.push_back(mid);
+					}
+					// update the infos.
+					materialInfosBuffer->at(mid).texture.layer = localIndex;
+					break;
+				}
+				++arrayIndex;
+			}
+			if(arrayIndex == arraysToCreate.size()){
+				arraysToCreate.push_back({ tex.width, tex.height, tex.images[0].compressedFormat, {mid} });
+					// update the infos.
+				materialInfosBuffer->at(mid).texture.index = arrayIndex;
+				materialInfosBuffer->at(mid).texture.layer = 0;
+			}
+			
+		}
+		// From the list of texture arrays, build them.
+		for(const TextureArrayInfos& arrayInfos : arraysToCreate){
+			const std::string texName = "TexArray_" + std::to_string(arrayInfos.width)
+											  + "_" + std::to_string(arrayInfos.height)
+											  + "_" + std::to_string((uint)arrayInfos.format);
+			Texture& tex = textures.emplace_back(texName);
+			tex.width = arrayInfos.width;
+			tex.height = arrayInfos.height;
+			tex.shape = TextureShape::Array2D;
+			tex.depth = (uint)arrayInfos.textures.size();
+			// Safety check.
+			tex.levels = 0xFFFF;
+			for(const uint tid : arrayInfos.textures){
+				const Texture& layerTex = textures2D[tid];
+				tex.levels = std::min(tex.levels, layerTex.levels);
+			}
+			tex.images.resize(tex.depth * tex.levels);
+			for(uint mid = 0; mid < tex.levels; ++mid){
+				for(uint lid = 0; lid < tex.depth; ++lid){
+					const uint texId = arrayInfos.textures[lid];
+					textures2D[texId].images[mid].clone(tex.images[mid * tex.depth + lid]);
+				}
+			}
+			// Now we have a beautiful texture2D array with all images set.
+			tex.upload( Layout::SRGB8_ALPHA8, false );
+		}
+
 		// Send data to the GPU.
 		globalMesh.upload();
 		meshInstanceInfosBuffer->upload();
 		meshInfosBuffer->upload();
+		materialInfosBuffer->upload();
 
-		// Load all textures.
-		textures.reserve(world.materials().size());
-		for(const Object::Material& material : world.materials()){
-			const std::string textureName = material.texture;
-			Texture& tex = textures.emplace_back(textureName.empty() ? "tex" : textureName);
-
-			for(const fs::path& texturePath : files.texturesList){
-				const std::string existingName = texturePath.filename().replace_extension().string();
-				if(existingName == textureName){
-					tex.images.resize(1);
-					tex.images[0].load(texturePath);
-					break;
-				}
-			}
-			if(tex.images.empty()){
-				tex.images.emplace_back();
-				Image::generateDefaultImage(tex.images[0]);
-			}
-			// Update texture parameters.
-			tex.width = tex.images[0].width;
-			tex.height = tex.images[0].height;
-			tex.depth = tex.levels = 1;
-			tex.shape = TextureShape::D2;
-			tex.upload(Layout::SRGB8_ALPHA8, false);
-		}
-
-		GPU::registerTextures(textures);
-
+		GPU::registerTextures( textures );
 
 	}
 };
@@ -954,7 +1056,8 @@ int main(int argc, char ** argv) {
 				texturedInstancedObject->use();
 				texturedInstancedObject->buffer(frameInfos, 0);
 				texturedInstancedObject->buffer(*world.meshInfosBuffer, 1);
-				texturedInstancedObject->buffer(*world.meshInstanceInfosBuffer, 2);
+				texturedInstancedObject->buffer( *world.meshInstanceInfosBuffer, 2 );
+				texturedInstancedObject->buffer( *world.materialInfosBuffer, 3 );
 
 				GPU::drawIndirectMesh(world.globalMesh, *drawCommands);
 			}
