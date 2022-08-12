@@ -100,118 +100,8 @@ struct GameFiles {
 
 };
 
-struct ModelScene {
-	Object dff;
-	std::vector<Mesh> meshes;
-	std::vector<Texture> textures;
-	std::vector<uint> meshToTextures;
+struct Scene {
 
-	void clean(){
-		for(Mesh& mesh : meshes){
-			mesh.clean();
-		}
-		for(Texture& texture : textures){
-			texture.clean();
-		}
-		meshes.clear();
-		textures.clear();
-		meshToTextures.clear();
-
-		dff = Object();
-	}
-
-	void load(const fs::path& dffPath, const GameFiles& files){
-
-		Dff::load(dffPath, dff);
-
-		const glm::vec2 defaultUV = glm::vec2(0.5f);
-		const glm::vec3 defaultNormal = glm::vec3(0.0f, 0.0f, 1.0f);
-
-		for(const Object::Set& set : dff.faceSets){
-
-			// Load geometry.
-			{
-				meshes.emplace_back(dff.name + "_part_" + std::to_string(meshes.size()));
-				Mesh& mesh = meshes.back();
-
-				const size_t vertCount = set.faces.size() * 3;
-
-				mesh.positions.resize(vertCount);
-				mesh.indices.resize(vertCount);
-				mesh.texcoords.resize(vertCount);
-				mesh.normals.resize(vertCount);
-
-				unsigned int ind = 0;
-				for(const Object::Set::Face& f : set.faces){
-					mesh.positions[ind]   = dff.positions[f.v0];
-					mesh.positions[ind+1] = dff.positions[f.v1];
-					mesh.positions[ind+2] = dff.positions[f.v2];
-					mesh.indices[ind]   = ind;
-					mesh.indices[ind+1] = ind+1;
-					mesh.indices[ind+2] = ind+2;
-
-					mesh.texcoords[ind+0] = (f.t0 != Object::Set::Face::INVALID) ? dff.uvs[f.t0] : defaultUV;
-					mesh.texcoords[ind+1] = (f.t1 != Object::Set::Face::INVALID) ? dff.uvs[f.t1] : defaultUV;
-					mesh.texcoords[ind+2] = (f.t2 != Object::Set::Face::INVALID) ? dff.uvs[f.t2] : defaultUV;
-
-					mesh.normals[ind+0] = (f.n0 != Object::Set::Face::INVALID) ? dff.normals[f.n0] : defaultNormal;
-					mesh.normals[ind+1] = (f.n1 != Object::Set::Face::INVALID) ? dff.normals[f.n1] : defaultNormal;
-					mesh.normals[ind+2] = (f.n2 != Object::Set::Face::INVALID) ? dff.normals[f.n2] : defaultNormal;
-
-					ind += 3;
-
-				}
-				mesh.computeBoundingBox();
-				mesh.upload();
-			}
-			// Load texture if it has not already been loaded.
-			{
-				const std::string textureName = dff.materials[set.material].texture;
-				const uint textureCount = (uint)textures.size();
-
-				uint textureIndex = textureCount;
-				// Look at existing textures first.
-				for(uint tid = 0u; tid < textureCount; ++tid){
-					if(textures[tid].name() == textureName){
-						textureIndex = tid;
-						break;
-					}
-				}
-
-				// If not found, create a new texture.
-				if(textureIndex == textureCount){
-
-					Texture& tex = textures.emplace_back(textureName.empty() ? "tex" : textureName);
-
-					for(const fs::path& texturePath : files.texturesList){
-						const std::string existingName = texturePath.filename().replace_extension().string();
-						if(existingName == textureName){
-							tex.images.resize(1);
-							tex.images[0].load(texturePath);
-							break;
-						}
-					}
-					if(tex.images.empty()){
-						tex.images.emplace_back();
-						Image::generateDefaultImage(tex.images[0]);
-					}
-					// Update texture parameters.
-					tex.width = tex.images[0].width;
-					tex.height = tex.images[0].height;
-					tex.depth = tex.levels = 1;
-					tex.shape = TextureShape::D2;
-					tex.uncompress();
-					tex.upload(Layout::SRGB8_ALPHA8, false);
-				}
-
-				meshToTextures.emplace_back(textureIndex);
-
-			}
-		}
-	}
-};
-
-struct WorldScene {
 
 	struct MeshInfos {
 		glm::vec4 bboxMin;
@@ -229,20 +119,18 @@ struct WorldScene {
 		glm::mat4 frame;
 	};
 
-	struct TextureInfos
-	{
+	struct TextureInfos {
 		uint index;
 		uint layer;
 		uint pad0, pad1;
 	};
 
-	struct MaterialInfos
-	{
+	struct MaterialInfos {
 		TextureInfos texture;
 	};
 
 	World world;
-	Mesh globalMesh{ "global" };
+	Mesh globalMesh{"None"};
 	std::vector<Texture> textures;
 
 	std::unique_ptr<StructuredBuffer<MeshInfos>> meshInfosBuffer;
@@ -264,26 +152,168 @@ struct WorldScene {
 		world = World();
 	}
 
+	void loadDFF(const fs::path& dffPath, const GameFiles& files){
+		Object obj;
+		if(!Dff::load(dffPath, obj)){
+			return;
+		}
+
+		Log::check(!obj.positions.empty(), "Object with no positions.");
+
+		const size_t posCount = obj.positions.size();
+		if(obj.uvs.size() != posCount){
+			obj.uvs.resize(posCount, glm::vec2(0.5f));
+		}
+		if(obj.normals.size() != posCount){
+			obj.normals.resize(posCount, glm::vec3(0.0f, 0.0f, 1.0f));
+		}
+		globalMesh = Mesh(dffPath.filename().replace_extension());
+		globalMesh.positions = obj.positions;
+		globalMesh.texcoords = obj.uvs;
+		globalMesh.normals = obj.normals;
+
+		// Total index count fo the object.
+		size_t totalIndexSize = 0;
+		for(const Object::Set& set : obj.faceSets){
+			totalIndexSize += set.faces.size() * 3;
+		}
+
+		globalMesh.indices.reserve(totalIndexSize);
+
+		// Already allocate the buffers as we know the number of meshes and instances.
+		uint meshesCount = obj.faceSets.size();
+		meshInfosBuffer = std::make_unique<StructuredBuffer<MeshInfos>>(meshesCount, BufferType::STORAGE);
+		// There is one instance per mesh.
+		meshInstanceInfosBuffer = std::make_unique<StructuredBuffer<MeshInstanceInfos>>(meshesCount, BufferType::STORAGE);
+
+		uint meshIndex = 0;
+		// Pack each mesh.
+		for(const Object::Set& set : obj.faceSets){
+			// Build index buffer.
+			const uint indexOffset = (uint)globalMesh.indices.size();
+
+			for(const Object::Set::Face& f : set.faces){
+#ifdef DEBUG
+				if(f.t0 != f.v0 || f.t1 != f.v1 || f.t2 != f.v2 ||
+				   f.n0 != f.v0 || f.n1 != f.v1 || f.n2 != f.v2 ){
+					Log::error("Discrepancy between position indices and other attribute indices.");
+				}
+#endif
+				globalMesh.indices.push_back(f.v0);
+				globalMesh.indices.push_back(f.v1);
+				globalMesh.indices.push_back(f.v2);
+
+			}
+			// Generate extra infos.
+			BoundingBox bbox = BoundingBox();
+			if(!set.faces.empty()) {
+				bbox.minis = bbox.maxis = obj.positions[set.faces[0].v0];
+			}
+			for(const Object::Set::Face& f : set.faces){
+				bbox.merge(obj.positions[f.v0]);
+				bbox.merge(obj.positions[f.v1]);
+				bbox.merge(obj.positions[f.v2]);
+
+			}
+
+			MeshInfos& meshInfos = meshInfosBuffer->at(meshIndex);
+			meshInfos.bboxMin = glm::vec4(bbox.minis, 1.0f);
+			meshInfos.bboxMax = glm::vec4(bbox.maxis, 1.0f);
+			meshInfos.firstIndex = indexOffset;
+			meshInfos.firstInstanceIndex = meshIndex;
+			meshInfos.materialIndex = (uint)set.material;
+			meshInfos.instanceCount = 1u; // One instance for each mesh.
+			meshInfos.indexCount = (uint)set.faces.size() * 3u;
+			meshInfos.vertexOffset = 0u; // Only one object.
+
+			meshInstanceInfosBuffer->at(meshIndex).frame = glm::mat4(1.0f);
+
+			++meshIndex;
+
+		}
+
+		// Populate material info and load textures.
+		const std::vector<Object::Material>& materials = obj.materials;
+		materialInfosBuffer = std::make_unique<StructuredBuffer<MaterialInfos>>(materials.size(), BufferType::STORAGE);
+
+		// Load all textures each in its own array to keep things simple.
+		textures.reserve(materials.size());
+
+		uint materialId = 0u;
+		for(const Object::Material& material : materials){
+			const std::string textureName = material.texture.empty() ? "No texture" : material.texture;
+
+			uint mid = 0;
+			// Do we have the texture already.
+			for( ; mid < textures.size(); ++mid){
+				if(textures[mid].name() == textureName)
+					break;
+			}
+			// Else emplace the texture.
+			if(mid == textures.size()){
+				Texture& tex = textures.emplace_back(textureName);
+
+				for( const fs::path& texturePath : files.texturesList){
+					const std::string existingName = texturePath.filename().replace_extension().string();
+					if(existingName == textureName){
+						tex.images.resize(1);
+						tex.images[0].load(texturePath);
+						break;
+					}
+				}
+				if(tex.images.empty()){
+					tex.images.emplace_back();
+					Image::generateDefaultImage(tex.images[0]);
+				}
+				// Update texture parameters.
+				tex.width = tex.images[0].width;
+				tex.height = tex.images[0].height;
+				tex.depth = tex.levels = 1;
+				tex.shape = TextureShape::D2;
+				tex.uncompress();
+				// Convert it to a 2D array with one layer.
+				tex.shape = TextureShape::Array2D;
+				tex.upload(Layout::SRGB8_ALPHA8, false);
+			}
+
+			MaterialInfos& matInfos = materialInfosBuffer->at(materialId);
+			matInfos.texture.index = mid;
+			matInfos.texture.layer = 0;
+			++materialId;
+		}
+
+		// Send data to the GPU.
+		globalMesh.upload();
+		meshInstanceInfosBuffer->upload();
+		meshInfosBuffer->upload();
+		materialInfosBuffer->upload();
+
+		GPU::registerTextures( textures );
+
+	}
+
 	void load(const fs::path& worldPath, const GameFiles& files){
+
+		struct MeshExtInfos {
+		 BoundingBox bbox;
+		 uint object;
+		 uint material;
+		 uint indexCount;
+		 uint firstIndex;
+		 uint vertexOffset;
+
+		 MeshExtInfos(const BoundingBox& _bbox, uint _object, uint _material, uint _indexCount, uint _firstIndex, uint _vertexOffset) :
+				 bbox(_bbox), object(_object), material(_material),
+				 indexCount(_indexCount), firstIndex(_firstIndex), vertexOffset(_vertexOffset)
+			 { }
+		 };
+
 		// Load the world and setup all the GPU data.
 		world.load(worldPath, files.resourcesPath);
+		globalMesh = Mesh(worldPath.filename().replace_extension());
 
 		const size_t instanceCount = world.instances().size();
 		const size_t objectCount = world.objects().size();
-
-		struct MeshExtInfos {
-			BoundingBox bbox;
-			uint object;
-			uint material;
-			uint indexCount;
-			uint firstIndex;
-			uint vertexOffset;
-
-			MeshExtInfos(const BoundingBox& _bbox, uint _object, uint _material, uint _indexCount, uint _firstIndex, uint _vertexOffset) :
-					bbox(_bbox), object(_object), material(_material),
-					indexCount(_indexCount), firstIndex(_firstIndex), vertexOffset(_vertexOffset)
-			{ }
-		};
 
 		uint meshesCount = 0;
 		std::vector<MeshExtInfos> meshInfos;
@@ -368,6 +398,7 @@ struct WorldScene {
 		uint currentMeshIndex = 0;
 		for(const auto& instanceIndices : instancesReferencingMesh){
 
+			// TODO: do above by estimating meshesCount first.
 			const MeshExtInfos& infos = meshInfos[currentMeshIndex];
 			MeshInfos& gpuInfos = meshInfosBuffer->at(currentMeshIndex);
 			gpuInfos.bboxMin = glm::vec4(infos.bbox.minis, 1.f);
@@ -402,9 +433,10 @@ struct WorldScene {
 			std::vector<uint> textures; // Indices in textures2D
 		};
 		std::vector<TextureArrayInfos> arraysToCreate;
-		
+
+		uint materialId = 0u;
 		for(const Object::Material& material : materials){
-			const std::string textureName = material.texture.empty() ? "tex" : material.texture;
+			const std::string textureName = material.texture.empty() ? "No texture" : material.texture;
 			
 			uint mid = 0;
 			// Do we have the texture already.
@@ -439,14 +471,13 @@ struct WorldScene {
 
 			// Now that we have the 2D texture, we need to find a compatible texture array to insert it in.
 			const Texture& tex = textures2D[mid];
+			MaterialInfos& matInfos = materialInfosBuffer->at(materialId);
 
 			uint arrayIndex = 0;
 			for(TextureArrayInfos& textureArray : arraysToCreate){
-				if(textureArray.width == tex.width
-				   && textureArray.height == tex.height
-				   && textureArray.format == tex.images[0].compressedFormat){
+				if((textureArray.width == tex.width) && (textureArray.height == tex.height) && (textureArray.format == tex.images[0].compressedFormat)){
 					// We found one! update the infos.
-					materialInfosBuffer->at(mid).texture.index = arrayIndex;
+					matInfos.texture.index = arrayIndex;
 					// Is the texture already in there
 					uint localIndex = 0;
 					for(uint texId : textureArray.textures){
@@ -460,7 +491,7 @@ struct WorldScene {
 						textureArray.textures.push_back(mid);
 					}
 					// update the infos.
-					materialInfosBuffer->at(mid).texture.layer = localIndex;
+					matInfos.texture.layer = localIndex;
 					break;
 				}
 				++arrayIndex;
@@ -468,11 +499,12 @@ struct WorldScene {
 			if(arrayIndex == arraysToCreate.size()){
 				arraysToCreate.push_back({ tex.width, tex.height, tex.images[0].compressedFormat, {mid} });
 					// update the infos.
-				materialInfosBuffer->at(mid).texture.index = arrayIndex;
-				materialInfosBuffer->at(mid).texture.layer = 0;
+				matInfos.texture.index = arrayIndex;
+				matInfos.texture.layer = 0;
 			}
-			
+			++materialId;
 		}
+
 		// From the list of texture arrays, build them.
 		for(const TextureArrayInfos& arrayInfos : arraysToCreate){
 			const std::string texName = "TexArray_" + std::to_string(arrayInfos.width)
@@ -575,23 +607,20 @@ int main(int argc, char ** argv) {
 	Framebuffer fb(uint(renderingRes[0]), uint(renderingRes[1]), {Layout::RGBA8, Layout::DEPTH_COMPONENT32F}, "sceneFb");
 	std::unique_ptr<Buffer> drawCommands = nullptr;
 
-	// Data loading.
-
-	ModelScene model;
-	WorldScene world;
+	// Data storage.
+	Scene scene;
 
 	// GUi state
 	Mesh boundingBox("bbox");
 	enum class ViewerMode {
-		MODEL, WORLD
+		MODEL, AREA, WORLD
 	};
 	ViewerMode viewMode = ViewerMode::MODEL;
 	float zoomPct = 100.f;
 	glm::vec2 centerPct(50.f, 50.0f);
 	int shadingMode = MODE_SHADING_LIGHT;
 	int albedoMode = MODE_ALBEDO_TEXTURE;
-	int selectedWorld = -1;
-	int selectedModel = -1;
+	int selectedItem = -1;
 	int selectedMesh = -1;
 	int selectedTexture = -1;
 	bool showWireframe = false;
@@ -651,8 +680,8 @@ int main(int argc, char ** argv) {
 					fs::path newInstallPath;
 					if(Window::showDirectoryPicker(fs::path(""), newInstallPath)){
 						gameFiles = GameFiles( newInstallPath);
-						model = ModelScene();
-						selectedModel = -1;
+						scene = Scene();
+						selectedItem = -1;
 						selectedMesh = -1;
 						selectedTexture = -1;
 						reloaded = true;
@@ -688,9 +717,13 @@ int main(int argc, char ** argv) {
 
 			if(ImGui::BeginTabBar("#FilesTabBar")){
 
-					viewMode = ViewerMode::MODEL;
 				if(ImGui::BeginTabItem("Models")){
-					selectedWorld = -1;
+					if(viewMode != ViewerMode::MODEL){
+						selectedItem = -1;
+						selectedMesh = -1;
+						selectedTexture = -1;
+						viewMode = ViewerMode::MODEL;
+					}
 
 					const unsigned int modelsCount = (uint)gameFiles.modelsList.size();
 					ImGui::Text("Found %u models", modelsCount);
@@ -714,20 +747,21 @@ int main(int argc, char ** argv) {
 								std::string modelName = modelPath.filename().string();
 								const std::string modelParent = modelPath.parent_path().filename().string();
 
-								if(selectedModel == row){
+								if(selectedItem == row){
 									modelName = "* " + modelName;
 								}
 
-								if(ImGui::Selectable(modelName.c_str(), selectedModel == row, selectableTableFlags)){
-									if(selectedModel != row){
-										model.clean();
-										selectedModel = row;
-										model.load(modelPath, gameFiles);
-										// Compute the bounding box.
-										BoundingBox modelBox;
-										for(Mesh& mesh : model.meshes){
-											modelBox.merge(mesh.bbox);
-										}
+								if(ImGui::Selectable(modelName.c_str(), selectedItem == row, selectableTableFlags)){
+									if(selectedItem != row){
+										selectedItem = row;
+										scene.clean();
+										scene.loadDFF(modelPath, gameFiles);
+
+										const size_t meshCount = scene.meshInfosBuffer->size();
+										drawCommands = std::make_unique<Buffer>(meshCount * sizeof(GPU::DrawCommand), BufferType::INDIRECT);
+
+										// Compute the total bounding box.
+										BoundingBox modelBox = scene.globalMesh.computeBoundingBox();
 										// Center the camera.
 										const glm::vec3 center = modelBox.getCentroid();
 										const glm::vec3 extent = modelBox.getSize();
@@ -752,10 +786,13 @@ int main(int argc, char ** argv) {
 					ImGui::EndTabItem();
 				}
 
-				if(ImGui::BeginTabItem("Worlds", nullptr, ImGuiTabItemFlags_SetSelected)){
-
-					viewMode = ViewerMode::WORLD;
-					selectedModel = -1;
+				if(ImGui::BeginTabItem("Worlds", nullptr)){
+					if(viewMode != ViewerMode::WORLD){
+						selectedItem = -1;
+						selectedMesh = -1;
+						selectedTexture = -1;
+						viewMode = ViewerMode::WORLD;
+					}
 					
 					const unsigned int worldCount = (uint)gameFiles.worldsList.size();
 					ImGui::Text("Found %u worlds", worldCount);
@@ -775,16 +812,39 @@ int main(int argc, char ** argv) {
 							const fs::path& worldPath = gameFiles.worldsList[row];
 							std::string worldName = worldPath.filename().string();
 
-							if(selectedWorld == row){
+							if(selectedItem == row){
 								worldName = "* " + worldName;
 							}
 
-							if(ImGui::Selectable(worldName.c_str(), selectedWorld == row, selectableTableFlags)){
-								if(selectedWorld != row){
-									selectedWorld = row;
-									world.clean();
-									world.load(worldPath, gameFiles);
-									drawCommands = std::make_unique<Buffer>(world.meshInfosBuffer->size() * sizeof(GPU::DrawCommand), BufferType::INDIRECT);
+							if(ImGui::Selectable(worldName.c_str(), selectedItem == row, selectableTableFlags)){
+								if(selectedItem != row){
+									selectedItem = row;
+									scene.clean();
+									scene.load(worldPath, gameFiles);
+									drawCommands = std::make_unique<Buffer>(scene.meshInfosBuffer->size() * sizeof(GPU::DrawCommand), BufferType::INDIRECT);
+
+									// Compute the total bounding box.
+									BoundingBox modelBox;
+									const size_t meshCount = scene.meshInfosBuffer->size();
+									for(size_t mid = 0; mid < meshCount; ++mid){
+										const Scene::MeshInfos& infos = scene.meshInfosBuffer->at(mid);
+										const BoundingBox bbox(infos.bboxMin, infos.bboxMax);
+										for(size_t iid = 0; iid < infos.instanceCount; ++iid ){
+											const size_t iiid = infos.firstInstanceIndex + iid;
+											const glm::mat4& frame = scene.meshInstanceInfosBuffer->at(iiid).frame;
+											modelBox.merge( bbox.transformed(frame));
+										}
+									}
+									// Center the camera.
+									const glm::vec3 center = modelBox.getCentroid();
+									const glm::vec3 extent = modelBox.getSize();
+									// Keep the camera off the object.
+									const float maxExtent = glm::max(extent[0], glm::max(extent[1], extent[2]));
+									// Handle case where the object is a flat quad (leves, decals...).
+									glm::vec3 offset = std::abs(extent[0]) < 1.0f ? glm::vec3(1.0f, 0.0f, 0.0f) : glm::vec3(0.0f, 0.0f, 1.0f);
+									camera.pose(center + maxExtent * offset, center, glm::vec3(0.0, 1.0f, 0.0f));
+									selectedMesh = -1;
+									selectedTexture = -1;
 								}
 							}
 
@@ -805,8 +865,9 @@ int main(int argc, char ** argv) {
 		ImGui::End();
 
 		if(ImGui::Begin("Inspector")){
-			if(selectedModel >= 0){
-				ImGui::Text("Model: %s", gameFiles.modelsList[selectedModel].filename().string().c_str());
+			if(selectedItem >= 0){
+				const std::string itemName = scene.globalMesh.name();
+				ImGui::Text("Item: %s (%lu vertices)", itemName.c_str(), scene.globalMesh.positions.size());
 				ImGui::SameLine();
 				if(ImGui::SmallButton("Deselect")){
 					selectedMesh = -1;
@@ -818,27 +879,29 @@ int main(int argc, char ** argv) {
 					// Header
 					ImGui::TableSetupScrollFreeze(0, 1); // Make top row always visible
 					ImGui::TableSetupColumn("Name", ImGuiTableColumnFlags_None);
-					ImGui::TableSetupColumn("Vertices", ImGuiTableColumnFlags_None);
 					ImGui::TableSetupColumn("Triangles", ImGuiTableColumnFlags_None);
+					ImGui::TableSetupColumn("Material", ImGuiTableColumnFlags_None);
 					ImGui::TableHeadersRow();
 
-					const int meshCount = (int)model.meshes.size();
+					const int meshCount = (int)scene.meshInfosBuffer->size();
 					for(int row = 0; row < meshCount; ++row){
 						ImGui::TableNextColumn();
 						ImGui::PushID(row);
 
-						const Mesh& mesh = model.meshes[row];
-						std::string meshName = mesh.name();
+						std::string meshName = itemName + "_part_" + std::to_string(row);
 						if(selectedMesh == row){
 							meshName = "* " + meshName;
 						}
 
+						const Scene::MeshInfos& meshInfos = scene.meshInfosBuffer->at(row);
 						if(ImGui::Selectable(meshName.c_str(), selectedMesh == row, selectableTableFlags)){
 							if(selectedMesh != row){
 								selectedMesh = row;
+
 								// Update bbox mesh.
+								BoundingBox bbox(meshInfos.bboxMin, meshInfos.bboxMax);
 								boundingBox.clean();
-								boundingBox.positions = mesh.bbox.getCorners();
+								boundingBox.positions = bbox.getCorners();
 								boundingBox.colors.resize(boundingBox.positions.size(), glm::vec3(1.0f, 0.0f, 0.0f));
 								// Setup degenerate triangles for each line of a cube.
 								boundingBox.indices = {
@@ -847,9 +910,9 @@ int main(int argc, char ** argv) {
 							}
 						}
 						ImGui::TableNextColumn();
-						ImGui::Text("%lu", mesh.metrics().vertices);
+						ImGui::Text("%u", meshInfos.indexCount / 3u);
 						ImGui::TableNextColumn();
-						ImGui::Text("%lu", mesh.metrics().indices/3);
+						ImGui::Text("%u", meshInfos.materialIndex);
 
 						ImGui::PopID();
 					}
@@ -857,19 +920,20 @@ int main(int argc, char ** argv) {
 					ImGui::EndTable();
 				}
 
-				if(ImGui::BeginTable("#TextureList", 2, tableFlags, winSize)){
+				if(ImGui::BeginTable("#TextureList", 3, tableFlags, winSize)){
 					// Header
 					ImGui::TableSetupScrollFreeze(0, 1); // Make top row always visible
 					ImGui::TableSetupColumn("Name", ImGuiTableColumnFlags_None);
 					ImGui::TableSetupColumn("Size", ImGuiTableColumnFlags_None);
+					ImGui::TableSetupColumn("Format", ImGuiTableColumnFlags_None);
 					ImGui::TableHeadersRow();
 
-					const int texCount = (int)model.textures.size();
+					const int texCount = (int)scene.textures.size();
 					for(int row = 0; row < texCount; ++row){
 						ImGui::TableNextColumn();
 						ImGui::PushID(row);
 
-						const Texture& tex = model.textures[row];
+						const Texture& tex = scene.textures[row];
 						std::string texName = tex.name();
 						if(selectedTexture == row){
 							texName = "* " + texName;
@@ -883,6 +947,14 @@ int main(int argc, char ** argv) {
 
 						ImGui::TableNextColumn();
 						ImGui::Text("%ux%u", tex.width, tex.height);
+						ImGui::TableNextColumn();
+						static const std::unordered_map<Image::Compression, const char*> compressionNames = {
+							{ Image::Compression::NONE, "BGRA8" },
+							{ Image::Compression::BC1, "BC1/DXT1" },
+							{ Image::Compression::BC2, "BC2/DXT3" },
+							{ Image::Compression::BC3, "BC3/DXT5" },
+						};
+						ImGui::Text("%s", compressionNames.at(tex.images[0].compressedFormat));
 						ImGui::PopID();
 					}
 
@@ -909,7 +981,7 @@ int main(int argc, char ** argv) {
 				winSize.x = std::max(winSize.x, 2.f);
 				winSize.y = std::max(winSize.y, 2.f);
 
-				const Texture& tex = model.textures[selectedTexture];
+				const Texture& tex = scene.textures[selectedTexture];
 				const glm::vec2 texCenter = centerPct / 100.f;
 				const glm::vec2 texScale(100.0f / std::max(zoomPct, 1.f));
 				const glm::vec2 miniUV = texCenter - texScale * 0.5f;
@@ -993,83 +1065,71 @@ int main(int argc, char ** argv) {
 		frameInfos.upload();
 
 
+
 		fb.bind(glm::vec4(0.25f, 0.25f, 0.25f, 1.0f), 1.0f, LoadOperation::DONTCARE);
 
-		if(viewMode == ViewerMode::MODEL){
-			fb.bind(LoadOperation::LOAD, LoadOperation::LOAD, LoadOperation::DONTCARE);
+		if(selectedItem >= 0){
+
+
+			// Populate drawCommands by using a compute shader (that will later perform culling).
+			drawArgsCompute->use();
+			drawArgsCompute->buffer(frameInfos, 0);
+			drawArgsCompute->buffer(*scene.meshInfosBuffer, 1);
+			drawArgsCompute->buffer(*scene.meshInstanceInfosBuffer, 2);
+			drawArgsCompute->buffer(*drawCommands, 3);
+			GPU::dispatch((uint)scene.meshInfosBuffer->size(), 1, 1);
+
+			fb.bind(glm::vec4(0.25f, 0.25f, 0.25f, 1.0f), 1.0f, LoadOperation::DONTCARE);
 			GPU::setViewport(0, 0, fb.width(), fb.height());
-
-			GPU::setPolygonState(PolygonMode::FILL);
-			GPU::setDepthState(true, TestFunction::LESS, true);
-			GPU::setBlendState(false);
-			GPU::setCullState(true);
-
-			texturedObject->use();
-			texturedObject->buffer(frameInfos, 0);
-
-			for(unsigned int i = 0; i < model.meshes.size(); ++i){
-				texturedObject->texture(model.textures[model.meshToTextures[i]], 0);
-				GPU::drawMesh(model.meshes[i]);
-			}
-
-			if(showWireframe){
-				// Temporarily force the mode.
-				frameInfos.at(0).shadingMode = MODE_SHADING_NONE;
-				frameInfos.at(0).albedoMode = MODE_ALBEDO_UNIFORM;
-				frameInfos.upload();
-
-				texturedObject->use();
-				texturedObject->buffer(frameInfos, 0);
-				GPU::setPolygonState(PolygonMode::LINE);
-				for(unsigned int i = 0; i < model.meshes.size(); ++i){
-					if(selectedMesh == -1 || selectedMesh == (int)i){
-						GPU::drawMesh(model.meshes[i]);
-					}
-				}
-			}
 
 			if(selectedMesh >= 0){
 				coloredObject->use();
 				coloredObject->buffer(frameInfos, 0);
 				GPU::setPolygonState(PolygonMode::LINE);
 				GPU::setCullState(false);
-				GPU::drawMesh(boundingBox);
-			}
-		} else {
-
-			if(selectedWorld >= 0){
-				// Populate drawCommands by using a compute shader (that will later perform culling).
-				drawArgsCompute->use();
-				drawArgsCompute->buffer(frameInfos, 0);
-				drawArgsCompute->buffer(*world.meshInfosBuffer, 1);
-				drawArgsCompute->buffer(*world.meshInstanceInfosBuffer, 2);
-				drawArgsCompute->buffer(*drawCommands, 3);
-				GPU::dispatch((uint)world.meshInfosBuffer->size(), 1, 1);
-
-				fb.bind(LoadOperation::LOAD, LoadOperation::LOAD, LoadOperation::DONTCARE);
-				GPU::setViewport(0, 0, fb.width(), fb.height());
-				GPU::setPolygonState(PolygonMode::FILL);
 				GPU::setDepthState(true, TestFunction::LESS, true);
 				GPU::setBlendState(false);
-				GPU::setCullState(true);
-
-				texturedInstancedObject->use();
-				texturedInstancedObject->buffer(frameInfos, 0);
-				texturedInstancedObject->buffer(*world.meshInfosBuffer, 1);
-				texturedInstancedObject->buffer( *world.meshInstanceInfosBuffer, 2 );
-				texturedInstancedObject->buffer( *world.materialInfosBuffer, 3 );
-
-				GPU::drawIndirectMesh(world.globalMesh, *drawCommands);
+				GPU::drawMesh(boundingBox);
 			}
 
-	 }
+			GPU::setPolygonState(PolygonMode::FILL);
+			GPU::setCullState(true);
+			GPU::setDepthState(true, TestFunction::LESS, true);
+			GPU::setBlendState(false);
 
+			texturedInstancedObject->use();
+			texturedInstancedObject->buffer(frameInfos, 0);
+			texturedInstancedObject->buffer(*scene.meshInfosBuffer, 1);
+			texturedInstancedObject->buffer( *scene.meshInstanceInfosBuffer, 2 );
+			texturedInstancedObject->buffer( *scene.materialInfosBuffer, 3 );
+
+			GPU::drawIndirectMesh(scene.globalMesh, *drawCommands);
+
+
+			//if(showWireframe){
+				// Temporarily force the mode.
+//				frameInfos.at(0).shadingMode = MODE_SHADING_NONE;
+//				frameInfos.at(0).albedoMode = MODE_ALBEDO_UNIFORM;
+//				frameInfos.upload();
+//
+//				texturedObject->use();
+//				texturedObject->buffer(frameInfos, 0);
+//				GPU::setPolygonState(PolygonMode::LINE);
+//				for(unsigned int i = 0; i < model.meshes.size(); ++i){
+//					if(selectedMesh == -1 || selectedMesh == (int)i){
+//						GPU::drawMesh(model.meshes[i]);
+//					}
+//				}
+	//		}
+
+
+		}
 
 		Framebuffer::backbuffer()->bind(glm::vec4(0.2f, 0.2f, 0.2f, 1.0f), LoadOperation::DONTCARE, LoadOperation::DONTCARE);
 
 	}
 
-	model.clean();
+	scene.clean();
 	for(Program* program : programPool){
 		program->clean();
 		delete program;
