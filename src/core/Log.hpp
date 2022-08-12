@@ -10,7 +10,7 @@ void warning(const char* format, ...);
 
 void error(const char* format, ...);
 
-void check(bool value, const char* format, ...);
+bool check(bool value, const char* format, ...);
 
 }
 

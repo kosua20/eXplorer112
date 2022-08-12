@@ -59,7 +59,7 @@ void Log::error(const char* format, ...){
 	fflush(stderr);
 }
 
-void Log::check(bool value, const char* format, ...){
+bool Log::check(bool value, const char* format, ...){
 	if(!value){
 
 		fprintf(stderr, "Check  : Failed: ");
@@ -74,4 +74,5 @@ void Log::check(bool value, const char* format, ...){
 
 	}
 	assert(value);
+	return !value;
 }
