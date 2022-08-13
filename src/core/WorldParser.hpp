@@ -9,12 +9,18 @@ class World {
 
 public:
 
+	World();
+
+	World(const Object& object);
+
 	struct Instance {
 		glm::mat4 frame;
+		std::string name;
 		uint object;
 
-		Instance(uint _object, const glm::mat4& _frame);
+		Instance(const std::string& _name, uint _object, const glm::mat4& _frame);
 	};
+
 
 	bool load(const fs::path& path, const fs::path& resourcesPath);
 
@@ -24,9 +30,9 @@ public:
 	
 	const std::vector<Object::Material>& materials() const {  return _materials; };
 
+	const std::string& name() const{ return _name; };
 
 private:
-
 
 	using ObjectReferenceList = std::map<fs::path, uint>;
 	
@@ -35,5 +41,6 @@ private:
 	std::vector<Object> _objects;
 	std::vector<Instance> _instances;
 	std::vector<Object::Material> _materials;
+	std::string _name;
 
 };

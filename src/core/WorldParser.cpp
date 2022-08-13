@@ -8,8 +8,50 @@
 #include <glm/gtx/euler_angles.hpp>
 #include <unordered_map>
 
-World::Instance::Instance(uint _object, const glm::mat4& _frame) : frame(_frame), object(_object){
 
+#define LOG_WORLD_LOADING
+
+World::Instance::Instance(const std::string& _name, uint _object, const glm::mat4& _frame) :
+	frame(_frame), name(_name), object(_object){
+
+}
+
+
+World::World() {
+
+};
+
+World::World(const Object& object){
+	_name = object.name;
+	_objects.push_back(object);
+	Object& localObject = _objects.back();
+	_materials = localObject.materials;
+	localObject.materials.clear();
+
+	const size_t posCount = localObject.positions.size();
+	if(localObject.uvs.empty()){
+		localObject.uvs.resize(posCount, glm::vec2(0.5f));
+
+		for(Object::Set& set : localObject.faceSets){
+			for(Object::Set::Face& f : set.faces){
+				f.t0 = f.v0;
+				f.t1 = f.v1;
+				f.t2 = f.v2;
+			}
+		}
+	}
+	if(localObject.normals.empty()){
+		localObject.normals.resize(posCount, glm::vec3(0.0f, 0.0f, 1.0f));
+		for(Object::Set& set : localObject.faceSets){
+			for(Object::Set::Face& f : set.faces){
+				f.n0 = f.v0;
+				f.n1 = f.v1;
+				f.n2 = f.v2;
+			}
+		}
+	}
+
+	_instances.emplace_back(object.name, 0, glm::mat4(1.0f));
 }
 
 bool isEntityVisible(const pugi::xml_node& entity){
@@ -116,10 +158,11 @@ void World::processEntity(const pugi::xml_node& entity, const glm::mat4& globalF
 		const uint objCount = (uint)objectRefs.size();
 		objectRefs[objPath] = objCount;
 	}
-	_instances.emplace_back(objectRefs[objPath], frame);
+	_instances.emplace_back(objName, objectRefs[objPath], frame);
 
+#ifdef LOG_WORLD_LOADING
 	Log::info("Actor: %s", objName);
-
+#endif
 	//Log::info("Actor: %s, rot: (%f %f %f), model: %s, visible: %s", objName, rotAngles[0], rotAngles[1], rotAngles[2], modelName.c_str(), visible ? "yes" : "no");
 
 }
@@ -133,6 +176,8 @@ bool World::load(const fs::path& path, const fs::path& resourcePath){
 		return false;
 	}
 
+	_name = path.filename().replace_extension().string();
+	
 	ObjectReferenceList referencedObjects;
 
 	/// Instances parsing.
@@ -174,7 +219,9 @@ bool World::load(const fs::path& path, const fs::path& resourcePath){
 	for(const auto& objRef : referencedObjects){
 		const fs::path objPath = resourcePath / objRef.first;
 		const std::string modelName = objPath.filename().replace_extension().string();
+#ifdef LOG_WORLD_LOADING
 		Log::info("Retrieving model %s", modelName.c_str());
+#endif
 		Dff::load(objPath, _objects[objRef.second]);
 	}
 
@@ -190,14 +237,15 @@ bool World::load(const fs::path& path, const fs::path& resourcePath){
 
 		const fs::path areaPath = resourcePath / areaPathStrUp;
 		const std::string areaName = areaPath.filename().replace_extension().string();
+#ifdef LOG_WORLD_LOADING
 		Log::info("Area: %s", areaName.c_str());
-
+#endif
 		if(!Area::load(areaPath, _objects.emplace_back())){
 			_objects.pop_back();
 			continue;
 		}
 
-		_instances.emplace_back(_objects.size()-1, glm::mat4(1.0f));
+		_instances.emplace_back(areaName, _objects.size()-1, glm::mat4(1.0f));
 	}
 
 	/// Empty objects cleanup.
