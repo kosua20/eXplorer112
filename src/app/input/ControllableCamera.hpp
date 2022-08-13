@@ -19,7 +19,7 @@ public:
 	};
 
 	/// Constructor
-	ControllableCamera();
+	ControllableCamera(Mode mode = Mode::FPS);
 
 	/** Update all view parameters
 	 \param position the camera position

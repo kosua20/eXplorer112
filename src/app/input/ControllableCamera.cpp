@@ -2,7 +2,7 @@
 #include "input/Input.hpp"
 #include <imgui/imgui.h>
 
-ControllableCamera::ControllableCamera() {
+ControllableCamera::ControllableCamera(Mode mode) : _mode(mode) {
 	reset();
 }
 

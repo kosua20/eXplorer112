@@ -48,8 +48,8 @@ struct FrameData {
 	glm::mat4 ivp{1.0f};
 	glm::vec4 color{1.0f};
 	// Shading settings.
-	int shadingMode = 0;
-	int albedoMode = 0;
+	uint shadingMode = 0;
+	uint albedoMode = 0;
 	// Selection data.
 	int selectedMesh = -1;
 	int selectedInstance= -1;
@@ -151,7 +151,7 @@ int main(int argc, char ** argv) {
 	double timer = Input::getTime();
 	double remainingTime = 0;
 
-	ControllableCamera camera;
+	ControllableCamera camera(ControllableCamera::Mode::FPS);
 	camera.speed() = 100.0f;
 	camera.projection(config.screenResolution[0] / config.screenResolution[1], glm::pi<float>() * 0.4f, 10.f, 10000.0f);
 	camera.pose(glm::vec3(0.0f, 0.0f, 100.0f), glm::vec3(0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
