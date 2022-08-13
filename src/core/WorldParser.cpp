@@ -9,7 +9,7 @@
 #include <unordered_map>
 
 
-#define LOG_WORLD_LOADING
+//#define LOG_WORLD_LOADING
 
 World::Instance::Instance(const std::string& _name, uint _object, const glm::mat4& _frame) :
 	frame(_frame), name(_name), object(_object){

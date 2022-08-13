@@ -288,173 +288,82 @@ int main(int argc, char ** argv) {
 
 			if(ImGui::BeginTabBar("#FilesTabBar")){
 
-				if(ImGui::BeginTabItem("Models")){
-					if(viewMode != ViewerMode::MODEL){
-						deselect(frameInfos[0], selected, SelectionFilter::ALL);
-						viewMode = ViewerMode::MODEL;
-					}
+				struct TabSettings {
+					const char* title;
+					const char* names;
+					const std::vector<fs::path>* files;
+					ViewerMode mode;
+					void (Scene::*load) (const fs::path& filePath, const GameFiles& );
+				};
 
-					const unsigned int modelsCount = (uint)gameFiles.modelsList.size();
-					ImGui::Text("Found %u models", modelsCount);
+				const std::vector<TabSettings> tabSettings = {
+					{ "Models", "models", &gameFiles.modelsList, ViewerMode::MODEL, &Scene::loadFile},
+					{ "Areas", "areas", &gameFiles.areasList, ViewerMode::AREA, &Scene::loadFile},
+					{ "Worlds", "worlds", &gameFiles.worldsList, ViewerMode::WORLD, &Scene::load},
+				};
 
-					if(ImGui::BeginTable("#ModelsTable", 2, tableFlags)){
-						// Header
-						ImGui::TableSetupScrollFreeze(0, 1); // Make top row always visible
-						ImGui::TableSetupColumn("Name", ImGuiTableColumnFlags_None);
-						ImGui::TableSetupColumn("Directory", ImGuiTableColumnFlags_None);
-						ImGui::TableHeadersRow();
+				for(const TabSettings& tab : tabSettings){
 
-						ImGuiListClipper clipper;
-						clipper.Begin(modelsCount);
-						while (clipper.Step()) {
-							for (int row = clipper.DisplayStart; row < clipper.DisplayEnd; row++){
-								ImGui::PushID(row);
-								ImGui::TableNextColumn();
+					if(ImGui::BeginTabItem(tab.title)){
+						if(viewMode != tab.mode){
+							deselect(frameInfos[0], selected, SelectionFilter::ALL);
+							viewMode = tab.mode;
+						}
 
-								const fs::path& modelPath = gameFiles.modelsList[row];
-								std::string modelName = modelPath.filename().string();
-								const std::string modelParent = modelPath.parent_path().filename().string();
+						const unsigned int itemsCount = (uint)(*tab.files).size();
+						ImGui::Text("Found %u %s", itemsCount, tab.names);
 
-								if(selected.item == row){
-									modelName = "* " + modelName;
-								}
+						if(ImGui::BeginTable("Table", 2, tableFlags)){
+							// Header
+							ImGui::TableSetupScrollFreeze(0, 1); // Make top row always visible
+							ImGui::TableSetupColumn("Name", ImGuiTableColumnFlags_None);
+							ImGui::TableSetupColumn("Directory", ImGuiTableColumnFlags_None);
+							ImGui::TableHeadersRow();
 
-								if(ImGui::Selectable(modelName.c_str(), selected.item == row, selectableTableFlags)){
-									if(selected.item != row){
-										selected.item = row;
-										scene.loadFile(modelPath, gameFiles);
-										// Allocate commands buffer.
-										const size_t meshCount = scene.meshInfos->size();
-										drawCommands = std::make_unique<Buffer>(meshCount * sizeof(GPU::DrawCommand), BufferType::INDIRECT);
-										// Center camera
-										adjustCameraToBoundingBox(camera, scene.computeBoundingBox());
-										deselect(frameInfos[0], selected, (SelectionFilter)(OBJECT | TEXTURE));
+							ImGuiListClipper clipper;
+							clipper.Begin(itemsCount);
+							while (clipper.Step()) {
+								for (int row = clipper.DisplayStart; row < clipper.DisplayEnd; row++){
+									ImGui::PushID(row);
+									ImGui::TableNextColumn();
+
+									const fs::path& itemPath = (*tab.files)[row];
+									std::string itemName = itemPath.filename().string();
+									// Log two levels of hierarchy.
+									const fs::path& parentPath = itemPath.parent_path();
+									std::string itemParent = parentPath.parent_path().filename().string();
+									itemParent += "/" + parentPath.filename().string();
+
+									if(selected.item == row){
+										itemName = "* " + itemName;
 									}
-								}
-								ImGui::TableNextColumn();
-								ImGui::Text("%s", modelParent.c_str());
 
-								ImGui::PopID();
-							}
-						}
+									if(ImGui::Selectable(itemName.c_str(), selected.item == row, selectableTableFlags)){
+										if(selected.item != row){
+											selected.item = row;
 
-						ImGui::EndTable();
-					}
-					ImGui::EndTabItem();
-				}
-
-				if(ImGui::BeginTabItem("Areas")){
-					if(viewMode != ViewerMode::AREA){
-						deselect(frameInfos[0], selected, SelectionFilter::ALL);
-						viewMode = ViewerMode::AREA;
-					}
-
-					const unsigned int itemsCount = (uint)gameFiles.areasList.size();
-					ImGui::Text("Found %u areas", itemsCount);
-
-					if(ImGui::BeginTable("#AreasTable", 2, tableFlags)){
-						// Header
-						ImGui::TableSetupScrollFreeze(0, 1); // Make top row always visible
-						ImGui::TableSetupColumn("Name", ImGuiTableColumnFlags_None);
-						ImGui::TableSetupColumn("Directory", ImGuiTableColumnFlags_None);
-						ImGui::TableHeadersRow();
-
-						ImGuiListClipper clipper;
-						clipper.Begin(itemsCount);
-						while (clipper.Step()) {
-							for (int row = clipper.DisplayStart; row < clipper.DisplayEnd; row++){
-								ImGui::PushID(row);
-								ImGui::TableNextColumn();
-
-								const fs::path& itemPath = gameFiles.areasList[row];
-								std::string itemName = itemPath.filename().string();
-								// Log two levels of hierarchy.
-								const fs::path& parentPath = itemPath.parent_path();
-								std::string itemParent = parentPath.parent_path().filename().string();
-								itemParent += "/" + parentPath.filename().string();
-
-								if(selected.item == row){
-									itemName = "* " + itemName;
-								}
-
-								if(ImGui::Selectable(itemName.c_str(), selected.item == row, selectableTableFlags)){
-									if(selected.item != row){
-										selected.item = row;
-										scene.loadFile(itemPath, gameFiles);
-										// Allocate commands buffer.
-										const size_t meshCount = scene.meshInfos->size();
-										drawCommands = std::make_unique<Buffer>(meshCount * sizeof(GPU::DrawCommand), BufferType::INDIRECT);
-										// Center camera
-										adjustCameraToBoundingBox(camera, scene.computeBoundingBox());
-										deselect(frameInfos[0], selected, (SelectionFilter)(OBJECT | TEXTURE));
+											(scene.*tab.load)(itemPath, gameFiles);
+											// Allocate commands buffer.
+											const size_t meshCount = scene.meshInfos->size();
+											drawCommands = std::make_unique<Buffer>(meshCount * sizeof(GPU::DrawCommand), BufferType::INDIRECT);
+											// Center camera
+											adjustCameraToBoundingBox(camera, scene.computeBoundingBox());
+											deselect(frameInfos[0], selected, (SelectionFilter)(OBJECT | TEXTURE));
+										}
 									}
-								}
-								ImGui::TableNextColumn();
-								ImGui::Text("%s", itemParent.c_str());
+									ImGui::TableNextColumn();
+									ImGui::Text("%s", itemParent.c_str());
 
-								ImGui::PopID();
-							}
-						}
-
-						ImGui::EndTable();
-					}
-					ImGui::EndTabItem();
-				}
-
-				if(ImGui::BeginTabItem("Worlds", nullptr)){
-					if(viewMode != ViewerMode::WORLD){
-						deselect(frameInfos[0], selected, SelectionFilter::ALL);
-						viewMode = ViewerMode::WORLD;
-					}
-					
-					const unsigned int worldCount = (uint)gameFiles.worldsList.size();
-					ImGui::Text("Found %u worlds", worldCount);
-
-					if(ImGui::BeginTable("#WorldsTable", 2, tableFlags)){
-						// Header
-						ImGui::TableSetupScrollFreeze(0, 1); // Make top row always visible
-						ImGui::TableSetupColumn("Name", ImGuiTableColumnFlags_None);
-						ImGui::TableSetupColumn("Directory", ImGuiTableColumnFlags_None);
-						ImGui::TableHeadersRow();
-
-						for(int row = 0; row < (int)worldCount; row++){
-							ImGui::PushID(row);
-							ImGui::TableNextColumn();
-
-
-							const fs::path& worldPath = gameFiles.worldsList[row];
-							std::string worldName = worldPath.filename().string();
-
-							if(selected.item == row){
-								worldName = "* " + worldName;
-							}
-
-							if(ImGui::Selectable(worldName.c_str(), selected.item == row, selectableTableFlags)){
-								if(selected.item != row){
-									selected.item = row;
-									scene.load(worldPath, gameFiles);
-									// Allocate commands buffer.
-									const size_t meshCount = scene.meshInfos->size();
-									drawCommands = std::make_unique<Buffer>(meshCount * sizeof(GPU::DrawCommand), BufferType::INDIRECT);
-									// Center camera
-									adjustCameraToBoundingBox(camera, scene.computeBoundingBox());
-									deselect(frameInfos[0], selected, (SelectionFilter)(OBJECT | TEXTURE));
+									ImGui::PopID();
 								}
 							}
-
-							ImGui::TableNextColumn();
-							ImGui::Text("");
-
-							ImGui::PopID();
+							ImGui::EndTable();
 						}
-
-						ImGui::EndTable();
+						ImGui::EndTabItem();
 					}
-					ImGui::EndTabItem();
 				}
 				ImGui::EndTabBar();
 			}
-
 		}
 		ImGui::End();
 
