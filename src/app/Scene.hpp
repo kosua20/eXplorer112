@@ -4,6 +4,7 @@
 #include "core/TextUtilities.hpp"
 #include "core/Common.hpp"
 #include "core/Geometry.hpp"
+#include "core/WorldParser.hpp"
 
 #include "resources/Texture.hpp"
 #include "resources/Mesh.hpp"
@@ -35,8 +36,6 @@ class Scene {
 public:
 
 	struct MeshInfos {
-		glm::vec4 bboxMin;
-		glm::vec4 bboxMax;
 		uint indexCount;
 		uint instanceCount;
 		uint firstIndex;
@@ -60,6 +59,20 @@ public:
 		TextureInfos texture;
 	};
 
+	// CPU data.
+	struct MeshCPUInfos {
+		std::string name;
+		BoundingBox bbox;
+	};
+	struct InstanceCPUInfos {
+		std::string name;
+		BoundingBox bbox;
+	};
+	struct TextureCPUInfos {
+		std::string name;
+		TextureInfos data;
+	};
+
 public:
 
 	void clean();
@@ -68,13 +81,30 @@ public:
 
 	void load(const fs::path& worldPath, const GameFiles& files);
 
+	BoundingBox computeBoundingBox() const;
+
+private:
+
+	struct TextureArrayInfos {
+		uint width = 0;
+		uint height = 0;
+		Image::Compression format = Image::Compression::NONE;
+		std::vector<uint> textures;
+	};
+
+	void upload(const World& world, const GameFiles& files);
+	
 public:
 
 	Mesh globalMesh{"None"};
 	std::vector<Texture> textures;
 
-	std::unique_ptr<StructuredBuffer<MeshInfos>> meshInfosBuffer;
-	std::unique_ptr<StructuredBuffer<MeshInstanceInfos>> meshInstanceInfosBuffer;
-	std::unique_ptr<StructuredBuffer<MaterialInfos>> materialInfosBuffer;
+	std::unique_ptr<StructuredBuffer<MeshInfos>> meshInfos;
+	std::unique_ptr<StructuredBuffer<MeshInstanceInfos>> instanceInfos;
+	std::unique_ptr<StructuredBuffer<MaterialInfos>> materialInfos;
+
+	std::vector<MeshCPUInfos> meshDebugInfos;
+	std::vector<InstanceCPUInfos> instanceDebugInfos;
+	std::vector<TextureCPUInfos> textureDebugInfos;
 
 };
