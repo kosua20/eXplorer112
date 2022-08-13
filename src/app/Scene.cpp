@@ -315,7 +315,7 @@ void Scene::upload(const World& world, const GameFiles& files){
 
 void Scene::load(const fs::path& worldPath, const GameFiles& files){
 	
-	World world;
+	world = World();
 	world.load(worldPath, files.resourcesPath);
 	upload(world, files);
 
@@ -338,8 +338,8 @@ void Scene::loadFile(const fs::path& filePath, const GameFiles& files){
 		return;
 	}
 
-	World fakeWorld(obj);
-	upload(fakeWorld, files);
+	world = World(obj);
+	upload(world, files);
 
 }
 

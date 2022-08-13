@@ -15,7 +15,10 @@ World::Instance::Instance(const std::string& _name, uint _object, const glm::mat
 	frame(_frame), name(_name), object(_object){
 
 }
+World::Camera::Camera(const std::string& _name, const glm::mat4& _frame) :
+	frame(_frame), name(_name){
 
+}
 
 World::World() {
 
@@ -95,6 +98,8 @@ void World::processEntity(const pugi::xml_node& entity, const glm::mat4& globalF
 		return;
 	}
 
+	// If there is a model, retrieve it.
+	const char* objName = entity.find_child_by_attribute("name", "name").child_value();
 	// Application of the frame on templates is weird.
 	// It seems the template frame takes priority. Maybe it's the delta from the template frame to the first sub-element frame that should be used on other elements?
 	glm::mat4 localFrame = getEntityFrame(entity);
@@ -125,10 +130,10 @@ void World::processEntity(const pugi::xml_node& entity, const glm::mat4& globalF
 		glm::mat4 mdlFrame = glm::rotate(glm::mat4(1.0f), cam2DRot[1], glm::vec3(0.0f, 1.0f, 0.0f));
 		mdlFrame = glm::rotate(mdlFrame, cam2DRot[0], glm::vec3(glm::transpose(mdlFrame)[0]));
 		frame = frame * mdlFrame;
+		// Store the camera
+		_cameras.emplace_back(std::string(objName ? objName : "Unknown camera"), frame);
 	}
 
-	// If there is a model, retrieve it.
-	const char* objName = entity.find_child_by_attribute("name", "name").child_value();
 	const char* objPathStr = entity.find_child_by_attribute("name", "sourceName").child_value();
 	// Camera model has a few options including  default fallback.
 	if(strcmp(type, "CAMERA") == 0){

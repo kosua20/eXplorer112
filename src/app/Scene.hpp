@@ -98,6 +98,8 @@ private:
 	
 public:
 
+	World world;
+
 	Mesh globalMesh{"None"};
 	std::vector<Texture> textures;
 
