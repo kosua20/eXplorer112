@@ -196,7 +196,9 @@ int main(int argc, char ** argv) {
 	int shadingMode = MODE_SHADING_LIGHT;
 	int albedoMode = MODE_ALBEDO_TEXTURE;
 	SelectionState selected;
-
+	bool showDecals = true;
+	bool showTransparents = true;
+	bool showOpaques = true;
 
 	bool showWireframe = false;
 #ifdef DEBUG
@@ -608,6 +610,12 @@ int main(int argc, char ** argv) {
 			ImGui::RadioButton("Normal", &albedoMode, MODE_ALBEDO_NORMAL); ImGui::SameLine();
 			ImGui::RadioButton("Texture", &albedoMode, MODE_ALBEDO_TEXTURE);
 
+			ImGui::Checkbox("Opaques", &showOpaques);
+			ImGui::SameLine();
+			ImGui::Checkbox("Decals", &showDecals);
+			ImGui::SameLine();
+			ImGui::Checkbox("Transparents", &showTransparents);
+
 			ImGui::Checkbox("Wireframe", &showWireframe);
 			ImGui::Separator();
 
@@ -648,13 +656,12 @@ int main(int argc, char ** argv) {
 		/// Rendering.
 		const glm::mat4 vp		   = camera.projection() * camera.view();
 
-		frameInfos.at(0).vp = vp;
-		frameInfos.at(0).ivp = glm::transpose(glm::inverse(vp));
-		frameInfos.at(0).color = glm::vec4(1.0f);
-		frameInfos.at(0).albedoMode = albedoMode;
-		frameInfos.at(0).shadingMode = shadingMode;
+		frameInfos[0].vp = vp;
+		frameInfos[0].ivp = glm::transpose(glm::inverse(vp));
+		frameInfos[0].color = glm::vec4(1.0f);
+		frameInfos[0].albedoMode = albedoMode;
+		frameInfos[0].shadingMode = shadingMode;
 		frameInfos.upload();
-
 		fb.bind(glm::vec4(0.25f, 0.25f, 0.25f, 1.0f), 1.0f, LoadOperation::DONTCARE);
 
 		if(selected.item >= 0){
@@ -684,6 +691,7 @@ int main(int argc, char ** argv) {
 			GPU::setCullState(true);
 			GPU::setDepthState(true, TestFunction::LESS, true);
 			GPU::setBlendState(false);
+			GPU::setColorState(true, true, true, false);
 
 			texturedInstancedObject->use();
 			texturedInstancedObject->buffer(frameInfos, 0);
@@ -691,9 +699,29 @@ int main(int argc, char ** argv) {
 			texturedInstancedObject->buffer(*scene.instanceInfos, 2);
 			texturedInstancedObject->buffer(*scene.materialInfos, 3);
 
-			GPU::drawIndirectMesh(scene.globalMesh, *drawCommands);
+			if(showOpaques){
+					GPU::drawIndirectMesh(scene.globalMesh, *drawCommands, mid);
+			}
 
+			// Render decals on top with specific blending mode.
+			if(showDecals){
+				// Decal textures seem to have no alpha channel at all. White is used for background. Use min blending.
+				// Alternative possibility: src * dst, but this makes some decals appear as black squares.
+				GPU::setDepthState(true, TestFunction::LEQUAL, false);
+				GPU::setCullState(true);
+				GPU::setBlendState(true, BlendEquation::MIN, BlendFunction::ONE, BlendFunction::ONE);
+					GPU::drawIndirectMesh(scene.globalMesh, *drawCommands, mid);
+			}
 
+			if(showTransparents){
+				// Alternative possibility: min(src, dst), but this makes decals less visible.
+				GPU::setDepthState(true, TestFunction::LEQUAL, false);
+				GPU::setCullState(false);
+				GPU::setBlendState(true, BlendEquation::ADD, BlendFunction::ONE, BlendFunction::ONE);
+					GPU::drawIndirectMesh(scene.globalMesh, *drawCommands, mid);
+			}
+
+			// Debug view.
 			if(showWireframe){
 
 				GPU::setPolygonState(PolygonMode::LINE);

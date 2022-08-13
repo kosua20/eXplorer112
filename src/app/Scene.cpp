@@ -226,6 +226,7 @@ void Scene::upload(const World& world, const GameFiles& files){
 			// Now that we have the 2D texture, we need to find a compatible texture array to insert it in.
 			const Texture& tex = textures2D[tid];
 			MaterialInfos& matInfos = (*materialInfos)[materialId];
+			matInfos.type = uint(material.type);
 
 			uint arrayIndex = 0;
 			for(TextureArrayInfos& textureArray : arraysToCreate){

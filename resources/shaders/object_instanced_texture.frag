@@ -35,17 +35,26 @@ void main(){
 		shading += 0.1;
 	}
 
-	vec3 albedo = engine.color.rgb;
+	vec4 albedo = engine.color;
+
 	if(engine.albedoMode == MODE_ALBEDO_TEXTURE){
 		MaterialInfos material =  materialInfos[meshInfos[DrawIndex].materialIndex];
 		vec4 color = texture(sampler2DArray(textures[material.texture.index], sRepeatLinearLinear), vec3(In.uv,material.texture.layer) );
 		if(color.a < 0.05){
 			discard;
 		}
-		albedo = color.rgb;
+		albedo = color;
+
+		// Make decals more visible
+		if(material.type == MATERIAL_DECAL){
+			albedo.rgb *= 0.5;
+		}
+
 	} else if(engine.albedoMode == MODE_ALBEDO_NORMAL){
-		albedo = normalize(In.n) * 0.5 + 0.5;
+		albedo.rgb = normalize(In.n) * 0.5 + 0.5;
+		albedo.a = 1.0;
 	}
 
-	fragColor = vec4(shading * albedo, 1.0);
+
+	fragColor = vec4(shading * albedo.rgb, albedo.a);
 }

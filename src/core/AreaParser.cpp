@@ -145,15 +145,16 @@ bool load(const fs::path& path, Object& outObject){
 		frame = areaFrame * frame;
 		const glm::mat3 frameNormal = glm::transpose(glm::inverse(glm::mat3(frame)));
 
-		// Skip some objects
+		// Skip some objects, determine type.
+		Object::Material::Type materialType = Object::Material::OPAQUE;
 		const auto userData = group.child("userdata").find_child_by_attribute("name", "3dsmax User Properties");
 		if(userData){
 			const char* userType = userData.child_value();
 			// Skipd decals for now (TODO: extract decals)
 			if(strcmp(userType, "\"decal\"") == 0){
-				continue;
+				materialType = Object::Material::DECAL;
 			} else if(strcmp(userType, "\"transparent\"") == 0){
-				continue;
+				materialType = Object::Material::TRANSPARENT;
 			} else if(strstr(userType, "\"portal") != nullptr){
 				// Skip physics/sound/visibility portals
 				continue;
@@ -228,6 +229,7 @@ bool load(const fs::path& path, Object& outObject){
 				if(shader.index < 0){
 					shader.index = outObject.materials.size();
 					outObject.materials.push_back(shader.material);
+					outObject.materials.back().type = materialType;
 				}
 
 				Object::Set& set = outObject.faceSets.emplace_back();

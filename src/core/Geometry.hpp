@@ -36,11 +36,17 @@ struct Object {
 	};
 
 	struct Material {
+
+		enum Type : uint {
+			OPAQUE = 0u, DECAL = 1u, TRANSPARENT = 2u
+		};
+
 		// For now, only diffuse texture.
 		std::string texture;
+		Type type = OPAQUE;
 
 		bool operator ==(const Material& b){
-			return this->texture == b.texture;
+			return texture == b.texture && type == b.type;
 		}
 	};
 

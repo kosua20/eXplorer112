@@ -57,6 +57,8 @@ public:
 
 	struct MaterialInfos {
 		TextureInfos texture;
+		uint type;
+		uint pad0, pad1, pad2;
 	};
 
 	// CPU data.
