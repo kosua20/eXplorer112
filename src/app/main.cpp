@@ -700,7 +700,13 @@ int main(int argc, char ** argv) {
 			texturedInstancedObject->buffer(*scene.materialInfos, 3);
 
 			if(showOpaques){
+				for(uint mid = 0; mid < scene.meshInfos->size(); ++mid){
+					const uint materialIndex = (*scene.meshInfos)[mid].materialIndex;
+					if((*scene.materialInfos)[materialIndex].type != Object::Material::OPAQUE){
+						continue;
+					}
 					GPU::drawIndirectMesh(scene.globalMesh, *drawCommands, mid);
+				}
 			}
 
 			// Render decals on top with specific blending mode.
@@ -710,7 +716,13 @@ int main(int argc, char ** argv) {
 				GPU::setDepthState(true, TestFunction::LEQUAL, false);
 				GPU::setCullState(true);
 				GPU::setBlendState(true, BlendEquation::MIN, BlendFunction::ONE, BlendFunction::ONE);
+				for(uint mid = 0; mid < scene.meshInfos->size(); ++mid){
+					const uint materialIndex = (*scene.meshInfos)[mid].materialIndex;
+					if((*scene.materialInfos)[materialIndex].type != Object::Material::DECAL){
+						continue;
+					}
 					GPU::drawIndirectMesh(scene.globalMesh, *drawCommands, mid);
+				}
 			}
 
 			if(showTransparents){
@@ -718,7 +730,13 @@ int main(int argc, char ** argv) {
 				GPU::setDepthState(true, TestFunction::LEQUAL, false);
 				GPU::setCullState(false);
 				GPU::setBlendState(true, BlendEquation::ADD, BlendFunction::ONE, BlendFunction::ONE);
+				for(uint mid = 0; mid < scene.meshInfos->size(); ++mid){
+					const uint materialIndex = (*scene.meshInfos)[mid].materialIndex;
+					if((*scene.materialInfos)[materialIndex].type != Object::Material::TRANSPARENT){
+						continue;
+					}
 					GPU::drawIndirectMesh(scene.globalMesh, *drawCommands, mid);
+				}
 			}
 
 			// Debug view.
@@ -735,7 +753,9 @@ int main(int argc, char ** argv) {
 				debugInstancedObject->buffer(*scene.instanceInfos, 2);
 				debugInstancedObject->buffer(*scene.materialInfos, 3);
 
-				GPU::drawIndirectMesh(scene.globalMesh, *drawCommands);
+				for(uint mid = 0; mid < scene.meshInfos->size(); ++mid){
+					GPU::drawIndirectMesh(scene.globalMesh, *drawCommands, mid);
+				}
 			}
 
 

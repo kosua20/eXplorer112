@@ -211,10 +211,7 @@ public:
 		uint32_t firstInstance = 0;
 	};
 
-	/** Draw indexed geometry.
-	 \param mesh the mesh to draw
-	 */
-	static void drawIndirectMesh(const Mesh & mesh, const Buffer& args);
+	static void drawIndirectMesh(const Mesh& mesh, const Buffer& args, uint argIndex);
 
 	/** Draw tessellated geometry.
 	 \param mesh the mesh to tessellate and render
