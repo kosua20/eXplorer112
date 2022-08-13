@@ -3,8 +3,14 @@ layout(set = 0, binding = 0) uniform EngineData {
 	mat4 vp; ///< The transformation matrix.
 	mat4 ivp; ///< Inverse
 	vec4 color;
+	// Shading settings.
 	int shadingMode;
 	int albedoMode;
+	// Selection data.
+	int selectedMesh;
+	int selectedInstance;
+	int selectedTextureArray;
+	int selectedTextureLayer;
 } engine;
 
 
@@ -17,8 +23,6 @@ layout(set = 0, binding = 0) uniform EngineData {
 #define MODE_ALBEDO_TEXTURE 2
 
 struct MeshInfos {
-	vec4 bboxMin;
-	vec4 bboxMax;
 	uint indexCount;
 	uint instanceCount;
 	uint firstIndex;
