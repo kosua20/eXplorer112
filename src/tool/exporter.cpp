@@ -41,8 +41,11 @@ int main(int argc, const char** argv)
 	System::listAllFilesOfType(texturesPath, ".dds", texturesList);
 	System::listAllFilesOfType(texturesPath, ".tga", texturesList);
 
-#define SCENE_FILE "tutoeco.world"
 
+
+//#define SCENE_FILE "tutoeco.world"
+
+	fs::create_directory(outputPath);
 #ifndef SCENE_FILE
 	for(const auto& worldPath : worldsList)
 #endif
@@ -94,10 +97,12 @@ int main(int argc, const char** argv)
 		// Try to find each texture.
 		std::unordered_set<std::string> textureNames;
 		for(const Object::Material& material : world.materials()){
-			if(material.texture.empty()){
-				continue;
+			if(!material.color.empty()){
+				textureNames.insert(material.color);
 			}
-			textureNames.insert(material.texture);
+			if(!material.normal.empty()){
+				textureNames.insert(material.normal);
+			}
 		}
 
 		for(const std::string& textureName : textureNames){
