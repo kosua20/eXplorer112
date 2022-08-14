@@ -528,7 +528,7 @@ bool parseClump(FILE* file, Model& model){
 							return false;
 						}
 						// Attempt to parse normal map if available.
-						if(ftell(file) < (long)materialEnd){
+						while(ftell(file) < (long)materialEnd){
 							if(!parseExtension(file, &material.normalName)){
 								return false;
 							}
@@ -683,7 +683,7 @@ void convertToObj(Model& model, Object& outObject){
 		if(hasNormals){
 			outObject.normals.reserve(outObject.normals.size() + vertCount);
 			for(size_t vid = 0; vid < vertCount; ++vid){
-				const glm::vec3 tnor = glm::normalize(totalFrameNormal * set.normals[vid]);
+				const glm::vec3 tnor = glm::normalize(totalFrameNormal * glm::normalize(set.normals[vid]));
 				outObject.normals.push_back(tnor);
 			}
 		}
@@ -694,7 +694,6 @@ void convertToObj(Model& model, Object& outObject){
 				outObject.uvs.push_back(uvs[vid]);
 			}
 		}
-		// TODO: colors if needed
 		if(hasColors){
 			outObject.colors.reserve(outObject.colors.size() + vertCount);
 			for(size_t vid = 0; vid < vertCount; ++vid){
@@ -711,17 +710,21 @@ void convertToObj(Model& model, Object& outObject){
 		for(size_t tid = 0; tid < triCount; ++tid){
 
 			if(geom.faces[tid].id != materialId){
-				materialId = geom.faces[tid].id;
-
-				const Dff::Material& material = geom.materials[geom.mappings[materialId]];
-				std::string textureName;
-				if(!material.diffuseName.empty()){
-					textureName = TextUtilities::lowercase(material.diffuseName);
-				}
-
 				// New material
 				Object::Material& newMaterial = outObject.materials.emplace_back();
-				newMaterial.texture = textureName;
+				// Retrieve raw material info.
+				materialId = geom.faces[tid].id;
+				const Dff::Material& material = geom.materials[geom.mappings[materialId]];
+				// Albedo
+				{
+					std::string textureName = TextUtilities::lowercase(material.diffuseName);
+					newMaterial.color = !textureName.empty() ? textureName : DEFAULT_ALBEDO_TEXTURE;
+				}
+				// Normal
+				{
+					std::string textureName = TextUtilities::lowercase(material.normalName);
+					newMaterial.normal = !textureName.empty() ? textureName : DEFAULT_NORMAL_TEXTURE;
+				}
 
 				Object::Set& faceSet = outObject.faceSets.emplace_back();
 				faceSet.faces.reserve(256);

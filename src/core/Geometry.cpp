@@ -15,8 +15,11 @@ void writeMtlsToStream(const std::vector<Object::Material>& materials, std::ofst
 		mtlFile << "Kd " << diff << " " << diff << " " << diff << "\n";
 		mtlFile << "Ks " << spec << " " << spec << " " << spec << "\n";
 		mtlFile << "Ns " << 100 << "\n";
-		if(!mat.texture.empty()){
-			mtlFile << "map_Kd " << "textures/" << mat.texture << ".png\n";
+		if(!mat.color.empty()){
+			mtlFile << "map_Kd " << "textures/" << mat.color << ".png\n";
+		}
+		if(!mat.normal.empty()){
+			mtlFile << "map_Kn " << "textures/" << mat.normal << ".png\n";
 		}
 		mtlFile << "\n";
 

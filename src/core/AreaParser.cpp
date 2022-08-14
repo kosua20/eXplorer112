@@ -65,6 +65,33 @@ glm::mat4 parseFrame(const char* val){
 	return res;
 }
 
+std::string retrieveTextureName(const pugi::xml_node& textureRef, const pugi::xml_node& shader){
+	if(!textureRef){
+		return "";
+	}
+
+	const char* textureRefName = textureRef.attribute("ref").value();
+	const auto textureDec = shader.find_child_by_attribute("texture", "name", textureRefName);
+	if(!textureDec){
+		return "";
+	}
+
+	std::string texturePath = textureDec.attribute("sourcename").as_string();
+	TextUtilities::replace(texturePath, "\\", "/");
+	texturePath = TextUtilities::trim(texturePath, "/");
+
+	std::string textureName = texturePath;
+	const std::string::size_type slashPos = texturePath.find_last_of("/");
+	if(slashPos != std::string::npos){
+		textureName = texturePath.substr(slashPos+1);
+	}
+	if(textureName.find("#") != std::string::npos){
+		Log::warning("Skipping texture named %s", textureName.c_str());
+		return "";
+	}
+	return TextUtilities::lowercase(textureName);
+}
+
 bool load(const fs::path& path, Object& outObject){
 
 	pugi::xml_document areaFile;
@@ -96,29 +123,17 @@ bool load(const fs::path& path, Object& outObject){
 		const std::string shaderFullName = areaName + "_" + shaderBaseName;
 		Shader& shaderDesc = shaders[shaderFullName];
 
-		const auto textureRef = shader.child("shaderfunc").find_child_by_attribute("channel", "name", "color").child("texture");
-		if(textureRef){
-			const char* textureRefName = textureRef.attribute("ref").value();
-			const auto textureDec = shader.find_child_by_attribute("texture", "name", textureRefName);
-			if(textureDec){
-				std::string texturePath = textureDec.attribute("sourcename").as_string();
-				TextUtilities::replace(texturePath, "\\", "/");
-				texturePath = TextUtilities::trim(texturePath, "/");
-
-				std::string textureName = texturePath;
-				const std::string::size_type slashPos = texturePath.find_last_of("/");
-				if(slashPos != std::string::npos){
-					textureName = texturePath.substr(slashPos+1);
-				}
-				if(textureName.find("#") != std::string::npos){
-					Log::warning("Skipping texture named %s for shader %s", textureName.c_str(), shaderName);
-					textureName = "default_texture";
-				}
-
-				textureName = TextUtilities::lowercase(textureName);
-				shaderDesc.material.texture = textureName;
-
-			}
+		// Color
+		{
+			const auto textureRef = shader.child("shaderfunc").find_child_by_attribute("channel", "name", "color").child("texture");
+			const std::string textureName = retrieveTextureName(textureRef, shader);
+			shaderDesc.material.color = !textureName.empty() ? textureName : DEFAULT_ALBEDO_TEXTURE;
+		}
+		// Normal
+		{
+			const auto textureRef = shader.child("shaderfunc").find_child_by_attribute("channel", "name", "normal").child("texture");
+			const std::string textureName = retrieveTextureName(textureRef, shader);
+			shaderDesc.material.normal = !textureName.empty() ? textureName : DEFAULT_NORMAL_TEXTURE;
 		}
 	}
 
@@ -150,7 +165,6 @@ bool load(const fs::path& path, Object& outObject){
 		const auto userData = group.child("userdata").find_child_by_attribute("name", "3dsmax User Properties");
 		if(userData){
 			const char* userType = userData.child_value();
-			// Skipd decals for now (TODO: extract decals)
 			if(strcmp(userType, "\"decal\"") == 0){
 				materialType = Object::Material::DECAL;
 			} else if(strcmp(userType, "\"transparent\"") == 0){

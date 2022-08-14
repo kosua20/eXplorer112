@@ -5,6 +5,9 @@
 #include <fstream>
 #include <unordered_set>
 
+#define DEFAULT_ALBEDO_TEXTURE "checker"
+#define DEFAULT_NORMAL_TEXTURE "lysmum_n"
+
 struct Color {
 	uint8_t r;
 	uint8_t g;
@@ -41,12 +44,12 @@ struct Object {
 			OPAQUE = 0u, DECAL = 1u, TRANSPARENT = 2u
 		};
 
-		// For now, only diffuse texture.
-		std::string texture;
+		std::string color;
+		std::string normal;
 		Type type = OPAQUE;
 
 		bool operator ==(const Material& b){
-			return texture == b.texture && type == b.type;
+			return (color == b.color) && (normal == b.normal) && (type == b.type);
 		}
 	};
 
