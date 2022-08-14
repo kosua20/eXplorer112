@@ -210,7 +210,8 @@ void Scene::upload(const World& world, const GameFiles& files){
 					debugInfos.bbox.merge(obj.positions[f.v1]);
 					debugInfos.bbox.merge(obj.positions[f.v2]);
 				}
-
+				infos.bboxMin = glm::vec4(debugInfos.bbox.minis, 1.0f);
+				infos.bboxMax = glm::vec4(debugInfos.bbox.maxis, 1.0f);
 				indexOffset += infos.indexCount;
 				++currentMeshId;
 				++currentSetId;

@@ -36,6 +36,8 @@ class Scene {
 public:
 
 	struct MeshInfos {
+		glm::vec4 bboxMin;
+		glm::vec4 bboxMax;
 		uint indexCount;
 		uint instanceCount;
 		uint firstIndex;

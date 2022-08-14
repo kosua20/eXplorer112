@@ -26,17 +26,22 @@ layout(std140, set = 0, binding = 2) readonly buffer InstancesInfos {
 	MeshInstanceInfos instanceInfos[];
 };
 
+layout(set = 0, binding = 4) readonly buffer InstanceDrawInfos {
+	uint drawInstanceInfos[];
+};
+
 /** Apply the MVP transformation to the input vertex. */
 void main(){
 	MeshInfos mesh = meshInfos[DrawIndex];
-	uint instanceIndex = mesh.firstInstanceIndex + gl_InstanceIndex;
+	uint instanceIndex = drawInstanceInfos[mesh.firstInstanceIndex + gl_InstanceIndex];
+
 	MeshInstanceInfos instance = instanceInfos[instanceIndex];
 
 	gl_Position = engine.vp * instance.frame * vec4(v, 1.0);
 	Out.uv.xy = uv;
 
 
-	// Compute the TBN matrix (from tangent space to view space).
+	// Compute the TBN matrix (from tangent space to view space). Could be stored ahead of time or written by command generation shader if view matrix needs to be taken into account.
 	mat3 nMat = inverse(transpose(mat3(instance.frame)));
 	vec3 T = (nMat * tang);
 	vec3 B = (nMat * bitan);

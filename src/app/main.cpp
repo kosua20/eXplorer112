@@ -45,6 +45,7 @@ public:
 
 struct FrameData {
 	glm::mat4 vp{1.0f};
+	glm::mat4 vpCulling{1.0f};
 	glm::mat4 ivp{1.0f};
 	glm::vec4 color{1.0f};
 	// Shading settings.
@@ -181,6 +182,7 @@ int main(int argc, char ** argv) {
 	Framebuffer fb(uint(renderingRes[0]), uint(renderingRes[1]), {Layout::RGBA8, Layout::DEPTH_COMPONENT32F}, "sceneRender");
 	Framebuffer textureFramebuffer(512, 512, {Layout::RGBA8}, "textureViewer");
 	std::unique_ptr<Buffer> drawCommands = nullptr;
+	std::unique_ptr<Buffer> drawInstances = nullptr;
 
 	// Data storage.
 	Scene scene;
@@ -199,7 +201,7 @@ int main(int argc, char ** argv) {
 	bool showDecals = true;
 	bool showTransparents = true;
 	bool showOpaques = true;
-
+	bool freezeCulling = false;
 	bool showWireframe = false;
 #ifdef DEBUG
 	bool showDemoWindow = false;
@@ -347,7 +349,9 @@ int main(int argc, char ** argv) {
 											(scene.*tab.load)(itemPath, gameFiles);
 											// Allocate commands buffer.
 											const size_t meshCount = scene.meshInfos->size();
+											const size_t instanceCount = scene.instanceInfos->size();
 											drawCommands = std::make_unique<Buffer>(meshCount * sizeof(GPU::DrawCommand), BufferType::INDIRECT);
+											drawInstances = std::make_unique<Buffer>(instanceCount * sizeof(uint), BufferType::STORAGE);
 											// Center camera
 											adjustCameraToBoundingBox(camera, scene.computeBoundingBox());
 											deselect(frameInfos[0], selected, (SelectionFilter)(OBJECT | TEXTURE));
@@ -658,6 +662,8 @@ int main(int argc, char ** argv) {
 			ImGui::Checkbox("Transparents", &showTransparents);
 
 			ImGui::Checkbox("Wireframe", &showWireframe);
+			ImGui::SameLine();
+			ImGui::Checkbox("Freeze culling", &freezeCulling);
 			ImGui::Separator();
 
 			camera.interface();
@@ -698,6 +704,10 @@ int main(int argc, char ** argv) {
 		const glm::mat4 vp		   = camera.projection() * camera.view();
 
 		frameInfos[0].vp = vp;
+		// Only update the culling VP if needed.
+		if(!freezeCulling){
+			frameInfos[0].vpCulling = vp;
+		}
 		frameInfos[0].ivp = glm::transpose(glm::inverse(vp));
 		frameInfos[0].color = glm::vec4(1.0f);
 		frameInfos[0].albedoMode = albedoMode;
@@ -707,12 +717,13 @@ int main(int argc, char ** argv) {
 
 		if(selected.item >= 0){
 
-			// Populate drawCommands by using a compute shader (that will later perform culling).
+			// Populate drawCommands and drawInstancesby using a compute shader that performs culling.
 			drawArgsCompute->use();
 			drawArgsCompute->buffer(frameInfos, 0);
 			drawArgsCompute->buffer(*scene.meshInfos, 1);
 			drawArgsCompute->buffer(*scene.instanceInfos, 2);
 			drawArgsCompute->buffer(*drawCommands, 3);
+			drawArgsCompute->buffer(*drawInstances, 4);
 			GPU::dispatch((uint)scene.meshInfos->size(), 1, 1);
 
 			fb.bind(glm::vec4(0.25f, 0.25f, 0.25f, 1.0f), 1.0f, LoadOperation::DONTCARE);
@@ -739,6 +750,7 @@ int main(int argc, char ** argv) {
 			texturedInstancedObject->buffer(*scene.meshInfos, 1);
 			texturedInstancedObject->buffer(*scene.instanceInfos, 2);
 			texturedInstancedObject->buffer(*scene.materialInfos, 3);
+			texturedInstancedObject->buffer(*drawInstances, 4);
 
 			if(showOpaques){
 				for(uint mid = 0; mid < scene.meshInfos->size(); ++mid){
@@ -767,7 +779,7 @@ int main(int argc, char ** argv) {
 			}
 
 			if(showTransparents){
-				// Alternative possibility: min(src, dst), but this makes decals less visible.
+				// Alternative possibility: real alpha blend and object sorting.
 				GPU::setDepthState(true, TestFunction::LEQUAL, false);
 				GPU::setCullState(false);
 				GPU::setBlendState(true, BlendEquation::ADD, BlendFunction::ONE, BlendFunction::ONE);
@@ -793,6 +805,7 @@ int main(int argc, char ** argv) {
 				debugInstancedObject->buffer(*scene.meshInfos, 1);
 				debugInstancedObject->buffer(*scene.instanceInfos, 2);
 				debugInstancedObject->buffer(*scene.materialInfos, 3);
+				debugInstancedObject->buffer(*drawInstances, 4);
 
 				for(uint mid = 0; mid < scene.meshInfos->size(); ++mid){
 					GPU::drawIndirectMesh(scene.globalMesh, *drawCommands, mid);

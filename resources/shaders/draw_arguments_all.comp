@@ -15,14 +15,76 @@ layout(set = 0, binding = 3) writeonly buffer CommandBuffer {
 	DrawCommand drawCommands[];
 };
 
+layout(set = 0, binding = 4) writeonly buffer InstanceDrawInfos {
+	uint drawInstanceInfos[];
+};
+
+void populateBBoxCorners(vec4 minis, vec4 maxis, out vec4 corners[8]){
+	corners[0] = vec4( minis.x, minis.y, minis.z, 1.0);
+	corners[1] = vec4( minis.x, minis.y, maxis.z, 1.0);
+	corners[2] = vec4( minis.x, maxis.y, minis.z, 1.0);
+	corners[3] = vec4( minis.x, maxis.y, maxis.z, 1.0);
+	corners[4] = vec4( maxis.x, minis.y, minis.z, 1.0);
+	corners[5] = vec4( maxis.x, minis.y, maxis.z, 1.0);
+	corners[6] = vec4( maxis.x, maxis.y, minis.z, 1.0);
+	corners[7] = vec4( maxis.x, maxis.y, maxis.z, 1.0);
+}
+
+bool intersects(vec4 corners[8], vec4 planes[6]){
+	for(uint pid = 0; pid < 6; ++pid){
+		if((dot(planes[pid], corners[0]) < 0.0) &&
+		   (dot(planes[pid], corners[1]) < 0.0) &&
+		   (dot(planes[pid], corners[2]) < 0.0) &&
+		   (dot(planes[pid], corners[3]) < 0.0) &&
+		   (dot(planes[pid], corners[4]) < 0.0) &&
+		   (dot(planes[pid], corners[5]) < 0.0) &&
+		   (dot(planes[pid], corners[6]) < 0.0) &&
+		   (dot(planes[pid], corners[7]) < 0.0)){
+			return false;
+		}
+	}
+	return true;
+}
+
 void main(){
 
 	uint mid = gl_GlobalInvocationID.x;
 
 	MeshInfos infos = meshInfos[mid];
+	vec4 corners[8];
+	populateBBoxCorners(infos.bboxMin, infos.bboxMax, corners);
 
+	// We have to access rows easily, so transpose.
+	mat4 tvp = transpose(engine.vpCulling);
+	mat4 ivp = inverse(engine.vpCulling);
+	// Based on Fast Extraction of Viewing Frustum Planes from the World- View-Projection Matrix, G. Gribb, K. Hartmann
+	// (https://www.gamedevs.org/uploads/fast-extraction-viewing-frustum-planes-from-world-view-projection-matrix.pdf)
+	vec4 planes[6];
+	planes[0] = tvp[3] + tvp[0];
+	planes[1] = tvp[3] - tvp[0];
+	planes[2] = tvp[3] - tvp[1];
+	planes[3] = tvp[3] + tvp[1];
+	planes[4] = tvp[2];
+	planes[5] = tvp[3] - tvp[2];
+
+	uint effectiveCount = 0;
+	for(uint i = 0; i < infos.instanceCount; ++i){
+
+		uint flatInstanceIndex = infos.firstInstanceIndex + i;
+		mat4 frame = instanceInfos[flatInstanceIndex].frame;
+		vec4 instanceCorners[8];
+		for(uint cid = 0; cid < 8; ++cid){
+			instanceCorners[cid] = frame * corners[cid];
+		}
+
+		if(intersects(instanceCorners, planes)){
+			drawInstanceInfos[infos.firstInstanceIndex + effectiveCount] = flatInstanceIndex;
+			++effectiveCount;
+		}
+	}
+
+	drawCommands[mid].instanceCount = effectiveCount;
 	drawCommands[mid].indexCount = infos.indexCount;
-	drawCommands[mid].instanceCount = infos.instanceCount;
 	drawCommands[mid].firstIndex = infos.firstIndex;
 	drawCommands[mid].vertexOffset = int(infos.vertexOffset);
 	drawCommands[mid].firstInstance = 0u;
