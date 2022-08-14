@@ -45,7 +45,8 @@ struct TextureInfos {
 };
 
 struct MaterialInfos {
-	TextureInfos texture;
+	TextureInfos color;
+	TextureInfos normal;
 	uint type;
 	uint pad0, pad1, pad2;
 };

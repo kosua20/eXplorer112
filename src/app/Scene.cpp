@@ -52,6 +52,76 @@ void Scene::clean(){
 	textureDebugInfos.clear();
 }
 
+uint Scene::retrieveTexture(const std::string& textureName, const GameFiles& files, std::vector<Texture>& textures2D) const {
+	// Do we have the texture already.
+	uint tid = 0;
+	for( ; tid < textures2D.size(); ++tid){
+		if(textures2D[tid].name() == textureName)
+			return tid;
+	}
+
+	// Else emplace the texture.
+	Texture& tex = textures2D.emplace_back(textureName);
+	// Find the file on disk.
+	for( const fs::path& texturePath : files.texturesList){
+		const std::string existingName = texturePath.filename().replace_extension().string();
+		if(existingName == textureName){
+			tex.images.resize(1);
+			tex.images[0].load(texturePath);
+			break;
+		}
+	}
+	// If nothing was loaded, populate with default data.
+	if(tex.images.empty()){
+		tex.images.emplace_back();
+		Image::generateDefaultImage(tex.images[0]);
+	}
+	// Update texture parameters.
+	tex.width = tex.images[0].width;
+	tex.height = tex.images[0].height;
+	tex.depth = tex.levels = 1;
+	tex.shape = TextureShape::D2;
+	// Split BCn slices if needed.
+	tex.uncompress();
+	return tid;
+}
+
+Scene::TextureInfos Scene::storeTexture(const Texture& tex, uint tid, std::vector<TextureArrayInfos>& arraysToCreate) const{
+
+	TextureInfos texInfos;
+
+	uint arrayIndex = 0;
+	for(TextureArrayInfos& textureArray : arraysToCreate){
+		// Is the array compatible.
+		if((textureArray.width == tex.width) && (textureArray.height == tex.height) && (textureArray.format == tex.images[0].compressedFormat)){
+			// We found one! update the infos.
+			texInfos.index = arrayIndex;
+			// Is the texture already in there.
+			uint localIndex = 0;
+			for(uint texId : textureArray.textures){
+				if(texId == tid){
+					break;
+				}
+				++localIndex;
+			}
+			// Else add it to the list.
+			if(localIndex == textureArray.textures.size()){
+				textureArray.textures.push_back(tid);
+			}
+			// Update the infos.
+			texInfos.layer = localIndex;
+			return texInfos;
+		}
+		++arrayIndex;
+	}
+	// Else create a new array.
+	arraysToCreate.push_back({ tex.width, tex.height, tex.images[0].compressedFormat, {tid} });
+	// Update the infos.
+	texInfos.index = arrayIndex;
+	texInfos.layer = 0;
+	return texInfos;
+}
+
 void Scene::upload(const World& world, const GameFiles& files){
 
 	clean();
@@ -189,75 +259,21 @@ void Scene::upload(const World& world, const GameFiles& files){
 
 		uint materialId = 0u;
 		for(const Object::Material& material : materials){
-			const std::string textureName = material.texture.empty() ? "Empty texture" : material.texture;
-
-			// Do we have the texture already.
-			uint tid = 0;
-			for( ; tid < textures2D.size(); ++tid){
-				if(textures2D[tid].name() == textureName)
-					break;
-			}
-			// Else emplace the texture.
-			if(tid == textures2D.size()){
-				Texture& tex = textures2D.emplace_back(textureName);
-				// Find the file on disk.
-				for( const fs::path& texturePath : files.texturesList){
-					const std::string existingName = texturePath.filename().replace_extension().string();
-					if(existingName == textureName){
-						tex.images.resize(1);
-						tex.images[0].load(texturePath);
-						break;
-					}
-				}
-				// If nothing was loaded, populate with default data.
-				if(tex.images.empty()){
-					tex.images.emplace_back();
-					Image::generateDefaultImage(tex.images[0]);
-				}
-				// Update texture parameters.
-				tex.width = tex.images[0].width;
-				tex.height = tex.images[0].height;
-				tex.depth = tex.levels = 1;
-				tex.shape = TextureShape::D2;
-				// Split BCn slices if needed.
-				tex.uncompress();
-			}
-
-			// Now that we have the 2D texture, we need to find a compatible texture array to insert it in.
-			const Texture& tex = textures2D[tid];
 			MaterialInfos& matInfos = (*materialInfos)[materialId];
 			matInfos.type = uint(material.type);
-
-			uint arrayIndex = 0;
-			for(TextureArrayInfos& textureArray : arraysToCreate){
-				// Is the array compatible.
-				if((textureArray.width == tex.width) && (textureArray.height == tex.height) && (textureArray.format == tex.images[0].compressedFormat)){
-					// We found one! update the infos.
-					matInfos.texture.index = arrayIndex;
-					// Is the texture already in there.
-					uint localIndex = 0;
-					for(uint texId : textureArray.textures){
-						if(texId == tid){
-							break;
-						}
-						++localIndex;
-					}
-					// Else add it to the list.
-					if(localIndex == textureArray.textures.size()){
-						textureArray.textures.push_back(tid);
-					}
-					// Update the infos.
-					matInfos.texture.layer = localIndex;
-					break;
-				}
-				++arrayIndex;
+			// Color
+			{
+				const std::string textureName = !material.color.empty() ? material.color : DEFAULT_ALBEDO_TEXTURE;
+				const uint tid = retrieveTexture(textureName, files, textures2D);
+				// Now that we have the 2D texture, we need to find a compatible texture array to insert it in.
+				matInfos.color = storeTexture(textures2D[tid], tid, arraysToCreate);
 			}
-			// Else create a new array.
-			if(arrayIndex == arraysToCreate.size()){
-				arraysToCreate.push_back({ tex.width, tex.height, tex.images[0].compressedFormat, {tid} });
-				// Update the infos.
-				matInfos.texture.index = arrayIndex;
-				matInfos.texture.layer = 0;
+			// Normal
+			{
+				const std::string textureName = !material.normal.empty() ? material.normal : DEFAULT_NORMAL_TEXTURE;
+				const uint tid = retrieveTexture(textureName, files, textures2D);
+				// Now that we have the 2D texture, we need to find a compatible texture array to insert it in.
+				matInfos.normal = storeTexture(textures2D[tid], tid, arraysToCreate);
 			}
 			++materialId;
 		}

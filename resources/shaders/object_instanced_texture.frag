@@ -26,35 +26,40 @@ layout(location = 0) out vec4 fragColor; ///< Color.
 
 /** Texture each face. */
 void main(){
+	MaterialInfos material =  materialInfos[meshInfos[DrawIndex].materialIndex];
+
+
+	vec4 normalAndR = texture( sampler2DArray(textures[normalMap.index], sRepeatLinearLinear), vec3(In.uv.xy, normalMap.layer));
+	vec3 n = normalize(normalAndR.xyz * 2.0 - 1.0);
+	// Albedo
+	TextureInfos albedoMap = material.color;
+	vec4 albedo = texture(sampler2DArray(textures[albedoMap.index], sRepeatLinearLinear), vec3(In.uv.xy, albedoMap.layer));
+	// Make decals more visible
+	if(material.type == MATERIAL_DECAL){
+		albedo.rgb *= 0.5;
+	}
+
+	// Alpha test.
+	if(albedo.a < 0.05){
+		discard;
+	}
 
 	float shading = 1.0;
 	if(engine.shadingMode == MODE_SHADING_LIGHT){
-		vec3 lightDir = normalize(vec3(1.0));
-		shading = max(0.0, dot(normalize(In.n), lightDir));
+		vec3 lightDir = normalize(vec3(1.0, 1.0, 1.0)); // World space for now
+		shading = max(0.0, dot(n, lightDir));
 		// Ambient
 		shading += 0.1;
 	}
 
-	vec4 albedo = engine.color;
-
+	vec4 color = engine.color;
 	if(engine.albedoMode == MODE_ALBEDO_TEXTURE){
-		MaterialInfos material =  materialInfos[meshInfos[DrawIndex].materialIndex];
-		vec4 color = texture(sampler2DArray(textures[material.texture.index], sRepeatLinearLinear), vec3(In.uv,material.texture.layer) );
-		if(color.a < 0.05){
-			discard;
-		}
-		albedo = color;
-
-		// Make decals more visible
-		if(material.type == MATERIAL_DECAL){
-			albedo.rgb *= 0.5;
-		}
-
+		color = albedo;
 	} else if(engine.albedoMode == MODE_ALBEDO_NORMAL){
-		albedo.rgb = normalize(In.n) * 0.5 + 0.5;
-		albedo.a = 1.0;
+		color.rgb = n * 0.5 + 0.5;
+		color.a = 1.0;
 	}
 
 
-	fragColor = vec4(shading * albedo.rgb, albedo.a);
+	fragColor = vec4(shading * color.rgb, color.a);
 }

@@ -56,7 +56,8 @@ public:
 	};
 
 	struct MaterialInfos {
-		TextureInfos texture;
+		TextureInfos color;
+		TextureInfos normal;
 		uint type;
 		uint pad0, pad1, pad2;
 	};
@@ -95,7 +96,11 @@ private:
 	};
 
 	void upload(const World& world, const GameFiles& files);
+
+	uint retrieveTexture(const std::string& textureName, const GameFiles& files, std::vector<Texture>& textures2D) const;
 	
+	TextureInfos storeTexture(const Texture& tex, uint tid, std::vector<TextureArrayInfos>& arraysToCreate) const;
+
 public:
 
 	World world;
