@@ -5,14 +5,16 @@
 layout(location = 0) in vec3 v;///< Position.
 layout(location = 1) in vec3 n;///< Normal.
 layout(location = 2) in vec2 uv;///< UV.
+layout(location = 3) in vec3 tang; ///< Tangent.
+layout(location = 4) in vec3 bitan; ///< Bitangent.
 
 layout(push_constant) uniform constants {
 	uint DrawIndex;
 };
 
 layout(location = 0) out INTERFACE {
-	vec3 n; ///< Normal
-	vec2 uv; ///< Texture coordinates.
+	mat4 tbn; ///< Normal to view matrix.
+	vec4 uv; ///< Texture coordinates.
 } Out;
 
 
@@ -31,6 +33,14 @@ void main(){
 	MeshInstanceInfos instance = instanceInfos[instanceIndex];
 
 	gl_Position = engine.vp * instance.frame * vec4(v, 1.0);
-	Out.uv = uv;
-	Out.n = inverse(transpose(mat3(instance.frame))) * n; // For now no transformation
+	Out.uv.xy = uv;
+
+
+	// Compute the TBN matrix (from tangent space to view space).
+	mat3 nMat = inverse(transpose(mat3(instance.frame)));
+	vec3 T = (nMat * tang);
+	vec3 B = (nMat * bitan);
+	vec3 N = (nMat * n);
+	Out.tbn = mat4(mat3(T, B, N));
+
 }

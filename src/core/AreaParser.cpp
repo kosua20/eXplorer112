@@ -221,7 +221,7 @@ bool load(const fs::path& path, Object& outObject){
 					outObject.uvs.emplace_back(flipUV.x, 1.0f - flipUV.y);
 				}
 				if(nIndex >= 0){
-					const glm::vec3 nor = parseVec3(tokens[nIndex].c_str());
+					const glm::vec3 nor = glm::normalize(parseVec3(tokens[nIndex].c_str()));
 					outObject.normals.push_back(glm::normalize(frameNormal * nor));
 				}
 			}

@@ -4,8 +4,8 @@
 #include "engine.glsl"
 
 layout(location = 0) in INTERFACE {
-	vec3 n;
-	vec2 uv;
+	mat4 tbn; ///< Normal to view matrix.
+	vec4 uv;
 } In ;
 
 layout(push_constant) uniform constants {
@@ -29,8 +29,15 @@ void main(){
 	MaterialInfos material =  materialInfos[meshInfos[DrawIndex].materialIndex];
 
 
+	// Build normal using TBN matrix and normal map.
+	TextureInfos normalMap = material.normal;
+	// Flip the up of the local frame for back facing fragments.
+	mat3 tbn = mat3(In.tbn);
+	// Compute the normal at the fragment using the tangent space matrix and the normal read in the normal map.
 	vec4 normalAndR = texture( sampler2DArray(textures[normalMap.index], sRepeatLinearLinear), vec3(In.uv.xy, normalMap.layer));
 	vec3 n = normalize(normalAndR.xyz * 2.0 - 1.0);
+	n = normalize(tbn * n);
+
 	// Albedo
 	TextureInfos albedoMap = material.color;
 	vec4 albedo = texture(sampler2DArray(textures[albedoMap.index], sRepeatLinearLinear), vec3(In.uv.xy, albedoMap.layer));

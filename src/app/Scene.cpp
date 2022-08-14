@@ -148,38 +148,52 @@ void Scene::upload(const World& world, const GameFiles& files){
 		uint currentMeshId = 0;
 		for(uint oid = 0u; oid < objectCount; ++oid){
 			const uint vertexOffset = (uint)globalMesh.positions.size();
+			uint indexOffset = (uint)globalMesh.indices.size();
 
 			// Copy attributes.
 			const Object& obj = world.objects()[oid];
 			Log::check(!obj.positions.empty(), "Object with no positions.");
-			globalMesh.positions.insert(globalMesh.positions.end(), obj.positions.begin(), obj.positions.end());
-			globalMesh.texcoords.insert(globalMesh.texcoords.end(), obj.uvs.begin(), obj.uvs.end());
-			globalMesh.normals.insert(globalMesh.normals.end(), obj.normals.begin(), obj.normals.end());
-
 			Log::check((obj.positions.size() == obj.uvs.size()) && (obj.positions.size() == obj.normals.size()), "Discrepancy between positions and other attributes.");
+
+			Mesh objMesh("obj");
+			objMesh.positions = obj.positions;
+			objMesh.normals = obj.normals;
+			objMesh.texcoords = obj.uvs;
+			objMesh.colors.resize(obj.colors.size());
+			for(uint cid = 0; cid < obj.colors.size(); ++cid){
+				objMesh.colors[cid] = glm::vec3(obj.colors[cid]);
+			}
 
 			// Total index count fo the object.
 			size_t totalIndexSize = 0;
 			for(const Object::Set& set : obj.faceSets){
 				totalIndexSize += set.faces.size() * 3;
 			}
-			globalMesh.indices.reserve(globalMesh.indices.size() + totalIndexSize);
-
-			// Pack each mesh.
-			uint currentSetId = 0u;
+			objMesh.indices.reserve(totalIndexSize);
 			for(const Object::Set& set : obj.faceSets){
-				// Build index buffer.
-				const uint indexOffset = (uint)globalMesh.indices.size();
 				for(const Object::Set::Face& f : set.faces){
 	#ifdef DEBUG
 					if(f.t0 != f.v0 || f.t1 != f.v1 || f.t2 != f.v2 || f.n0 != f.v0 || f.n1 != f.v1 || f.n2 != f.v2 ){
 						Log::error("Discrepancy between position indices and other attribute indices.");
 					}
 	#endif
-					globalMesh.indices.push_back(f.v0);
-					globalMesh.indices.push_back(f.v1);
-					globalMesh.indices.push_back(f.v2);
+					objMesh.indices.push_back(f.v0);
+					objMesh.indices.push_back(f.v1);
+					objMesh.indices.push_back(f.v2);
 				}
+			}
+			objMesh.computeTangentsAndBitangents(true);
+
+			globalMesh.positions.insert(globalMesh.positions.end(), objMesh.positions.begin(), objMesh.positions.end());
+			globalMesh.texcoords.insert(globalMesh.texcoords.end(), objMesh.texcoords.begin(), objMesh.texcoords.end());
+			globalMesh.normals.insert(globalMesh.normals.end(), objMesh.normals.begin(), objMesh.normals.end());
+			globalMesh.tangents.insert(globalMesh.tangents.end(), objMesh.tangents.begin(), objMesh.tangents.end());
+			globalMesh.bitangents.insert(globalMesh.bitangents.end(), objMesh.bitangents.begin(), objMesh.bitangents.end());
+			globalMesh.indices.insert(globalMesh.indices.end(), objMesh.indices.begin(), objMesh.indices.end());
+
+			// Pack each mesh.
+			uint currentSetId = 0u;
+			for(const Object::Set& set : obj.faceSets){
 
 				// Populate mesh info.
 				MeshInfos& infos = (*meshInfos)[currentMeshId];
@@ -197,6 +211,7 @@ void Scene::upload(const World& world, const GameFiles& files){
 					debugInfos.bbox.merge(obj.positions[f.v2]);
 				}
 
+				indexOffset += infos.indexCount;
 				++currentMeshId;
 				++currentSetId;
 			}
