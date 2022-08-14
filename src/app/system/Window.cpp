@@ -325,6 +325,7 @@ void Window::setupImGui() {
 	colors[ImGuiCol_NavWindowingHighlight]  = ImVec4(1.00f, 1.00f, 1.00f, 0.70f);
 	colors[ImGuiCol_NavWindowingDimBg]      = ImVec4(0.61f, 0.61f, 0.61f, 0.20f);
 	colors[ImGuiCol_ModalWindowDimBg]       = ImVec4(0.22f, 0.22f, 0.22f, 0.35f);
+	colors[ImGuiCol_Header]                 = ImVec4(0.17f, 0.17f, 0.17f, 1.0f);
 
 	colors[ImGuiCol_Text]                   = textColor;
 	colors[ImGuiCol_CheckMark]              = textColor;
@@ -339,7 +340,6 @@ void Window::setupImGui() {
 	colors[ImGuiCol_Button]                 = buttonColor;
 	colors[ImGuiCol_ButtonHovered]          = buttonHoverColor;
 	colors[ImGuiCol_ButtonActive]           = buttonActiveColor;
-	colors[ImGuiCol_Header]                 = buttonColor;
 	colors[ImGuiCol_HeaderHovered]          = buttonHoverColor;
 	colors[ImGuiCol_HeaderActive]           = buttonActiveColor;
 	colors[ImGuiCol_Separator]              = buttonColor;

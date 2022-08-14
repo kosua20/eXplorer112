@@ -332,15 +332,11 @@ int main(int argc, char ** argv) {
 									ImGui::TableNextColumn();
 
 									const fs::path& itemPath = (*tab.files)[row];
-									std::string itemName = itemPath.filename().string();
+									const std::string itemName = itemPath.filename().string();
 									// Log two levels of hierarchy.
 									const fs::path& parentPath = itemPath.parent_path();
 									std::string itemParent = parentPath.parent_path().filename().string();
 									itemParent += "/" + parentPath.filename().string();
-
-									if(selected.item == row){
-										itemName = "* " + itemName;
-									}
 
 									if(ImGui::Selectable(itemName.c_str(), selected.item == row, selectableTableFlags)){
 										if(selected.item != row){
@@ -417,12 +413,7 @@ int main(int argc, char ** argv) {
 									const Scene::MeshInfos& meshInfos = (*scene.meshInfos)[row];
 									const Scene::MeshCPUInfos& meshDebugInfos = scene.meshDebugInfos[row];
 
-									std::string meshName = meshDebugInfos.name;
-									if(selected.mesh == row){
-										meshName = "* " + meshName;
-									}
-
-									if(ImGui::Selectable(meshName.c_str(), selected.mesh == row, selectableTableFlags)){
+									if(ImGui::Selectable(meshDebugInfos.name.c_str(), selected.mesh == row, selectableTableFlags)){
 										if(selected.mesh != row){
 											selected.mesh = row;
 											frameInfos[0].selectedMesh = row;
@@ -480,14 +471,9 @@ int main(int argc, char ** argv) {
 									ImGui::PushID(row);
 
 									const Scene::TextureCPUInfos& debugInfos = scene.textureDebugInfos[row];
-									std::string texName = debugInfos.name;
-									if(selected.texture == row){
-										texName = "* " + texName;
-									}
 									const Texture& arrayTex = scene.textures[debugInfos.data.index];
 
-
-									if(ImGui::Selectable(texName.c_str(), selected.texture == row, selectableTableFlags)){
+									if(ImGui::Selectable(debugInfos.name.c_str(), selected.texture == row, selectableTableFlags)){
 										selected.texture = row;
 										frameInfos[0].selectedTextureArray = debugInfos.data.index;
 										frameInfos[0].selectedTextureLayer = debugInfos.data.layer;
@@ -575,12 +561,7 @@ int main(int argc, char ** argv) {
 
 							const Scene::InstanceCPUInfos& debugInfos = scene.instanceDebugInfos[startRow + row];
 
-							std::string instanceName = debugInfos.name;
-							if(selected.instance == row){
-								instanceName = "* " + instanceName;
-							}
-
-							if(ImGui::Selectable(instanceName.c_str(), selected.instance == row, selectableTableFlags)){
+							if(ImGui::Selectable(debugInfos.name.c_str(), selected.instance == row, selectableTableFlags)){
 								if(selected.instance != row){
 									selected.instance = row;
 									frameInfos[0].selectedInstance = startRow + row;
@@ -655,12 +636,20 @@ int main(int argc, char ** argv) {
 			ImGui::RadioButton("Normal", &albedoMode, MODE_ALBEDO_NORMAL); ImGui::SameLine();
 			ImGui::RadioButton("Texture", &albedoMode, MODE_ALBEDO_TEXTURE);
 
-			ImGui::Checkbox("Opaques", &showOpaques);
-			ImGui::SameLine();
-			ImGui::Checkbox("Decals", &showDecals);
-			ImGui::SameLine();
-			ImGui::Checkbox("Transparents", &showTransparents);
 
+			if(ImGui::ArrowButton("VisibilityArrow", ImGuiDir_Down)){
+				ImGui::OpenPopup("visibilityPopup");
+			}
+
+			if(ImGui::BeginPopup("visibilityPopup")){
+				ImGui::Checkbox("Opaques",  &showOpaques);
+				ImGui::Checkbox("Decals", &showDecals);
+				ImGui::Checkbox("Transparents", &showTransparents);
+				ImGui::EndPopup();
+			}
+			ImGui::SameLine();
+			ImGui::Text("Visibility");
+			ImGui::SameLine();
 			ImGui::Checkbox("Wireframe", &showWireframe);
 			ImGui::SameLine();
 			ImGui::Checkbox("Freeze culling", &freezeCulling);
