@@ -317,7 +317,9 @@ void Scene::upload(const World& world, const GameFiles& files){
 				}
 			}
 			// Now we have a beautiful texture2D array with all images set.
-			tex.upload( Layout::SRGB8_ALPHA8, false );
+			// Do not apply gamma correction as there are normal maps in the array.
+			// Conversion for color will be done in the shaders.
+			tex.upload(Layout::RGBA8, false);
 		}
 
 		// Unroll the arrays to generate additional CPU infos on all textures.

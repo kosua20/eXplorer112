@@ -41,6 +41,8 @@ void main(){
 	// Albedo
 	TextureInfos albedoMap = material.color;
 	vec4 albedo = texture(sampler2DArray(textures[albedoMap.index], sRepeatLinearLinear), vec3(In.uv.xy, albedoMap.layer));
+	// Gamma conversion
+	albedo.rgb = pow(albedo.rgb, vec3(2.2));
 	// Make decals more visible
 	if(material.type == MATERIAL_DECAL){
 		albedo.rgb *= 0.5;
