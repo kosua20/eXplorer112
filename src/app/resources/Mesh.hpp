@@ -55,6 +55,8 @@ public:
 	 \return a success/error flag
 	 */
 	int saveAsObj(const std::string & path, bool defaultUVs);
+	void computeNormals();
+	void computeTangentsAndBitangents(bool force);
 
 	/** Get the resource name.
 	 \return the name.
