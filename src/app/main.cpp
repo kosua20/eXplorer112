@@ -48,6 +48,7 @@ struct FrameData {
 	glm::mat4 vpCulling{1.0f};
 	glm::mat4 ivp{1.0f};
 	glm::vec4 color{1.0f};
+	glm::vec4 camPos{1.0f};
 	// Shading settings.
 	uint shadingMode = 0;
 	uint albedoMode = 0;
@@ -699,6 +700,7 @@ int main(int argc, char ** argv) {
 		}
 		frameInfos[0].ivp = glm::transpose(glm::inverse(vp));
 		frameInfos[0].color = glm::vec4(1.0f);
+		frameInfos[0].camPos = glm::vec4(camera.position(), 1.0f);
 		frameInfos[0].albedoMode = albedoMode;
 		frameInfos[0].shadingMode = shadingMode;
 		frameInfos.upload();

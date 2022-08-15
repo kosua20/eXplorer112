@@ -5,6 +5,7 @@
 
 layout(location = 0) in INTERFACE {
 	mat4 tbn; ///< Normal to view matrix.
+	vec4 viewDir;
 	vec4 uv;
 } In ;
 
@@ -27,7 +28,6 @@ layout(location = 0) out vec4 fragColor; ///< Color.
 /** Texture each face. */
 void main(){
 	MaterialInfos material =  materialInfos[meshInfos[DrawIndex].materialIndex];
-
 
 	// Build normal using TBN matrix and normal map.
 	TextureInfos normalMap = material.normal;
@@ -53,12 +53,17 @@ void main(){
 		discard;
 	}
 
-	float shading = 1.0;
+	float diffuse = 1.0;
+	float specular = 0.0;
 	if(engine.shadingMode == MODE_SHADING_LIGHT){
-		vec3 lightDir = normalize(vec3(1.0, 1.0, 1.0)); // World space for now
-		shading = max(0.0, dot(n, lightDir));
-		// Ambient
-		shading += 0.1;
+		vec3 l = normalize(vec3(1.0, 1.0, 1.0)); // World space for now
+		vec3 v = normalize(In.viewDir.xyz);
+		//Diffuse (based on game shader)
+		diffuse = dot(n, l) * 0.5 + 0.5;
+		diffuse *= diffuse;
+		// Specular (based on game shader)
+		specular = pow(clamp(dot(reflect(v, n), -l), 0.0, 1.0), 4.0);
+		specular *= normalAndR.a;
 	}
 
 	vec4 color = engine.color;
@@ -70,5 +75,5 @@ void main(){
 	}
 
 
-	fragColor = vec4(shading * color.rgb, color.a);
+	fragColor = vec4(diffuse * color.rgb + specular, color.a);
 }

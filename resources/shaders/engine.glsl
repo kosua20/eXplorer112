@@ -4,6 +4,7 @@ layout(set = 0, binding = 0) uniform EngineData {
 	mat4 vpCulling; ///< The transformation matrix.
 	mat4 ivp; ///< Inverse
 	vec4 color;
+	vec4 camPos;
 	// Shading settings.
 	uint shadingMode;
 	uint albedoMode;

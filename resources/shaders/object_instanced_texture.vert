@@ -14,6 +14,7 @@ layout(push_constant) uniform constants {
 
 layout(location = 0) out INTERFACE {
 	mat4 tbn; ///< Normal to view matrix.
+	vec4 viewDir;
 	vec4 uv; ///< Texture coordinates.
 } Out;
 
@@ -37,9 +38,11 @@ void main(){
 
 	MeshInstanceInfos instance = instanceInfos[instanceIndex];
 
-	gl_Position = engine.vp * instance.frame * vec4(v, 1.0);
+	vec4 worldPos = instance.frame * vec4(v, 1.0);
+	gl_Position = engine.vp * worldPos;
 	Out.uv.xy = uv;
 
+	Out.viewDir.xyz = normalize(engine.camPos.xyz - worldPos.xyz);
 
 	// Compute the TBN matrix (from tangent space to view space). Could be stored ahead of time or written by command generation shader if view matrix needs to be taken into account.
 	mat3 nMat = inverse(transpose(mat3(instance.frame)));
