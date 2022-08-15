@@ -284,6 +284,9 @@ void Mesh::computeTangentsAndBitangents(bool force) {
 	for(uint vid = 0; vid < posCount; ++vid){
 		auto & remaps = perVertexRemaps[vid];
 		const uint remapCount = remaps.size();
+		if(remapCount == 0){
+			continue;
+		}
 		// FIrst instance always map to itself.
 		remaps[0].remapIndex = remaps[0].initialIndex;
 
@@ -342,6 +345,9 @@ void Mesh::computeTangentsAndBitangents(bool force) {
 
 	for(uint vid = 0; vid < posCount; ++vid){
 		const auto & remaps = perVertexRemaps[vid];
+		if(remaps.empty()){
+			continue;
+		}
 		// Initial instance is copied in place.
 		storeTangent(remaps[0].initialIndex, vid);
 		// Skip if no collisions detected.
