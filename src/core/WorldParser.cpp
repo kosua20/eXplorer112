@@ -3,6 +3,7 @@
 #include "core/TextUtilities.hpp"
 #include "core/AreaParser.hpp"
 #include "core/DFFParser.hpp"
+#include "core/GameCode.hpp"
 
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtx/euler_angles.hpp>
@@ -124,11 +125,9 @@ void World::processEntity(const pugi::xml_node& entity, const glm::mat4& globalF
 
 		frame = frame * mdlFrame;
 	} else if(strcmp(type, "CAMERA") == 0){
-		const char* cam2DRotStr = entity.find_child_by_attribute("name", "camerarotation").child_value();
-		const glm::vec2 cam2DRot = Area::parseVec2(cam2DRotStr) / 180.0f * glm::pi<float>();
-		// This is a wild guess.
-		glm::mat4 mdlFrame = glm::rotate(glm::mat4(1.0f), cam2DRot[1], glm::vec3(0.0f, 1.0f, 0.0f));
-		mdlFrame = glm::rotate(mdlFrame, cam2DRot[0], glm::vec3(glm::transpose(mdlFrame)[0]));
+		const char* cam2DRotStr = entity.find_child_by_attribute("name", "cameraInitialRotation").child_value();
+		const glm::vec2 cam2DRot = Area::parseVec2(cam2DRotStr); // Conversion to radians will be done below.
+		glm::mat4 mdlFrame = GameCode::cameraRotationMatrix(cam2DRot[0], cam2DRot[1]);
 		frame = frame * mdlFrame;
 		// Store the camera
 		_cameras.emplace_back(std::string(objName ? objName : "Unknown camera"), frame);
