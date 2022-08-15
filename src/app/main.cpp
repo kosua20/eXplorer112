@@ -207,6 +207,7 @@ int main(int argc, char ** argv) {
 #ifdef DEBUG
 	bool showDemoWindow = false;
 #endif
+	bool firstFrame = true;
 
 	while(window.nextFrame()) {
 
@@ -298,21 +299,23 @@ int main(int argc, char ** argv) {
 					const char* names;
 					const std::vector<fs::path>* files;
 					ViewerMode mode;
+					ControllableCamera::Mode camera;
 					void (Scene::*load) (const fs::path& filePath, const GameFiles& );
 				};
 
 				const std::vector<TabSettings> tabSettings = {
-					{ "Models", "models", &gameFiles.modelsList, ViewerMode::MODEL, &Scene::loadFile},
-					{ "Areas", "areas", &gameFiles.areasList, ViewerMode::AREA, &Scene::loadFile},
-					{ "Worlds", "worlds", &gameFiles.worldsList, ViewerMode::WORLD, &Scene::load},
+					{ "Models", "models", &gameFiles.modelsList, ViewerMode::MODEL, ControllableCamera::Mode::TurnTable, &Scene::loadFile},
+					{ "Areas", "areas", &gameFiles.areasList, ViewerMode::AREA, ControllableCamera::Mode::TurnTable, &Scene::loadFile},
+					{ "Worlds", "worlds", &gameFiles.worldsList, ViewerMode::WORLD, ControllableCamera::Mode::FPS, &Scene::load},
 				};
 
 				for(const TabSettings& tab : tabSettings){
 
 					if(ImGui::BeginTabItem(tab.title)){
-						if(viewMode != tab.mode){
+						if(viewMode != tab.mode || firstFrame){
 							deselect(frameInfos[0], selected, SelectionFilter::ALL);
 							viewMode = tab.mode;
+							camera.mode(tab.camera);
 						}
 
 						const unsigned int itemsCount = (uint)(*tab.files).size();
@@ -516,7 +519,7 @@ int main(int argc, char ** argv) {
 									const glm::vec4 camPos = cam.frame * glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);
 									const glm::vec4 camCenter = cam.frame * glm::vec4(0.0f, 0.0f, 1.0f, 1.0f);
 									const glm::vec4 camAbove = cam.frame * glm::vec4(0.0f, 1.0f, 0.0f, 1.0f);
-									camera.pose(glm::vec3(camPos), glm::vec3(camCenter), glm::normalize(glm::vec3(camAbove - camCenter)));
+									camera.pose(glm::vec3(camPos), glm::vec3(camCenter), glm::normalize(glm::vec3(camAbove - camPos)));
 								}
 								ImGui::PopID();
 							}
@@ -655,7 +658,10 @@ int main(int argc, char ** argv) {
 			ImGui::SameLine();
 			ImGui::Checkbox("Freeze culling", &freezeCulling);
 			ImGui::Separator();
-
+			if(ImGui::Button("Reset camera")){
+				camera.reset();
+				adjustCameraToBoundingBox(camera, scene.computeBoundingBox());
+			}
 			camera.interface();
 		}
 		ImGui::End();
@@ -819,7 +825,7 @@ int main(int argc, char ** argv) {
 		}
 
 		Framebuffer::backbuffer()->bind(glm::vec4(0.2f, 0.2f, 0.2f, 1.0f), LoadOperation::DONTCARE, LoadOperation::DONTCARE);
-
+		firstFrame = false;
 	}
 
 	scene.clean();

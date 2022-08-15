@@ -191,8 +191,9 @@ void ControllableCamera::updateUsingKeyboard(double frameTime) {
 
 	look	= rot * glm::vec3(0.0, 0.0, -1.0);
 	_center = _eye + look;
-	_up		= rot * glm::vec3(0.0, 1.0, 0.0);
-	_right  = rot * glm::vec3(1.0, 0.0, 0.0);
+	//_up		= rot * glm::vec3(0.0, 1.0, 0.0);
+	_right = normalize(cross(normalize(look), _up));
+	//_right  = rot * glm::vec3(1.0, 0.0, 0.0);
 }
 
 void ControllableCamera::updateUsingTurnTable(double frameTime) {

@@ -378,6 +378,10 @@ void Scene::loadFile(const fs::path& filePath, const GameFiles& files){
 }
 
 BoundingBox Scene::computeBoundingBox() const {
+	if(instanceDebugInfos.empty()){
+		return BoundingBox(glm::vec3(-100.0f), glm::vec3(100.0f));
+	}
+	
 	BoundingBox bbox;
 	for(const InstanceCPUInfos& infos : instanceDebugInfos){
 		bbox.merge(infos.bbox);

@@ -47,6 +47,8 @@ public:
 	/** Display a user interface to edit camera parameters. */
 	void interface();
 
+	void mode(Mode mode){ _mode = mode; }
+
 private:
 	/** Update the camera state based on joystick inputs.
 	 \param frameTime the time elapsed since the last frame, in seconds.
