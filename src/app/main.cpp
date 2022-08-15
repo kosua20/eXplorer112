@@ -520,6 +520,7 @@ int main(int argc, char ** argv) {
 									const glm::vec4 camCenter = cam.frame * glm::vec4(0.0f, 0.0f, 1.0f, 1.0f);
 									const glm::vec4 camAbove = cam.frame * glm::vec4(0.0f, 1.0f, 0.0f, 1.0f);
 									camera.pose(glm::vec3(camPos), glm::vec3(camCenter), glm::normalize(glm::vec3(camAbove - camPos)));
+									camera.fov(cam.fov);
 								}
 								ImGui::PopID();
 							}
@@ -529,11 +530,6 @@ int main(int argc, char ** argv) {
 					}
 					ImGui::EndTabBar();
 				}
-
-
-
-
-
 			}
 		}
 		ImGui::End();

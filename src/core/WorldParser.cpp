@@ -16,8 +16,8 @@ World::Instance::Instance(const std::string& _name, uint _object, const glm::mat
 	frame(_frame), name(_name), object(_object){
 
 }
-World::Camera::Camera(const std::string& _name, const glm::mat4& _frame) :
-	frame(_frame), name(_name){
+World::Camera::Camera(const std::string& _name, const glm::mat4& _frame, float _fov) :
+	frame(_frame), name(_name), fov(_fov){
 
 }
 
@@ -91,7 +91,7 @@ void World::processEntity(const pugi::xml_node& entity, const glm::mat4& globalF
 	const char* type = typeNode.first_child().value();
 	// Early exit.
 	if((strcmp(type, "ACTOR") != 0) && (strcmp(type, "DOOR") != 0) && (strcmp(type, "CREATURE") != 0)
-	   && (strcmp(type, "LIGHT") != 0) && (strcmp(type, "CAMERA") != 0) ){
+	   && (strcmp(type, "LIGHT") != 0) && (strcmp(type, "CAMERA") != 0) && (strcmp(type, "SOLID") != 0) ){
 		return;
 	}
 
@@ -129,8 +129,15 @@ void World::processEntity(const pugi::xml_node& entity, const glm::mat4& globalF
 		const glm::vec2 cam2DRot = Area::parseVec2(cam2DRotStr); // Conversion to radians will be done below.
 		glm::mat4 mdlFrame = GameCode::cameraRotationMatrix(cam2DRot[0], cam2DRot[1]);
 		frame = frame * mdlFrame;
+
+		const char* uiName = entity.find_child_by_attribute("name", "uiName").child_value();
+		const std::string camName = std::string(uiName ? uiName : objName ? objName : "Unknown camera");
+		const char* fovStr = entity.find_child_by_attribute("name", "fov").child_value();
+		float fov = ((fovStr && fovStr[0] != '\0') ? std::stof(fovStr) : 45.0f) * glm::pi<float>() / 180.0f;
+		// Adjust the frame, putting the viewpoint at the front of the default camera.
+		glm::mat4 renderFrame = frame * glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, -2.75f, 10.0f));
 		// Store the camera
-		_cameras.emplace_back(std::string(objName ? objName : "Unknown camera"), frame);
+		_cameras.emplace_back(camName, renderFrame, fov);
 	}
 
 	const char* objPathStr = entity.find_child_by_attribute("name", "sourceName").child_value();

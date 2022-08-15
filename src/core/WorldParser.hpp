@@ -24,8 +24,9 @@ public:
 	struct Camera {
 		glm::mat4 frame;
 		std::string name;
+		float fov;
 
-		Camera(const std::string& _name, const glm::mat4& _frame);
+		Camera(const std::string& _name, const glm::mat4& _frame, float _fov);
 	};
 
 	bool load(const fs::path& path, const fs::path& resourcesPath);
