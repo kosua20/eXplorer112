@@ -321,6 +321,9 @@ int main(int argc, char ** argv) {
 						const unsigned int itemsCount = (uint)(*tab.files).size();
 						ImGui::Text("Found %u %s", itemsCount, tab.names);
 
+						static ImGuiTextFilter itemFilter;
+						itemFilter.Draw();
+
 						if(ImGui::BeginTable("Table", 2, tableFlags)){
 							// Header
 							ImGui::TableSetupScrollFreeze(0, 1); // Make top row always visible
@@ -328,40 +331,41 @@ int main(int argc, char ** argv) {
 							ImGui::TableSetupColumn("Directory", ImGuiTableColumnFlags_None);
 							ImGui::TableHeadersRow();
 
-							ImGuiListClipper clipper;
-							clipper.Begin(itemsCount);
-							while (clipper.Step()) {
-								for (int row = clipper.DisplayStart; row < clipper.DisplayEnd; row++){
-									ImGui::PushID(row);
-									ImGui::TableNextColumn();
+							for(int row = 0; row < (int)itemsCount; row++){
 
-									const fs::path& itemPath = (*tab.files)[row];
-									const std::string itemName = itemPath.filename().string();
-									// Log two levels of hierarchy.
-									const fs::path& parentPath = itemPath.parent_path();
-									std::string itemParent = parentPath.parent_path().filename().string();
-									itemParent += "/" + parentPath.filename().string();
-
-									if(ImGui::Selectable(itemName.c_str(), selected.item == row, selectableTableFlags)){
-										if(selected.item != row){
-											selected.item = row;
-
-											(scene.*tab.load)(itemPath, gameFiles);
-											// Allocate commands buffer.
-											const size_t meshCount = scene.meshInfos->size();
-											const size_t instanceCount = scene.instanceInfos->size();
-											drawCommands = std::make_unique<Buffer>(meshCount * sizeof(GPU::DrawCommand), BufferType::INDIRECT);
-											drawInstances = std::make_unique<Buffer>(instanceCount * sizeof(uint), BufferType::STORAGE);
-											// Center camera
-											adjustCameraToBoundingBox(camera, scene.computeBoundingBox());
-											deselect(frameInfos[0], selected, (SelectionFilter)(OBJECT | TEXTURE));
-										}
-									}
-									ImGui::TableNextColumn();
-									ImGui::Text("%s", itemParent.c_str());
-
-									ImGui::PopID();
+								const fs::path& itemPath = (*tab.files)[row];
+								const std::string itemName = itemPath.filename().string();
+								if(!itemFilter.PassFilter(itemName.c_str())){
+									continue;
 								}
+
+								ImGui::PushID(row);
+								ImGui::TableNextColumn();
+
+								// Log two levels of hierarchy.
+								const fs::path& parentPath = itemPath.parent_path();
+								std::string itemParent = parentPath.parent_path().filename().string();
+								itemParent += "/" + parentPath.filename().string();
+
+								if(ImGui::Selectable(itemName.c_str(), selected.item == row, selectableTableFlags)){
+									if(selected.item != row){
+										selected.item = row;
+
+										(scene.*tab.load)(itemPath, gameFiles);
+										// Allocate commands buffer.
+										const size_t meshCount = scene.meshInfos->size();
+										const size_t instanceCount = scene.instanceInfos->size();
+										drawCommands = std::make_unique<Buffer>(meshCount * sizeof(GPU::DrawCommand), BufferType::INDIRECT);
+										drawInstances = std::make_unique<Buffer>(instanceCount * sizeof(uint), BufferType::STORAGE);
+										// Center camera
+										adjustCameraToBoundingBox(camera, scene.computeBoundingBox());
+										deselect(frameInfos[0], selected, (SelectionFilter)(OBJECT | TEXTURE));
+									}
+								}
+								ImGui::TableNextColumn();
+								ImGui::Text("%s", itemParent.c_str());
+
+								ImGui::PopID();
 							}
 							ImGui::EndTable();
 						}
@@ -394,9 +398,15 @@ int main(int argc, char ** argv) {
 
 				ImVec2 winSize = ImGui::GetContentRegionAvail();
 				winSize.y *= 0.9;
+				winSize.y -= ImGui::GetTextLineHeightWithSpacing(); // For search field.
+
 				if(ImGui::BeginTabBar("InspectorTabbar")){
 
 					if(ImGui::BeginTabItem("Meshes")){
+
+						static ImGuiTextFilter meshFilter;
+						meshFilter.Draw();
+
 						if(ImGui::BeginTable("Meshes#MeshList", 3, tableFlags, winSize)){
 							// Header
 							ImGui::TableSetupScrollFreeze(0, 1); // Make top row always visible
@@ -406,57 +416,60 @@ int main(int argc, char ** argv) {
 							ImGui::TableHeadersRow();
 
 							const int rowCount = (int)scene.meshDebugInfos.size();
-							ImGuiListClipper clipper;
-							clipper.Begin(rowCount);
+							for(int row = 0; row < rowCount; ++row){
 
-							while(clipper.Step()){
-								for(int row = clipper.DisplayStart; row < clipper.DisplayEnd; ++row){
-									ImGui::TableNextColumn();
-									ImGui::PushID(row);
-
-									const Scene::MeshInfos& meshInfos = (*scene.meshInfos)[row];
-									const Scene::MeshCPUInfos& meshDebugInfos = scene.meshDebugInfos[row];
-
-									if(ImGui::Selectable(meshDebugInfos.name.c_str(), selected.mesh == row, selectableTableFlags)){
-										if(selected.mesh != row){
-											selected.mesh = row;
-											frameInfos[0].selectedMesh = row;
-
-											boundingBox.clean();
-
-											// Generate a mesh with bounding boxes of all instances.
-											for(uint iid = 0u; iid < meshInfos.instanceCount; ++iid){
-												const Scene::InstanceCPUInfos& debugInfos = scene.instanceDebugInfos[meshInfos.firstInstanceIndex + iid];
-												const auto corners = debugInfos.bbox.getCorners();
-												const uint indexShift = (uint)boundingBox.positions.size();
-												boundingBox.positions.insert(boundingBox.positions.end(), corners.begin(), corners.end());
-												// Setup degenerate triangles for each line of a cube.
-												const std::vector<uint> localIndices = { 0, 1, 0, 0, 2, 0, 1, 3, 1, 2, 3, 2, 4, 5, 4, 4, 6, 4, 5, 7, 5, 6, 7, 6, 1, 5, 1, 0, 4, 0, 2, 6, 2, 3, 7, 3};
-												for(const uint ind : localIndices){
-													boundingBox.indices.push_back(indexShift + ind);
-												}
-
-											}
-											boundingBox.colors.resize(boundingBox.positions.size(), glm::vec3(1.0f, 0.0f, 0.0f));
-											boundingBox.upload();
-											deselect(frameInfos[0], selected, INSTANCE);
-										}
-									}
-
-									ImGui::TableNextColumn();
-									ImGui::Text("%u", meshInfos.indexCount / 3u);
-									ImGui::TableNextColumn();
-									ImGui::Text("%u", meshInfos.materialIndex);
-
-									ImGui::PopID();
+								const Scene::MeshInfos& meshInfos = (*scene.meshInfos)[row];
+								const Scene::MeshCPUInfos& meshDebugInfos = scene.meshDebugInfos[row];
+								if(!meshFilter.PassFilter(meshDebugInfos.name.c_str())){
+									continue;
 								}
+
+								ImGui::TableNextColumn();
+								ImGui::PushID(row);
+								if(ImGui::Selectable(meshDebugInfos.name.c_str(), selected.mesh == row, selectableTableFlags)){
+									if(selected.mesh != row){
+										selected.mesh = row;
+										frameInfos[0].selectedMesh = row;
+
+										boundingBox.clean();
+
+										// Generate a mesh with bounding boxes of all instances.
+										for(uint iid = 0u; iid < meshInfos.instanceCount; ++iid){
+											const Scene::InstanceCPUInfos& debugInfos = scene.instanceDebugInfos[meshInfos.firstInstanceIndex + iid];
+											const auto corners = debugInfos.bbox.getCorners();
+											const uint indexShift = (uint)boundingBox.positions.size();
+											boundingBox.positions.insert(boundingBox.positions.end(), corners.begin(), corners.end());
+											// Setup degenerate triangles for each line of a cube.
+											const std::vector<uint> localIndices = { 0, 1, 0, 0, 2, 0, 1, 3, 1, 2, 3, 2, 4, 5, 4, 4, 6, 4, 5, 7, 5, 6, 7, 6, 1, 5, 1, 0, 4, 0, 2, 6, 2, 3, 7, 3};
+											for(const uint ind : localIndices){
+												boundingBox.indices.push_back(indexShift + ind);
+											}
+
+										}
+										boundingBox.colors.resize(boundingBox.positions.size(), glm::vec3(1.0f, 0.0f, 0.0f));
+										boundingBox.upload();
+										deselect(frameInfos[0], selected, INSTANCE);
+									}
+								}
+
+								ImGui::TableNextColumn();
+								ImGui::Text("%u", meshInfos.indexCount / 3u);
+								ImGui::TableNextColumn();
+								ImGui::Text("%u", meshInfos.materialIndex);
+
+								ImGui::PopID();
 							}
+
 							ImGui::EndTable();
 						}
 						ImGui::EndTabItem();
 					}
 
 					if(ImGui::BeginTabItem("Textures")){
+
+						static ImGuiTextFilter textureFilter;
+						textureFilter.Draw();
+
 						if(ImGui::BeginTable("Textures#TextureList", 3, tableFlags, winSize)){
 							// Header
 							ImGui::TableSetupScrollFreeze(0, 1); // Make top row always visible
@@ -466,44 +479,48 @@ int main(int argc, char ** argv) {
 							ImGui::TableHeadersRow();
 
 							int rowCount = (int)scene.textureDebugInfos.size();
-							ImGuiListClipper clipper;
-							clipper.Begin(rowCount);
+							for(int row = 0; row < rowCount; ++row){
 
-							while(clipper.Step()){
-								for(int row = clipper.DisplayStart; row < clipper.DisplayEnd; ++row){
-									ImGui::TableNextColumn();
-									ImGui::PushID(row);
-
-									const Scene::TextureCPUInfos& debugInfos = scene.textureDebugInfos[row];
-									const Texture& arrayTex = scene.textures[debugInfos.data.index];
-
-									if(ImGui::Selectable(debugInfos.name.c_str(), selected.texture == row, selectableTableFlags)){
-										selected.texture = row;
-										frameInfos[0].selectedTextureArray = debugInfos.data.index;
-										frameInfos[0].selectedTextureLayer = debugInfos.data.layer;
-										zoomPct = 100.f;
-										centerPct = glm::vec2(50.f, 50.0f);
-										textureFramebuffer.resize(arrayTex.width, arrayTex.height);
-									}
-
-									ImGui::TableNextColumn();
-									ImGui::Text("%ux%u", arrayTex.width, arrayTex.height);
-									ImGui::TableNextColumn();
-									static const std::unordered_map<Image::Compression, const char*> compressionNames = {
-										{ Image::Compression::NONE, "BGRA8" },
-										{ Image::Compression::BC1, "BC1/DXT1" },
-										{ Image::Compression::BC2, "BC2/DXT3" },
-										{ Image::Compression::BC3, "BC3/DXT5" },
-									};
-									ImGui::Text("%s", compressionNames.at(arrayTex.images[0].compressedFormat));
-									ImGui::PopID();
+								const Scene::TextureCPUInfos& debugInfos = scene.textureDebugInfos[row];
+								const Texture& arrayTex = scene.textures[debugInfos.data.index];
+								if(!textureFilter.PassFilter(debugInfos.name.c_str())){
+									continue;
 								}
+
+								ImGui::TableNextColumn();
+								ImGui::PushID(row);
+
+								if(ImGui::Selectable(debugInfos.name.c_str(), selected.texture == row, selectableTableFlags)){
+									selected.texture = row;
+									frameInfos[0].selectedTextureArray = debugInfos.data.index;
+									frameInfos[0].selectedTextureLayer = debugInfos.data.layer;
+									zoomPct = 100.f;
+									centerPct = glm::vec2(50.f, 50.0f);
+									textureFramebuffer.resize(arrayTex.width, arrayTex.height);
+								}
+
+								ImGui::TableNextColumn();
+								ImGui::Text("%ux%u", arrayTex.width, arrayTex.height);
+								ImGui::TableNextColumn();
+								static const std::unordered_map<Image::Compression, const char*> compressionNames = {
+									{ Image::Compression::NONE, "BGRA8" },
+									{ Image::Compression::BC1, "BC1/DXT1" },
+									{ Image::Compression::BC2, "BC2/DXT3" },
+									{ Image::Compression::BC3, "BC3/DXT5" },
+								};
+								ImGui::Text("%s", compressionNames.at(arrayTex.images[0].compressedFormat));
+								ImGui::PopID();
 							}
 							ImGui::EndTable();
 						}
 						ImGui::EndTabItem();
 					}
+
 					if(ImGui::BeginTabItem("Cameras")){
+
+						static ImGuiTextFilter cameraFilter;
+						cameraFilter.Draw();
+
 						if(ImGui::BeginTable("#CamerasList", 1, tableFlags, winSize)){
 							// Header
 							ImGui::TableSetupScrollFreeze(0, 1); // Make top row always visible
@@ -512,9 +529,15 @@ int main(int argc, char ** argv) {
 
 							const int rowCount = (int)scene.world.cameras().size();
 							for(int row = 0; row < rowCount; ++row){
+
+								const World::Camera& cam = scene.world.cameras()[row];
+								if(!cameraFilter.PassFilter(cam.name.c_str())){
+									continue;
+								}
+
 								ImGui::TableNextColumn();
 								ImGui::PushID(row);
-								const World::Camera& cam = scene.world.cameras()[row];
+
 								if(ImGui::Selectable(cam.name.c_str())){
 									const glm::vec4 camPos = cam.frame * glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);
 									const glm::vec4 camCenter = cam.frame * glm::vec4(0.0f, 0.0f, 1.0f, 1.0f);
