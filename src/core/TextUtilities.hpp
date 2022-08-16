@@ -86,5 +86,6 @@ public:
 	static std::string padInt(uint number, uint padding);
 
 	static std::string lowercase(const std::string & src);
+	static std::string uppercase(const std::string & src);
 	
 };

@@ -128,3 +128,12 @@ std::string TextUtilities::lowercase(const std::string & src){
 	});
 	return dst;
 }
+
+std::string TextUtilities::uppercase(const std::string & src){
+	std::string dst(src);;
+	std::transform(src.begin(), src.end(), dst.begin(),
+				   [](unsigned char c){
+		return std::toupper(c);
+	});
+	return dst;
+}
