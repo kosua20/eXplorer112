@@ -380,34 +380,32 @@ int main(int argc, char ** argv) {
 		if(ImGui::Begin("Inspector")){
 			if(selected.item >= 0){
 
-				ImGui::Text("%lu meshes (%lu verts.), %lu instances, %lu textures, %lu cameras",
-							scene.meshDebugInfos.size(),
+				ImGui::Text("%s: %lu vertices, %lu faces",
+							scene.world.name().c_str(),
 							scene.globalMesh.positions.size(),
-							scene.instanceDebugInfos.size(),
-							scene.textureDebugInfos.size(),
-							scene.world.cameras().size());
-
+							scene.globalMesh.indices.size() / 3 );
+				ImGui::SameLine();
 				if(ImGui::SmallButton("Deselect")){
 					deselect(frameInfos[0], selected, OBJECT);
-				}
-				ImGui::SameLine();
-				if(ImGui::SmallButton("Center to selection")){
-					// Pick whatever bounding box is currently displayed.
-					adjustCameraToBoundingBox(camera, boundingBox.computeBoundingBox());
 				}
 
 				ImVec2 winSize = ImGui::GetContentRegionAvail();
 				winSize.y *= 0.9;
 				winSize.y -= ImGui::GetTextLineHeightWithSpacing(); // For search field.
 
+
+				const std::string meshesTabName = "Meshes (" + std::to_string(scene.meshDebugInfos.size()) + ")###MeshesTab";
+				const std::string texturesTabName = "Textures (" + std::to_string(scene.textureDebugInfos.size()) + ")###TexturesTab";
+				const std::string camerasTabName = "Cameras (" + std::to_string(scene.world.cameras().size()) + ")###CamerasTab";
+
 				if(ImGui::BeginTabBar("InspectorTabbar")){
 
-					if(ImGui::BeginTabItem("Meshes")){
+					if(ImGui::BeginTabItem(meshesTabName.c_str())){
 
 						static ImGuiTextFilter meshFilter;
 						meshFilter.Draw();
 
-						if(ImGui::BeginTable("Meshes#MeshList", 3, tableFlags, winSize)){
+						if(ImGui::BeginTable("#MeshList", 3, tableFlags, winSize)){
 							// Header
 							ImGui::TableSetupScrollFreeze(0, 1); // Make top row always visible
 							ImGui::TableSetupColumn("Name", ImGuiTableColumnFlags_None);
@@ -449,6 +447,7 @@ int main(int argc, char ** argv) {
 										boundingBox.colors.resize(boundingBox.positions.size(), glm::vec3(1.0f, 0.0f, 0.0f));
 										boundingBox.upload();
 										deselect(frameInfos[0], selected, INSTANCE);
+										adjustCameraToBoundingBox(camera, boundingBox.computeBoundingBox());
 									}
 								}
 
@@ -465,12 +464,12 @@ int main(int argc, char ** argv) {
 						ImGui::EndTabItem();
 					}
 
-					if(ImGui::BeginTabItem("Textures")){
+					if(ImGui::BeginTabItem(texturesTabName.c_str())){
 
 						static ImGuiTextFilter textureFilter;
 						textureFilter.Draw();
 
-						if(ImGui::BeginTable("Textures#TextureList", 3, tableFlags, winSize)){
+						if(ImGui::BeginTable("#TextureList", 3, tableFlags, winSize)){
 							// Header
 							ImGui::TableSetupScrollFreeze(0, 1); // Make top row always visible
 							ImGui::TableSetupColumn("Name", ImGuiTableColumnFlags_None);
@@ -557,10 +556,11 @@ int main(int argc, char ** argv) {
 		}
 		ImGui::End();
 
-		if(ImGui::Begin("Instances")){
+		const std::string instancesTabName = "Instances (" + std::to_string(scene.instanceDebugInfos.size()) + ")###Instances";
+		if(ImGui::Begin(instancesTabName.c_str())){
 			if(selected.item >= 0){
 				ImVec2 winSize = ImGui::GetContentRegionAvail();
-				if(ImGui::BeginTable("Instances#InstanceList", 1, tableFlags, winSize)){
+				if(ImGui::BeginTable("#InstanceList", 1, tableFlags, winSize)){
 					// Header
 					ImGui::TableSetupScrollFreeze(0, 1); // Make top row always visible
 					ImGui::TableSetupColumn("Name", ImGuiTableColumnFlags_None);
@@ -596,6 +596,7 @@ int main(int argc, char ** argv) {
 									boundingBox.indices = { 0, 1, 0, 0, 2, 0, 1, 3, 1, 2, 3, 2, 4, 5, 4, 4, 6, 4, 5, 7, 5, 6, 7, 6, 1, 5, 1, 0, 4, 0, 2, 6, 2, 3, 7, 3};
 									boundingBox.colors.resize(boundingBox.positions.size(), glm::vec3(1.0f, 0.0f, 0.0f));
 									boundingBox.upload();
+									adjustCameraToBoundingBox(camera, boundingBox.computeBoundingBox());
 								}
 							}
 							ImGui::PopID();
