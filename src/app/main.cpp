@@ -396,6 +396,7 @@ int main(int argc, char ** argv) {
 
 				const std::string meshesTabName = "Meshes (" + std::to_string(scene.meshDebugInfos.size()) + ")###MeshesTab";
 				const std::string texturesTabName = "Textures (" + std::to_string(scene.textureDebugInfos.size()) + ")###TexturesTab";
+				const std::string lightsTabName = "Lights (" + std::to_string(scene.world.lights().size()) + ")###LightsTab";
 				const std::string camerasTabName = "Cameras (" + std::to_string(scene.world.cameras().size()) + ")###CamerasTab";
 
 				if(ImGui::BeginTabBar("InspectorTabbar")){
@@ -515,7 +516,54 @@ int main(int argc, char ** argv) {
 						ImGui::EndTabItem();
 					}
 
-					if(ImGui::BeginTabItem("Cameras")){
+					if(ImGui::BeginTabItem(lightsTabName.c_str())){
+
+						static ImGuiTextFilter lightFilter;
+						lightFilter.Draw();
+
+						if(ImGui::BeginTable("#LightsList", 3, tableFlags, winSize)){
+							// Header
+							ImGui::TableSetupScrollFreeze(0, 1); // Make top row always visible
+							ImGui::TableSetupColumn("Name", ImGuiTableColumnFlags_None);
+							ImGui::TableSetupColumn("Type", ImGuiTableColumnFlags_None);
+							ImGui::TableSetupColumn("Color", ImGuiTableColumnFlags_None);
+							ImGui::TableHeadersRow();
+
+							const int rowCount = (int)scene.world.lights().size();
+							for(int row = 0; row < rowCount; ++row){
+
+								const World::Light& light = scene.world.lights()[row];
+								if(!lightFilter.PassFilter(light.name.c_str())){
+									continue;
+								}
+
+								ImGui::TableNextColumn();
+								ImGui::PushID(row);
+
+								if(ImGui::Selectable(light.name.c_str())){
+									const glm::vec3 camCenter = glm::vec3(light.frame[3]);
+									const glm::vec3 camPos = camCenter - glm::vec3(light.radius.x, 0.0f, 0.0f);
+									camera.pose(camPos, camCenter, glm::vec3(0.0f, 1.0f, 0.0f));
+									camera.fov(45.0f * glm::pi<float>() / 180.0f);
+								}
+								ImGui::TableNextColumn();
+								static const std::unordered_map<World::Light::Type, const char*> lightTypeNames = {
+									{ World::Light::POINT, "Point" },
+									{ World::Light::SPOT, "Spot" },
+									{ World::Light::DIRECTIONAL, "Directional" },
+								};
+								ImGui::Text("%s", lightTypeNames.at(light.type));
+								ImGui::TableNextColumn();
+								glm::vec3 tmpColor = light.color;
+								ImGui::ColorEdit3("##LightColor", &tmpColor[0], ImGuiColorEditFlags_NoLabel | ImGuiColorEditFlags_NoInputs);
+								ImGui::PopID();
+							}
+							ImGui::EndTable();
+						}
+						ImGui::EndTabItem();
+					}
+
+					if(ImGui::BeginTabItem(camerasTabName.c_str())){
 
 						static ImGuiTextFilter cameraFilter;
 						cameraFilter.Draw();
