@@ -175,6 +175,61 @@ void World::processEntity(const pugi::xml_node& entity, const glm::mat4& globalF
 		return;
 	}
 
+	if(type == "LIGHT"){
+
+		const char* lightTypeStr = entity.find_child_by_attribute("name", "lightType").child_value();
+		const int lightType = Area::parseInt(lightTypeStr, 1);
+		Log::check(lightType >= 1 && lightType <= 3, "Unexpected type for light %s", objName.c_str());
+
+		Light& light = _lights.emplace_back();
+		light.frame = frame;
+		light.name = objName;
+		light.type = (Light::Type)lightType;
+
+		const char* colorTypeStr = entity.find_child_by_attribute("name", "color").child_value();
+		light.color = Area::parseVec3(colorTypeStr, glm::vec3(1.0f));
+
+		const char* radiusTypeStr = entity.find_child_by_attribute("name", "radius").child_value();
+		light.radius = Area::parseVec3(radiusTypeStr, glm::vec3(10000.0f));
+
+		const char* coneTypeStr = entity.find_child_by_attribute("name", "coneAngle").child_value();
+		if(!coneTypeStr || coneTypeStr[0] == '\0'){
+			coneTypeStr = entity.find_child_by_attribute("name", "cone angle").child_value();
+		}
+		light.angle = (float)(Area::parseInt(coneTypeStr)) * glm::pi<float>() / 180.0f;
+
+		const char* shadowStr = entity.find_child_by_attribute("name", "shadow").child_value();
+		light.shadow = Area::parseBool(shadowStr);
+
+		light.material = Light::NO_MATERIAL;
+		std::string materialStr = entity.find_child_by_attribute("name", "material").child_value();
+		if(!materialStr.empty()){
+			TextUtilities::replace(materialStr, "\\", "/");
+			materialStr = TextUtilities::trim(materialStr, "/");
+			const fs::path texturePath = materialStr;
+			const std::string extension = texturePath.filename().extension().string();
+			if(extension == ".tga" || extension == ".dds"){
+				Object::Material material;
+				material.color = texturePath.filename().replace_extension().string();
+				material.normal = "";
+				material.type = Object::Material::LIGHT;
+
+				// Insert material in list, except if already present.
+				const uint matCount = (uint)_materials.size();
+				uint mid = 0;
+				for(; mid < matCount; ++mid){
+					if(_materials[mid] == material){
+						break;
+					}
+				}
+				if(mid == matCount){
+					_materials.push_back(material);
+				}
+				light.material = mid;
+			}
+		}
+	}
+
 	const char* objPathStr = entity.find_child_by_attribute("name", "sourceName").child_value();
 	// Camera model has a few options including  default fallback.
 	if(type == "CAMERA"){

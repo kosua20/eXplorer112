@@ -30,6 +30,25 @@ public:
 		Camera(const std::string& _name, const glm::mat4& _frame, float _fov);
 	};
 
+	struct Light {
+
+		static const uint NO_MATERIAL = 0xFFFF;
+
+		enum Type {
+			POINT = 1, SPOT = 2, DIRECTIONAL = 3
+		};
+
+		glm::mat4 frame;
+		glm::vec3 color;
+		glm::vec3 radius;
+		std::string name;
+		float angle;
+		uint material;
+		Type type;
+		bool shadow;
+
+	};
+
 	bool load(const fs::path& path, const fs::path& resourcesPath);
 
 	const std::vector<Object>& objects() const {  return _objects; };
@@ -39,6 +58,8 @@ public:
 	const std::vector<Object::Material>& materials() const {  return _materials; };
 
 	const std::vector<Camera>& cameras() const {  return _cameras; };
+
+	const std::vector<Light>& lights() const {  return _lights; };
 
 	const std::string& name() const{ return _name; };
 
@@ -53,6 +74,7 @@ private:
 	std::vector<Instance> _instances;
 	std::vector<Object::Material> _materials;
 	std::vector<Camera> _cameras;
+	std::vector<Light> _lights;
 	std::string _name;
 
 };
