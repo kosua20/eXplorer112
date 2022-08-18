@@ -7,18 +7,32 @@
 
 namespace Area {
 
-
-glm::vec2 parseVec2(const char* val){
+bool parseBool(const char* val, bool fallback){
 	if(val == nullptr || val[0] == '\0'){
-		return glm::vec2(0.0f);
+		return fallback;
+	}
+	return strcmp(val, "true") == 0 || strcmp(val, "TRUE") == 0 || strcmp(val, "True") == 0 || strcmp(val, "1") == 0;
+}
+
+int parseInt(const char* val, int fallback){
+	if(val == nullptr || val[0] == '\0'){
+		return fallback;
+	}
+	std::string valStr(val);
+	return std::stoi(val);
+}
+
+glm::vec2 parseVec2(const char* val, const glm::vec2& fallback){
+	if(val == nullptr || val[0] == '\0'){
+		return fallback;
 	}
 
 	std::string valStr(val);
 	valStr = TextUtilities::trim(valStr, "()");
 	const std::vector<std::string> tokens = TextUtilities::split(valStr, " ", true);
-	if(tokens.size() != 2){
+	if(tokens.size() < 2){
 		Log::error("Unable to parse vec2.");
-		return glm::vec2(0.0f);
+		return fallback;
 	}
 	return { std::stof(tokens[0]), std::stof(tokens[1])};
 }
@@ -31,7 +45,8 @@ glm::vec3 parseVec3(const char* val, const glm::vec3& fallback){
 	std::string valStr(val);
 	valStr = TextUtilities::trim(valStr, "()");
 	const std::vector<std::string> tokens = TextUtilities::split(valStr, " ", true);
-	if(tokens.size() != 3){
+	if(tokens.size() < 3){
+		// We have to be lenient for some parameters (RGB/RGBA colors)
 		Log::error("Unable to parse vec3.");
 		return fallback;
 	}

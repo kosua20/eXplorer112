@@ -59,9 +59,8 @@ World::World(const Object& object){
 }
 
 bool isEntityVisible(const pugi::xml_node& entity){
-	const char* objVisibility = entity.find_child_by_attribute("name", "visible").child_value();
-	const bool visible = !objVisibility || strcmp(objVisibility, "true") == 0 || strcmp(objVisibility, "1") == 0;
-	return visible;
+	const char* boolVal = entity.find_child_by_attribute("name", "visible").child_value();
+	return Area::parseBool(boolVal, true);
 }
 
 std::string getEntityName(const pugi::xml_node& entity){
@@ -354,7 +353,7 @@ bool World::load(const fs::path& path, const fs::path& resourcePath){
 		instance.object = elem->second;
 	}
 
-	/// Extract list unique materials.
+	/// Extract list of unique materials.
 	for(Object& object : _objects){
 		for(Object::Set& set : object.faceSets){
 			const Object::Material& material = object.materials[set.material];
