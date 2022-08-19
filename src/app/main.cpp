@@ -182,6 +182,7 @@ int main(int argc, char ** argv) {
 	glm::vec2 renderingRes = config.resolutionRatio * config.screenResolution;
 	Framebuffer fb(uint(renderingRes[0]), uint(renderingRes[1]), {Layout::RGBA8, Layout::DEPTH_COMPONENT32F}, "sceneRender");
 	Framebuffer textureFramebuffer(512, 512, {Layout::RGBA8}, "textureViewer");
+	textureFramebuffer.clear(glm::vec4(0.0f, 0.0f, 0.0f, 1.0f), 0.0f);
 	std::unique_ptr<Buffer> drawCommands = nullptr;
 	std::unique_ptr<Buffer> drawInstances = nullptr;
 
@@ -190,6 +191,7 @@ int main(int argc, char ** argv) {
 
 	// GUi state
 	Mesh boundingBox("bbox");
+	Mesh debugLights("lights");
 	enum class ViewerMode {
 		MODEL, AREA, WORLD
 	};
@@ -204,6 +206,7 @@ int main(int argc, char ** argv) {
 	bool showOpaques = true;
 	bool freezeCulling = false;
 	bool showWireframe = false;
+	bool showLights = false;
 #ifdef DEBUG
 	bool showDemoWindow = false;
 #endif
@@ -360,6 +363,51 @@ int main(int argc, char ** argv) {
 										// Center camera
 										adjustCameraToBoundingBox(camera, scene.computeBoundingBox());
 										deselect(frameInfos[0], selected, (SelectionFilter)(OBJECT | TEXTURE));
+										// Build light debug visualisation.
+										debugLights.clean();
+										for(const World::Light& light : scene.world.lights()){
+
+											uint indexShift = (uint)debugLights.positions.size();
+											// Build octahedron.
+											const glm::vec3 lightPos = glm::vec3(light.frame[3]);
+											for(uint i = 0; i < 3; ++i){
+												glm::vec3 offset(0.0f);
+												offset[i] = light.radius[i];
+												debugLights.positions.push_back(lightPos - offset);
+												debugLights.positions.push_back(lightPos + offset);
+												debugLights.colors.push_back(light.color);
+												debugLights.colors.push_back(light.color);
+
+											}
+											const std::vector<uint> octaIndices = {
+												0, 2, 0,
+												0, 3, 0,
+												0, 4, 0,
+												0, 5, 0,
+
+												1, 2, 1,
+												1, 3, 1,
+												1, 4, 1,
+												1, 5, 1,
+
+												2, 4, 2,
+												2, 5, 2,
+												3, 4, 3,
+												3, 5, 3,
+
+												0, 1, 0,
+												2, 3, 2,
+												4, 5, 4
+											};
+
+											// Setup degenerate triangles for each line of a octahedron.
+
+											for(const uint ind : octaIndices){
+												debugLights.indices.push_back(indexShift + ind);
+											}
+
+										}
+										debugLights.upload();
 									}
 								}
 								ImGui::TableNextColumn();
@@ -387,6 +435,7 @@ int main(int argc, char ** argv) {
 				ImGui::SameLine();
 				if(ImGui::SmallButton("Deselect")){
 					deselect(frameInfos[0], selected, OBJECT);
+					boundingBox.clean();
 				}
 
 				ImVec2 winSize = ImGui::GetContentRegionAvail();
@@ -657,29 +706,27 @@ int main(int argc, char ** argv) {
 		ImGui::End();
 
 		if(ImGui::Begin("Texture")){
-			if(selected.texture >= 0){
+			ImGui::PushItemWidth(120);
+			ImGui::SliderFloat("Zoom (%)", &zoomPct, 0.0f, 1000.0f);
+			ImGui::SameLine();
+			ImGui::SliderFloat("X (%)", &centerPct[0], 0.0f, 100.0f);
+			ImGui::SameLine();
+			ImGui::SliderFloat("Y (%)", &centerPct[1], 0.0f, 100.0f);
+			ImGui::PopItemWidth();
 
-				ImGui::PushItemWidth(120);
-				ImGui::SliderFloat("Zoom (%)", &zoomPct, 0.0f, 1000.0f);
-				ImGui::SameLine();
-				ImGui::SliderFloat("X (%)", &centerPct[0], 0.0f, 100.0f);
-				ImGui::SameLine();
-				ImGui::SliderFloat("Y (%)", &centerPct[1], 0.0f, 100.0f);
-				ImGui::PopItemWidth();
+			// Adjust the texture display to the window size.
+			ImVec2 winSize = ImGui::GetContentRegionAvail();
+			winSize.x = std::max(winSize.x, 2.f);
+			winSize.y = std::max(winSize.y, 2.f);
 
-				// Adjust the texture display to the window size.
-				ImVec2 winSize = ImGui::GetContentRegionAvail();
-				winSize.x = std::max(winSize.x, 2.f);
-				winSize.y = std::max(winSize.y, 2.f);
+			const Texture* tex = textureFramebuffer.texture();
+			const glm::vec2 texCenter = centerPct / 100.f;
+			const glm::vec2 texScale(100.0f / std::max(zoomPct, 1.f));
+			const glm::vec2 miniUV = texCenter - texScale * 0.5f;
+			const glm::vec2 maxiUV = texCenter + texScale * 0.5f;
 
-				const Texture* tex = textureFramebuffer.texture();
-				const glm::vec2 texCenter = centerPct / 100.f;
-				const glm::vec2 texScale(100.0f / std::max(zoomPct, 1.f));
-				const glm::vec2 miniUV = texCenter - texScale * 0.5f;
-				const glm::vec2 maxiUV = texCenter + texScale * 0.5f;
+			ImGui::ImageButton(*tex, ImVec2(winSize.x, winSize.y), miniUV, maxiUV, 0, ImVec4(1.0f, 0.0f, 1.0f, 1.0f));
 
-				ImGui::ImageButton(*tex, ImVec2(winSize.x, winSize.y), miniUV, maxiUV, 0, ImVec4(1.0f, 0.0f, 1.0f, 1.0f));
-			}
 		}
 		ImGui::End();
 
@@ -723,6 +770,8 @@ int main(int argc, char ** argv) {
 			ImGui::Text("Visibility");
 			ImGui::SameLine();
 			ImGui::Checkbox("Wireframe", &showWireframe);
+			ImGui::SameLine();
+			ImGui::Checkbox("Lights", &showLights);
 			ImGui::SameLine();
 			ImGui::Checkbox("Freeze culling", &freezeCulling);
 			ImGui::Separator();
@@ -802,6 +851,16 @@ int main(int argc, char ** argv) {
 				GPU::setDepthState(true, TestFunction::LESS, true);
 				GPU::setBlendState(false);
 				GPU::drawMesh(boundingBox);
+			}
+
+			if(showLights && !debugLights.indices.empty()){
+				coloredDebugDraw->use();
+				coloredDebugDraw->buffer(frameInfos, 0);
+				GPU::setPolygonState(PolygonMode::LINE);
+				GPU::setCullState(false);
+				GPU::setDepthState(true, TestFunction::LESS, true);
+				GPU::setBlendState(false);
+				GPU::drawMesh(debugLights);
 			}
 
 			GPU::setPolygonState(PolygonMode::FILL);
