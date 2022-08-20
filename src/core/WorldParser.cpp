@@ -4,6 +4,7 @@
 #include "core/AreaParser.hpp"
 #include "core/DFFParser.hpp"
 #include "core/GameCode.hpp"
+#include "core/Common.hpp"
 
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtx/euler_angles.hpp>
@@ -335,6 +336,7 @@ bool World::load(const fs::path& path, const fs::path& resourcePath){
 	const auto& areas = world.child("World").child("scene").child("areas");
 	for(const auto& area : areas.children()){
 
+		// Load geometry
 		const char* areaPathStr = area.attribute("sourceName").value();
 		// Cleanup model path.
 		std::string areaPathStrUp(areaPathStr);
@@ -350,8 +352,26 @@ bool World::load(const fs::path& path, const fs::path& resourcePath){
 			_objects.pop_back();
 			continue;
 		}
-
 		_instances.emplace_back(areaName, _objects.size()-1, glm::mat4(1.0f));
+
+		// Parse postprocess infos.
+		Zone& zone = _zones.emplace_back();
+		zone.name = area.attribute("name").value();
+		// Update area bounding box.
+		zone.bbox = BoundingBox();
+		const auto& positions = _objects.back().positions;
+		for(const glm::vec3& pos : positions){
+			zone.bbox.merge(pos);
+		}
+		// Other information.
+		const char* ambientStr = area.find_child_by_attribute("name", "ambientColor").child_value();
+		const char* fogColorStr = area.find_child_by_attribute("name", "fogColor").child_value();
+		const char* fogParamsStr = area.find_child_by_attribute("name", "hfogParams").child_value();
+		const char* fogDensityStr = area.find_child_by_attribute("name", "fogDensity").child_value();
+		zone.ambientColor = Area::parseVec4(ambientStr);
+		zone.fogColor = Area::parseVec4(fogColorStr);
+		zone.fogParams = Area::parseVec4(fogParamsStr);
+		zone.fogDensity = Area::parseFloat(fogDensityStr);
 	}
 
 	/// Empty objects cleanup.

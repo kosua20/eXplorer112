@@ -3,6 +3,7 @@
 #include "core/System.hpp"
 #include "core/Geometry.hpp"
 #include "core/Common.hpp"
+#include "resources/Bounds.hpp"
 #include <map>
 #include <unordered_map>
 
@@ -49,6 +50,15 @@ public:
 
 	};
 
+	struct Zone {
+		BoundingBox bbox;
+		glm::vec4 ambientColor;
+		glm::vec4 fogColor;
+		glm::vec4 fogParams;
+		std::string name;
+		float fogDensity;
+	};
+
 	bool load(const fs::path& path, const fs::path& resourcesPath);
 
 	const std::vector<Object>& objects() const {  return _objects; };
@@ -60,6 +70,8 @@ public:
 	const std::vector<Camera>& cameras() const {  return _cameras; };
 
 	const std::vector<Light>& lights() const {  return _lights; };
+	
+	const std::vector<Zone>& zones() const {  return _zones; };
 
 	const std::string& name() const{ return _name; };
 
@@ -75,6 +87,7 @@ private:
 	std::vector<Object::Material> _materials;
 	std::vector<Camera> _cameras;
 	std::vector<Light> _lights;
+	std::vector<Zone> _zones;
 	std::string _name;
 
 };
