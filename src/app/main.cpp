@@ -21,6 +21,22 @@
 #define MODE_ALBEDO_NORMAL 1
 #define MODE_ALBEDO_TEXTURE 2
 
+
+static const std::vector<uint> boxIndices = { 0, 1, 0, 0, 2, 0,
+	1, 3, 1, 2, 3, 2,
+	4, 5, 4, 4, 6, 4,
+	5, 7, 5, 6, 7, 6,
+	1, 5, 1, 0, 4, 0,
+	2, 6, 2, 3, 7, 3};
+
+static const std::vector<uint> octaIndices = {
+	0, 2, 0, 0, 3, 0, 0, 4, 0, 0, 5, 0,
+	1, 2, 1, 1, 3, 1, 1, 4, 1, 1, 5, 1,
+	2, 4, 2, 2, 5, 2, 3, 4, 3, 3, 5, 3,
+	0, 1, 0, 2, 3, 2, 4, 5, 4
+};
+
+
 class ViewerConfig : public RenderingConfig {
 public:
 
@@ -192,6 +208,7 @@ int main(int argc, char ** argv) {
 	// GUi state
 	Mesh boundingBox("bbox");
 	Mesh debugLights("lights");
+	Mesh debugZones("zones");
 	enum class ViewerMode {
 		MODEL, AREA, WORLD
 	};
@@ -207,6 +224,7 @@ int main(int argc, char ** argv) {
 	bool freezeCulling = false;
 	bool showWireframe = false;
 	bool showLights = false;
+	bool showZones = false;
 #ifdef DEBUG
 	bool showDemoWindow = false;
 #endif
@@ -363,51 +381,48 @@ int main(int argc, char ** argv) {
 										// Center camera
 										adjustCameraToBoundingBox(camera, scene.computeBoundingBox());
 										deselect(frameInfos[0], selected, (SelectionFilter)(OBJECT | TEXTURE));
+
 										// Build light debug visualisation.
-										debugLights.clean();
-										for(const World::Light& light : scene.world.lights()){
-
-											uint indexShift = (uint)debugLights.positions.size();
-											// Build octahedron.
-											const glm::vec3 lightPos = glm::vec3(light.frame[3]);
-											for(uint i = 0; i < 3; ++i){
-												glm::vec3 offset(0.0f);
-												offset[i] = light.radius[i];
-												debugLights.positions.push_back(lightPos - offset);
-												debugLights.positions.push_back(lightPos + offset);
-												debugLights.colors.push_back(light.color);
-												debugLights.colors.push_back(light.color);
+										{
+											debugLights.clean();
+											for(const World::Light& light : scene.world.lights()){
+												const uint indexShift = (uint)debugLights.positions.size();
+												// Build octahedron.
+												const glm::vec3 lightPos = glm::vec3(light.frame[3]);
+												for(uint i = 0; i < 3; ++i){
+													glm::vec3 offset(0.0f);
+													offset[i] = light.radius[i];
+													debugLights.positions.push_back(lightPos - offset);
+													debugLights.positions.push_back(lightPos + offset);
+													debugLights.colors.push_back(light.color);
+													debugLights.colors.push_back(light.color);
+												}
+												// Setup degenerate triangles for each line of a octahedron.
+												for(const uint ind : octaIndices){
+													debugLights.indices.push_back(indexShift + ind);
+												}
 
 											}
-											const std::vector<uint> octaIndices = {
-												0, 2, 0,
-												0, 3, 0,
-												0, 4, 0,
-												0, 5, 0,
-
-												1, 2, 1,
-												1, 3, 1,
-												1, 4, 1,
-												1, 5, 1,
-
-												2, 4, 2,
-												2, 5, 2,
-												3, 4, 3,
-												3, 5, 3,
-
-												0, 1, 0,
-												2, 3, 2,
-												4, 5, 4
-											};
-
-											// Setup degenerate triangles for each line of a octahedron.
-
-											for(const uint ind : octaIndices){
-												debugLights.indices.push_back(indexShift + ind);
-											}
-
+											debugLights.upload();
 										}
-										debugLights.upload();
+										// Build zones debug visualisation.
+										{
+											debugZones.clean();
+											for(const World::Zone& zone : scene.world.zones()){
+												const uint indexShift = (uint)debugZones.positions.size();
+												// Build box.
+												const auto corners = zone.bbox.getCorners();
+												const std::vector<glm::vec3> colors(corners.size(), zone.ambientColor);
+												debugZones.positions.insert(debugZones.positions.end(), corners.begin(), corners.end());
+												debugZones.colors.insert(debugZones.colors.end(), colors.begin(), colors.end());
+												// Setup degenerate triangles for each line of a octahedron.
+												for(const uint ind : boxIndices){
+													debugZones.indices.push_back(indexShift + ind);
+												}
+
+											}
+											debugZones.upload();
+										}
 									}
 								}
 								ImGui::TableNextColumn();
@@ -488,8 +503,7 @@ int main(int argc, char ** argv) {
 											const uint indexShift = (uint)boundingBox.positions.size();
 											boundingBox.positions.insert(boundingBox.positions.end(), corners.begin(), corners.end());
 											// Setup degenerate triangles for each line of a cube.
-											const std::vector<uint> localIndices = { 0, 1, 0, 0, 2, 0, 1, 3, 1, 2, 3, 2, 4, 5, 4, 4, 6, 4, 5, 7, 5, 6, 7, 6, 1, 5, 1, 0, 4, 0, 2, 6, 2, 3, 7, 3};
-											for(const uint ind : localIndices){
+											for(const uint ind : boxIndices){
 												boundingBox.indices.push_back(indexShift + ind);
 											}
 
@@ -690,7 +704,7 @@ int main(int argc, char ** argv) {
 									const auto corners = debugInfos.bbox.getCorners();
 									boundingBox.positions = corners;
 									// Setup degenerate triangles for each line of a cube.
-									boundingBox.indices = { 0, 1, 0, 0, 2, 0, 1, 3, 1, 2, 3, 2, 4, 5, 4, 4, 6, 4, 5, 7, 5, 6, 7, 6, 1, 5, 1, 0, 4, 0, 2, 6, 2, 3, 7, 3};
+									boundingBox.indices = boxIndices;
 									boundingBox.colors.resize(boundingBox.positions.size(), glm::vec3(1.0f, 0.0f, 0.0f));
 									boundingBox.upload();
 									adjustCameraToBoundingBox(camera, boundingBox.computeBoundingBox());
@@ -755,7 +769,6 @@ int main(int argc, char ** argv) {
 			ImGui::RadioButton("Normal", &albedoMode, MODE_ALBEDO_NORMAL); ImGui::SameLine();
 			ImGui::RadioButton("Texture", &albedoMode, MODE_ALBEDO_TEXTURE);
 
-
 			if(ImGui::ArrowButton("VisibilityArrow", ImGuiDir_Down)){
 				ImGui::OpenPopup("visibilityPopup");
 			}
@@ -773,12 +786,15 @@ int main(int argc, char ** argv) {
 			ImGui::SameLine();
 			ImGui::Checkbox("Lights", &showLights);
 			ImGui::SameLine();
+			ImGui::Checkbox("Zones", &showZones);
+
 			ImGui::Checkbox("Freeze culling", &freezeCulling);
-			ImGui::Separator();
+			ImGui::SameLine();
 			if(ImGui::Button("Reset camera")){
 				camera.reset();
 				adjustCameraToBoundingBox(camera, scene.computeBoundingBox());
 			}
+			ImGui::Separator();
 			camera.interface();
 		}
 		ImGui::End();
@@ -861,6 +877,16 @@ int main(int argc, char ** argv) {
 				GPU::setDepthState(true, TestFunction::LESS, true);
 				GPU::setBlendState(false);
 				GPU::drawMesh(debugLights);
+			}
+
+			if(showZones && !debugZones.indices.empty()){
+				coloredDebugDraw->use();
+				coloredDebugDraw->buffer(frameInfos, 0);
+				GPU::setPolygonState(PolygonMode::LINE);
+				GPU::setCullState(false);
+				GPU::setDepthState(true, TestFunction::LESS, true);
+				GPU::setBlendState(false);
+				GPU::drawMesh(debugZones);
 			}
 
 			GPU::setPolygonState(PolygonMode::FILL);
