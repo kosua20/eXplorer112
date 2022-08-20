@@ -22,6 +22,14 @@ int parseInt(const char* val, int fallback){
 	return std::stoi(val);
 }
 
+float parseFloat(const char* val, float fallback){
+	if(val == nullptr || val[0] == '\0'){
+		return fallback;
+	}
+	std::string valStr(val);
+	return std::stof(val);
+}
+
 glm::vec2 parseVec2(const char* val, const glm::vec2& fallback){
 	if(val == nullptr || val[0] == '\0'){
 		return fallback;
@@ -51,6 +59,21 @@ glm::vec3 parseVec3(const char* val, const glm::vec3& fallback){
 		return fallback;
 	}
 	return { std::stof(tokens[0]), std::stof(tokens[1]), std::stof(tokens[2])};
+}
+
+glm::vec4 parseVec4(const char* val, const glm::vec4& fallback){
+	if(val == nullptr || val[0] == '\0'){
+		return fallback;
+	}
+
+	std::string valStr(val);
+	valStr = TextUtilities::trim(valStr, "()");
+	const std::vector<std::string> tokens = TextUtilities::split(valStr, " ", true);
+	if(tokens.size() < 4){
+		Log::error("Unable to parse vec4.");
+		return fallback;
+	}
+	return { std::stof(tokens[0]), std::stof(tokens[1]), std::stof(tokens[2]), std::stof(tokens[3])};
 }
 
 glm::mat4 parseFrame(const char* val){
