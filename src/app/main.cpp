@@ -120,6 +120,55 @@ Program* loadProgram(const std::string& computeName){
 	return new Program(computeName, compContent);
 }
 
+void addLightGizmo(Mesh& mesh, const glm::vec3& center, const glm::vec3& radii, const glm::vec3& color){
+	static const uint vertCount = 64;
+
+	// Generate angles if not already done.
+	static std::vector<glm::vec2> coordinates;
+	if(coordinates.size() != vertCount){
+		coordinates.resize(vertCount);
+		for(uint a = 0u; a < vertCount; ++a){
+			const float angle = (float)a / (float)(vertCount-1) * 360.0f / 180.0f * glm::pi<float>();
+			coordinates[a][0] = std::cos(angle);
+			coordinates[a][1] = std::sin(angle);
+		}
+	}
+
+	// Preallocate storage space.
+	const uint totalVertCount = 3 * (vertCount + 2);
+	mesh.positions.reserve(mesh.positions.size() + totalVertCount);
+	mesh.colors.reserve(mesh.colors.size() + totalVertCount);
+	mesh.indices.reserve(mesh.indices.size() + 3 * totalVertCount);
+
+	// Three circles of radius 1, along the three axis.
+	for(int i = 0; i < 3; ++i){
+		const uint xIndex = (i + 1) % 3;
+		const uint yIndex = (i + 2) % 3;
+		const uint iIndex = mesh.positions.size();
+		for(uint a = 0u; a < vertCount; ++a){
+			glm::vec3& p = mesh.positions.emplace_back(center);
+			p[xIndex] += coordinates[a][0] * radii[xIndex];
+			p[yIndex] += coordinates[a][1] * radii[yIndex];
+			// Degenerate triangle for line rendering.
+			if(a != 0){
+				mesh.indices.push_back(iIndex + a);
+				mesh.indices.push_back(iIndex + a - 1);
+				mesh.indices.push_back(iIndex + a);
+			}
+		}
+
+		glm::vec3 offset(0.0f);
+		offset[i] = 5.0f;
+		mesh.positions.push_back(center - offset);
+		mesh.positions.push_back(center + offset);
+		mesh.indices.push_back(iIndex + vertCount);
+		mesh.indices.push_back(iIndex + vertCount+1);
+		mesh.indices.push_back(iIndex + vertCount);
+	}
+
+	mesh.colors.insert(mesh.colors.end(), totalVertCount, color);
+}
+
 void adjustCameraToBoundingBox(ControllableCamera& camera, const BoundingBox& bbox){
 	// Center the camera.
 	const glm::vec3 center = bbox.getCentroid();
@@ -457,21 +506,8 @@ int main(int argc, char ** argv) {
 										if(!scene.world.lights().empty()){
 
 											for(const World::Light& light : scene.world.lights()){
-												const uint indexShift = (uint)debugLights.positions.size();
-												// Build octahedron.
 												const glm::vec3 lightPos = glm::vec3(light.frame[3]);
-												for(uint i = 0; i < 3; ++i){
-													glm::vec3 offset(0.0f);
-													offset[i] = light.radius[i];
-													debugLights.positions.push_back(lightPos - offset);
-													debugLights.positions.push_back(lightPos + offset);
-													debugLights.colors.push_back(light.color);
-													debugLights.colors.push_back(light.color);
-												}
-												// Setup degenerate triangles for each line of a octahedron.
-												for(const uint ind : octaIndices){
-													debugLights.indices.push_back(indexShift + ind);
-												}
+												addLightGizmo(debugLights, lightPos, light.radius, light.color);
 
 											}
 											debugLights.upload();
@@ -913,7 +949,7 @@ int main(int argc, char ** argv) {
 			}
 		}
 		// Interpolate between current and new
-		effects = AmbientEffects::mix(effects, newEffects, 0.05f);
+		effects = AmbientEffects::mix(effects, newEffects, 0.1f);
 
 		// Camera.
 		const glm::mat4 vp		   = camera.projection() * camera.view();
