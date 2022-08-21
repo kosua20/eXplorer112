@@ -160,6 +160,32 @@ void deselect(FrameData& _frame, SelectionState& _state, SelectionFilter _filter
 
 }
 
+void loadEngineTextures(const GameFiles& gameFiles, Texture& fogXYTexture, Texture& fogZTexture){
+	if(gameFiles.texturesPath.empty()){
+		return;
+	}
+
+	fogXYTexture.clean();
+	Image& imgXY = fogXYTexture.images.emplace_back();
+	imgXY.load(gameFiles.texturesPath / "commons" / "fog_xy.png");
+	fogXYTexture.width = imgXY.width;
+	fogXYTexture.height = imgXY.height;
+	fogXYTexture.shape = TextureShape::D2;
+	fogXYTexture.depth = 1;
+	fogXYTexture.levels = 1;
+	fogXYTexture.upload(Layout::RGBA8, false);
+
+	fogZTexture.clean();
+	Image& imgZ = fogZTexture.images.emplace_back();
+	imgZ.load(gameFiles.texturesPath / "commons" / "fog_z.png");
+	fogZTexture.width = imgZ.width;
+	fogZTexture.height = imgZ.height;
+	fogZTexture.shape = TextureShape::D2;
+	fogZTexture.depth = 1;
+	fogZTexture.levels = 1;
+	fogZTexture.upload(Layout::RGBA8, false);
+}
+
 int main(int argc, char ** argv) {
 	// First, init/parse/load configuration.
 	ViewerConfig config(std::vector<std::string>(argv, argv + argc));
@@ -249,6 +275,11 @@ int main(int argc, char ** argv) {
 	bool showZones = false;
 
 	AmbientEffects effects;
+
+	Texture fogXYTexture("fogXYMap");
+	Texture fogZTexture("fogZMap");
+	loadEngineTextures(gameFiles, fogXYTexture, fogZTexture);
+
 #ifdef DEBUG
 	bool showDemoWindow = false;
 #endif
@@ -305,6 +336,7 @@ int main(int argc, char ** argv) {
 					fs::path newInstallPath;
 					if(Window::showDirectoryPicker(fs::path(""), newInstallPath)){
 						gameFiles = GameFiles( newInstallPath);
+						loadEngineTextures(gameFiles, fogXYTexture, fogZTexture);
 						scene = Scene();
 						deselect(frameInfos[0], selected, SelectionFilter::ALL);
 					}
@@ -947,6 +979,8 @@ int main(int argc, char ** argv) {
 			texturedInstancedObject->buffer(*scene.instanceInfos, 2);
 			texturedInstancedObject->buffer(*scene.materialInfos, 3);
 			texturedInstancedObject->buffer(*drawInstances, 4);
+			texturedInstancedObject->texture(fogXYTexture, 0);
+			texturedInstancedObject->texture(fogZTexture, 1);
 
 			if(showOpaques){
 				for(uint mid = 0; mid < scene.meshInfos->size(); ++mid){

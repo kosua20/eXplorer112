@@ -5,6 +5,7 @@
 
 layout(location = 0) in INTERFACE {
 	mat4 tbn; ///< Normal to view matrix.
+	vec4 worldPos;
 	vec4 viewDir;
 	vec4 uv;
 } In ;
@@ -21,6 +22,8 @@ layout(std140, set = 0, binding = 3) readonly buffer MaterialsInfos {
 	MaterialInfos materialInfos[];
 };
 
+layout(set = 2, binding = 0) uniform texture2D fogXYMap;
+layout(set = 2, binding = 1) uniform texture2D fogZMap;
 layout(set = 3, binding = 0) uniform texture2DArray textures[]; ///< Color textures.
 
 layout(location = 0) out vec4 fragColor; ///< Color.
@@ -79,5 +82,19 @@ void main(){
 	}
 
 
-	fragColor = vec4(diffuse * color.rgb + specular, color.a);
+	fragColor = vec4((diffuse + ambient) * color.rgb + specular, color.a);
+	// Height fog.
+	vec4 hFogParams = engine.fogParams;
+	float heightFog = hFogParams.z * (hFogParams.x-In.worldPos.y) / hFogParams.y;
+	heightFog = clamp(heightFog, 0.0, 1.0);
+	// Depth fog.
+	vec3 viewDirFog = 0.5 * engine.fogDensity * ( -In.viewDir.xyz ) / (1000.0);
+	viewDirFog = viewDirFog * 0.5 + 0.5;
+	float fogAttenXY = textureLod(sampler2D(fogXYMap, sClampLinear), viewDirFog.xy, 0.0).r;
+	float fogAttenZ  = textureLod(sampler2D( fogZMap, sClampLinear), viewDirFog.zz, 0.0).r;
+	float depthFog = 1.0 - (fogAttenXY * fogAttenZ);
+	// Final fog compositing.
+	float fogFactor = clamp(heightFog + depthFog, 0.0, 1.0);
+	fragColor.rgb = mix(fragColor.rgb, engine.fogColor.rgb, fogFactor);
+
 }
