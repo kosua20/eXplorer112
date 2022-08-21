@@ -434,8 +434,20 @@ int main(int argc, char ** argv) {
 										const size_t instanceCount = scene.instanceInfos->size();
 										drawCommands = std::make_unique<Buffer>(meshCount * sizeof(GPU::DrawCommand), BufferType::INDIRECT);
 										drawInstances = std::make_unique<Buffer>(instanceCount * sizeof(uint), BufferType::STORAGE);
+
 										// Center camera
-										adjustCameraToBoundingBox(camera, scene.computeBoundingBox());
+										if(scene.world.cameras().empty()){
+											adjustCameraToBoundingBox(camera, scene.computeBoundingBox());
+										} else {
+											// If a scene camera is available, place ourselves right next to it.
+											const World::Camera& refCam =  scene.world.cameras()[0];
+											const glm::vec3 pos = glm::vec3(refCam.frame[3]) - glm::vec3(0.0f, 50.0f, 0.0f);
+											const glm::vec3 up = glm::vec3(0.0f, 1.0f, 0.0f);
+											glm::vec3 front = refCam.frame * glm::vec4(0.0f, 0.0f, 1.0f, 0.0f);
+											glm::vec3 right = glm::normalize(glm::cross(glm::normalize(front), up));
+											front = glm::normalize(glm::cross(up, right));
+											camera.pose(pos, pos + front, up);
+										}
 										deselect(frameInfos[0], selected, (SelectionFilter)(OBJECT | TEXTURE));
 
 										debugLights.clean();
@@ -1013,7 +1025,7 @@ int main(int argc, char ** argv) {
 				// Alternative possibility: real alpha blend and object sorting.
 				GPU::setDepthState(true, TestFunction::LEQUAL, false);
 				GPU::setCullState(false);
-				GPU::setBlendState(true, BlendEquation::ADD, BlendFunction::ONE, BlendFunction::ONE);
+				GPU::setBlendState(true, BlendEquation::ADD, BlendFunction::SRC_ALPHA, BlendFunction::ONE_MINUS_SRC_ALPHA);
 				for(uint mid = 0; mid < scene.meshInfos->size(); ++mid){
 					const uint materialIndex = (*scene.meshInfos)[mid].materialIndex;
 					if((*scene.materialInfos)[materialIndex].type != Object::Material::TRANSPARENT){

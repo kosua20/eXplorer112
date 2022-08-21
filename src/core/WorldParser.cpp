@@ -159,7 +159,7 @@ void World::processEntity(const pugi::xml_node& entity, const glm::mat4& globalF
 		const char* fovStr = entity.find_child_by_attribute("name", "fov").child_value();
 		float fov = ((fovStr && fovStr[0] != '\0') ? std::stof(fovStr) : 45.0f) * glm::pi<float>() / 180.0f;
 		// Adjust the frame, putting the viewpoint at the front of the default camera.
-		glm::mat4 renderFrame = frame * glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, -2.75f, 10.0f));
+		glm::mat4 renderFrame = frame * glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, -2.75f, 11.0f));
 		// Store the camera
 		_cameras.emplace_back(camName, renderFrame, fov);
 	}

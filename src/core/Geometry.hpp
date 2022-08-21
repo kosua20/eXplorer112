@@ -6,7 +6,7 @@
 #include <unordered_set>
 
 #define DEFAULT_ALBEDO_TEXTURE "checker"
-#define DEFAULT_NORMAL_TEXTURE "lysmum_n"
+#define DEFAULT_NORMAL_TEXTURE "flat_n"
 
 struct Color {
 	uint8_t r;
