@@ -24,8 +24,10 @@ GameFiles::GameFiles(const fs::path& installPath){
 	// Textures can be a bit everywhere...
 	System::listAllFilesOfType(modelsPath, ".dds", texturesList);
 	System::listAllFilesOfType(modelsPath, ".tga", texturesList);
+	System::listAllFilesOfType(modelsPath, ".png", texturesList);
 	System::listAllFilesOfType(texturesPath, ".dds", texturesList);
 	System::listAllFilesOfType(texturesPath, ".tga", texturesList);
+	System::listAllFilesOfType(texturesPath, ".png", texturesList);
 	System::listAllFilesOfType(zonesPath, ".rf3", areasList);
 
 	std::sort(modelsList.begin(), modelsList.end());

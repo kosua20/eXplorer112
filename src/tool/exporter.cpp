@@ -39,8 +39,10 @@ int main(int argc, const char** argv)
 	std::vector<fs::path> texturesList;
 	System::listAllFilesOfType(modelsPath, ".dds", texturesList);
 	System::listAllFilesOfType(modelsPath, ".tga", texturesList);
+	System::listAllFilesOfType(modelsPath, ".png", texturesList);
 	System::listAllFilesOfType(texturesPath, ".dds", texturesList);
 	System::listAllFilesOfType(texturesPath, ".tga", texturesList);
+	System::listAllFilesOfType(texturesPath, ".png", texturesList);
 
 	if(dryRun){
 		Log::info("Dry run:");

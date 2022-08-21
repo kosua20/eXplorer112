@@ -209,7 +209,7 @@ void World::processEntity(const pugi::xml_node& entity, const glm::mat4& globalF
 			materialStr = TextUtilities::trim(materialStr, "/");
 			const fs::path texturePath = materialStr;
 			const std::string extension = texturePath.filename().extension().string();
-			if(extension == ".tga" || extension == ".dds"){
+			if(extension == ".tga" || extension == ".dds" || extension == ".png"){
 				Object::Material material;
 				material.color = texturePath.filename().replace_extension().string();
 				material.normal = "";
