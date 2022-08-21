@@ -12,12 +12,13 @@
 
 int main(int argc, const char** argv)
 {
-	if(argc < 3){
+	if(argc < 2){
 		return 1;
 	}
 
 	const fs::path inputPath(argv[1]);
-	const fs::path outputPath = fs::path(argv[2]);
+	const bool dryRun = argc == 2;
+	const fs::path outputPath = dryRun ? "" : fs::path(argv[2]);
 
 	const fs::path modelsPath = inputPath / "models";
 	const fs::path texturesPath = inputPath / "textures";
@@ -41,7 +42,26 @@ int main(int argc, const char** argv)
 	System::listAllFilesOfType(texturesPath, ".dds", texturesList);
 	System::listAllFilesOfType(texturesPath, ".tga", texturesList);
 
+	if(dryRun){
+		Log::info("Dry run:");
+		for(const auto& worldPath : worldsList){
+			Log::info("Processing world %s", worldPath.filename().string().c_str());
 
+			World world;
+			if(!world.load(worldPath, inputPath)){
+				Log::error("Unable to load world at path %s", worldPath.string().c_str());
+			}
+			Log::info("Summary for world %s", world.name().c_str());
+			Log::info("\t* %lu objects", world.objects().size());
+			Log::info("\t* %lu instances", world.instances().size());
+			Log::info("\t* %lu materials", world.materials().size());
+			Log::info("\t* %lu cameras", world.cameras().size());
+			Log::info("\t* %lu lights", world.lights().size());
+			Log::info("\t* %lu zones", world.zones().size());
+
+		}
+		return 0;
+	}
 
 //#define SCENE_FILE "tutoeco.world"
 
