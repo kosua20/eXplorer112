@@ -5,6 +5,12 @@ layout(set = 0, binding = 0) uniform EngineData {
 	mat4 ivp; ///< Inverse
 	vec4 color;
 	vec4 camPos;
+
+	vec4 ambientColor;
+	vec4 fogColor;
+	vec4 fogParams;
+	float fogDensity;
+
 	// Shading settings.
 	uint shadingMode;
 	uint albedoMode;

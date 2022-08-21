@@ -65,6 +65,12 @@ struct FrameData {
 	glm::mat4 ivp{1.0f};
 	glm::vec4 color{1.0f};
 	glm::vec4 camPos{1.0f};
+
+	glm::vec4 ambientColor{0.0f};
+	glm::vec4 fogColor{0.0f};
+	glm::vec4 fogParams{0.0f};
+	float fogDensity = 0.0f;
+
 	// Shading settings.
 	uint shadingMode = 0;
 	uint albedoMode = 0;
@@ -80,6 +86,22 @@ struct SelectionState {
    int mesh = -1;
    int instance = -1;
    int texture = -1;
+};
+
+struct AmbientEffects {
+	glm::vec4 color = glm::vec4(0.1f, 0.1f, 0.1f, 1.0f);
+	glm::vec4 fogColor = glm::vec4(0.2f, 0.2f, 0.2f, 1.0f);
+	glm::vec4 fogParams = glm::vec4(0.0f, 1.0f, 0.0f, 0.0f);
+	float fogDensity = 0.0f;
+
+	static AmbientEffects mix(const AmbientEffects& a, const AmbientEffects& b, float t){
+		AmbientEffects c;
+		c.color = glm::mix(a.color, b.color, t);
+		c.fogColor = glm::mix(a.fogColor, b.fogColor, t);
+		c.fogParams = glm::mix(a.fogParams, b.fogParams, t);
+		c.fogDensity = glm::mix(a.fogDensity, b.fogDensity, t);
+		return c;
+	}
 };
 
 Program* loadProgram(const std::string& vertName, const std::string& fragName){
@@ -225,6 +247,8 @@ int main(int argc, char ** argv) {
 	bool showWireframe = false;
 	bool showLights = false;
 	bool showZones = false;
+
+	AmbientEffects effects;
 #ifdef DEBUG
 	bool showDemoWindow = false;
 #endif
@@ -382,6 +406,7 @@ int main(int argc, char ** argv) {
 										adjustCameraToBoundingBox(camera, scene.computeBoundingBox());
 										deselect(frameInfos[0], selected, (SelectionFilter)(OBJECT | TEXTURE));
 
+										effects = AmbientEffects();
 										// Build light debug visualisation.
 										{
 											debugLights.clean();
@@ -828,22 +853,42 @@ int main(int argc, char ** argv) {
 			ImGui::ShowDemoWindow();
 		}
 #endif
+		/// Rendering
+		// Update ambient effects.
+		AmbientEffects newEffects = effects;
+		float minDist = FLT_MAX;
+		for(const World::Zone& zone : scene.world.zones()){
+			float dist = zone.bbox.distance(camera.position());
+			if(dist < minDist){
+				minDist = dist;
+				newEffects.color = zone.ambientColor;
+				newEffects.fogParams = zone.fogParams;
+				newEffects.fogColor = zone.fogColor;
+				newEffects.fogDensity = zone.fogDensity;
+			}
+		}
+		// Interpolate between current and new
+		effects = AmbientEffects::mix(effects, newEffects, 0.05f);
 
-		/// Rendering.
+		// Camera.
 		const glm::mat4 vp		   = camera.projection() * camera.view();
-
 		frameInfos[0].vp = vp;
 		// Only update the culling VP if needed.
 		if(!freezeCulling){
 			frameInfos[0].vpCulling = vp;
 		}
 		frameInfos[0].ivp = glm::transpose(glm::inverse(vp));
+
+		frameInfos[0].ambientColor = effects.color;
+		frameInfos[0].fogParams = effects.fogParams;
+		frameInfos[0].fogColor = effects.fogColor;
+		frameInfos[0].fogDensity = effects.fogDensity;
+
 		frameInfos[0].color = glm::vec4(1.0f);
 		frameInfos[0].camPos = glm::vec4(camera.position(), 1.0f);
 		frameInfos[0].albedoMode = albedoMode;
 		frameInfos[0].shadingMode = shadingMode;
 		frameInfos.upload();
-		fb.bind(glm::vec4(0.25f, 0.25f, 0.25f, 1.0f), 1.0f, LoadOperation::DONTCARE);
 
 		if(selected.item >= 0){
 
@@ -856,7 +901,8 @@ int main(int argc, char ** argv) {
 			drawArgsCompute->buffer(*drawInstances, 4);
 			GPU::dispatch((uint)scene.meshInfos->size(), 1, 1);
 
-			fb.bind(glm::vec4(0.25f, 0.25f, 0.25f, 1.0f), 1.0f, LoadOperation::DONTCARE);
+			// Determine clearing color by finding the closest area.
+			fb.bind(glm::vec4(glm::vec3(effects.fogColor), 1.0f), 1.0f, LoadOperation::DONTCARE);
 			fb.setViewport();
 
 			if(selected.mesh >= 0){
@@ -963,6 +1009,8 @@ int main(int argc, char ** argv) {
 			}
 
 
+		} else {
+			fb.clear(glm::vec4(0.2f, 0.2f, 0.2f, 1.0f), 1.0f);
 		}
 
 		if(selected.texture >= 0){

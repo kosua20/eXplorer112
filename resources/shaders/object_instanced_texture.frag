@@ -53,12 +53,16 @@ void main(){
 		discard;
 	}
 
+	vec3 ambient = vec3(0.0);
 	float diffuse = 1.0;
 	float specular = 0.0;
+
 	if(engine.shadingMode == MODE_SHADING_LIGHT){
 		vec3 l = normalize(vec3(1.0, 1.0, 1.0)); // World space for now
 		vec3 v = normalize(In.viewDir.xyz);
-		//Diffuse (based on game shader)
+		// Ambient. TODO: fetch based on position relative to list of areas, area index passed from the vertex shader, or reading a 3D texture containing indices.
+		ambient = engine.ambientColor.rgb;
+		// Diffuse (based on game shader)
 		diffuse = dot(n, l) * 0.5 + 0.5;
 		diffuse *= diffuse;
 		// Specular (based on game shader)
