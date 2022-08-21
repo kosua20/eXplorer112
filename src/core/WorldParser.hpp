@@ -3,7 +3,7 @@
 #include "core/System.hpp"
 #include "core/Geometry.hpp"
 #include "core/Common.hpp"
-#include "resources/Bounds.hpp"
+#include "core/Bounds.hpp"
 #include <map>
 #include <unordered_map>
 

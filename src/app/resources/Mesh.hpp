@@ -1,5 +1,5 @@
 #pragma once
-#include "resources/Bounds.hpp"
+#include "core/Bounds.hpp"
 #include "resources/Buffer.hpp"
 #include "graphics/GPUTypes.hpp"
 #include "core/Common.hpp"

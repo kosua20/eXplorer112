@@ -92,6 +92,9 @@ public:
 	 */
 	bool contains(const glm::vec3 & point) const;
 
+
+	float distance(const glm::vec3 & point) const;
+
 	/** \return true if no point has been added to the bounding box */
 	bool empty() const;
 

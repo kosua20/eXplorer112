@@ -1,5 +1,5 @@
 #include "input/Camera.hpp"
-#include "resources/Bounds.hpp"
+#include "core/Bounds.hpp"
 #include <sstream>
 
 Camera::Camera() {

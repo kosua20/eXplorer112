@@ -1,4 +1,4 @@
-#include "resources/Bounds.hpp"
+#include "core/Bounds.hpp"
 
 BoundingSphere::BoundingSphere(const glm::vec3 & aCenter, float aRadius) :
 	center(aCenter), radius(aRadius) {
@@ -78,6 +78,11 @@ BoundingBox BoundingBox::transformed(const glm::mat4 & trans) const {
 
 bool BoundingBox::contains(const glm::vec3 & point) const {
 	return glm::all(glm::greaterThanEqual(point, minis)) && glm::all(glm::lessThanEqual(point, maxis));
+}
+
+float BoundingBox::distance(const glm::vec3 & point) const {
+	glm::vec3 dists = glm::max(glm::abs(point - getCentroid()) - 0.5f * getSize(), 0.0f);
+	return glm::length(dists);
 }
 
 bool BoundingBox::empty() const {
