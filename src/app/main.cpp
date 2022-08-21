@@ -438,10 +438,12 @@ int main(int argc, char ** argv) {
 										adjustCameraToBoundingBox(camera, scene.computeBoundingBox());
 										deselect(frameInfos[0], selected, (SelectionFilter)(OBJECT | TEXTURE));
 
+										debugLights.clean();
+										debugZones.clean();
 										effects = AmbientEffects();
 										// Build light debug visualisation.
-										{
-											debugLights.clean();
+										if(!scene.world.lights().empty()){
+
 											for(const World::Light& light : scene.world.lights()){
 												const uint indexShift = (uint)debugLights.positions.size();
 												// Build octahedron.
@@ -463,8 +465,7 @@ int main(int argc, char ** argv) {
 											debugLights.upload();
 										}
 										// Build zones debug visualisation.
-										{
-											debugZones.clean();
+										if(!scene.world.zones().empty()){
 											for(const World::Zone& zone : scene.world.zones()){
 												const uint indexShift = (uint)debugZones.positions.size();
 												// Build box.
