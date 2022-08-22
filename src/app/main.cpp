@@ -120,53 +120,116 @@ Program* loadProgram(const std::string& computeName){
 	return new Program(computeName, compContent);
 }
 
-void addLightGizmo(Mesh& mesh, const glm::vec3& center, const glm::vec3& radii, const glm::vec3& color){
-	static const uint vertCount = 64;
+void addLightGizmo(Mesh& mesh, const World::Light& light){
+	static const uint circeSubdivs = 64;
+	static const float arrowScale = 80.0f;
 
 	// Generate angles if not already done.
 	static std::vector<glm::vec2> coordinates;
-	if(coordinates.size() != vertCount){
-		coordinates.resize(vertCount);
-		for(uint a = 0u; a < vertCount; ++a){
-			const float angle = (float)a / (float)(vertCount-1) * 360.0f / 180.0f * glm::pi<float>();
+	if(coordinates.size() != circeSubdivs){
+		coordinates.resize(circeSubdivs);
+		for(uint a = 0u; a < circeSubdivs; ++a){
+			const float angle = (float)a / (float)(circeSubdivs-1) * 360.0f / 180.0f * glm::pi<float>();
 			coordinates[a][0] = std::cos(angle);
 			coordinates[a][1] = std::sin(angle);
 		}
 	}
 
-	// Preallocate storage space.
-	const uint totalVertCount = 3 * (vertCount + 2);
-	mesh.positions.reserve(mesh.positions.size() + totalVertCount);
-	mesh.colors.reserve(mesh.colors.size() + totalVertCount);
-	mesh.indices.reserve(mesh.indices.size() + 3 * totalVertCount);
+	const uint firstVertexIndex = mesh.positions.size();
 
-	// Three circles of radius 1, along the three axis.
-	for(int i = 0; i < 3; ++i){
-		const uint xIndex = (i + 1) % 3;
-		const uint yIndex = (i + 2) % 3;
+	// Always generate a small cross.
+	for(uint i = 0; i < 3; ++i){
 		const uint iIndex = mesh.positions.size();
-		for(uint a = 0u; a < vertCount; ++a){
-			glm::vec3& p = mesh.positions.emplace_back(center);
-			p[xIndex] += coordinates[a][0] * radii[xIndex];
-			p[yIndex] += coordinates[a][1] * radii[yIndex];
-			// Degenerate triangle for line rendering.
-			if(a != 0){
-				mesh.indices.push_back(iIndex + a);
-				mesh.indices.push_back(iIndex + a - 1);
-				mesh.indices.push_back(iIndex + a);
-			}
-		}
-
 		glm::vec3 offset(0.0f);
-		offset[i] = 5.0f;
-		mesh.positions.push_back(center - offset);
-		mesh.positions.push_back(center + offset);
-		mesh.indices.push_back(iIndex + vertCount);
-		mesh.indices.push_back(iIndex + vertCount+1);
-		mesh.indices.push_back(iIndex + vertCount);
+		offset[i] = 10.0f;
+		mesh.positions.push_back(-offset);
+		mesh.positions.push_back( offset);
+		mesh.indices.push_back(iIndex );
+		mesh.indices.push_back(iIndex + 1);
+		mesh.indices.push_back(iIndex );
 	}
 
-	mesh.colors.insert(mesh.colors.end(), totalVertCount, color);
+	switch(light.type){
+		case World::Light::DIRECTIONAL:
+		{
+			// Arrow.
+			const uint iIndex = mesh.positions.size();
+			const float arrowEdgesLength = 0.8f * arrowScale;
+			const float arrowEdgesSpread = 0.2f * arrowScale;
+			mesh.positions.emplace_back(0.0f, 0.0f, arrowScale);
+			mesh.positions.emplace_back(0.0f, 0.0f, 0.0f);
+			mesh.positions.emplace_back( arrowEdgesSpread, 0.0f, arrowEdgesLength);
+			mesh.positions.emplace_back(-arrowEdgesSpread, 0.0f, arrowEdgesLength);
+			mesh.positions.emplace_back(0.0f,  arrowEdgesSpread, arrowEdgesLength);
+			mesh.positions.emplace_back(0.0f, -arrowEdgesSpread, arrowEdgesLength);
+			for(uint i = 1; i < 6; ++i){
+				mesh.indices.push_back(iIndex);
+				mesh.indices.push_back(iIndex + i);
+				mesh.indices.push_back(iIndex);
+			}
+			break;
+		}
+		case World::Light::SPOT:
+		{
+			// Cone
+			const uint iIndex = mesh.positions.size();
+			mesh.positions.emplace_back(0.0f, 0.0f, 0.0f);
+			mesh.positions.emplace_back(-light.radius.x, -light.radius.y, light.radius.z);
+			mesh.positions.emplace_back( light.radius.x, -light.radius.y, light.radius.z);
+			mesh.positions.emplace_back( light.radius.x,  light.radius.y, light.radius.z);
+			mesh.positions.emplace_back(-light.radius.x,  light.radius.y, light.radius.z);
+
+			for(uint i = 1; i < 5; ++i){
+				mesh.indices.push_back(iIndex);
+				mesh.indices.push_back(iIndex + i);
+				mesh.indices.push_back(iIndex);
+			}
+			for(uint i = 1; i < 5; ++i){
+				const uint iNext = i == 4 ? 1 : (i+1);
+				mesh.indices.push_back(iIndex + i);
+				mesh.indices.push_back(iIndex + iNext);
+				mesh.indices.push_back(iIndex + i);
+			}
+			break;
+		}
+		case World::Light::POINT:
+		{
+			// Three circles of radius 1, along the three axis.
+			const uint totalVertCount = 3 * circeSubdivs;
+			mesh.positions.reserve(mesh.positions.size() + totalVertCount);
+			mesh.indices.reserve(mesh.indices.size() + 3 * totalVertCount);
+
+			for(int i = 0; i < 3; ++i){
+				const uint xIndex = (i + 1) % 3;
+				const uint yIndex = (i + 2) % 3;
+				const uint iIndex = mesh.positions.size();
+				for(uint a = 0u; a < circeSubdivs; ++a){
+					glm::vec3& p = mesh.positions.emplace_back(0.0f);
+					p[xIndex] = coordinates[a][0] * light.radius[xIndex];
+					p[yIndex] = coordinates[a][1] * light.radius[yIndex];
+
+					// Degenerate triangle for line rendering.
+					if(a != 0){
+						mesh.indices.push_back(iIndex + a);
+						mesh.indices.push_back(iIndex + a - 1);
+						mesh.indices.push_back(iIndex + a);
+					}
+				}
+			}
+			break;
+		}
+		default:
+			break;
+	}
+
+	// Fill colors.
+	const uint vertexFinalCount = mesh.positions.size() - firstVertexIndex;
+	mesh.colors.insert(mesh.colors.end(), vertexFinalCount, light.color);
+	// Apply light frame.
+	for(uint i = 0; i < vertexFinalCount; ++i){
+		glm::vec3& p = mesh.positions[firstVertexIndex + i];
+		p = glm::vec3(light.frame * glm::vec4(p, 1.0f));
+	}
 }
 
 void adjustCameraToBoundingBox(ControllableCamera& camera, const BoundingBox& bbox){
@@ -318,6 +381,7 @@ int main(int argc, char ** argv) {
 	bool showDecals = true;
 	bool showTransparents = true;
 	bool showOpaques = true;
+	bool showFog = true;
 	bool freezeCulling = false;
 	bool showWireframe = false;
 	bool showLights = false;
@@ -504,11 +568,8 @@ int main(int argc, char ** argv) {
 										effects = AmbientEffects();
 										// Build light debug visualisation.
 										if(!scene.world.lights().empty()){
-
 											for(const World::Light& light : scene.world.lights()){
-												const glm::vec3 lightPos = glm::vec3(light.frame[3]);
-												addLightGizmo(debugLights, lightPos, light.radius, light.color);
-
+												addLightGizmo(debugLights, light);
 											}
 											debugLights.upload();
 										}
@@ -883,6 +944,7 @@ int main(int argc, char ** argv) {
 				ImGui::Checkbox("Opaques",  &showOpaques);
 				ImGui::Checkbox("Decals", &showDecals);
 				ImGui::Checkbox("Transparents", &showTransparents);
+				ImGui::Checkbox("Fog", &showFog);
 				ImGui::EndPopup();
 			}
 			ImGui::SameLine();
@@ -947,6 +1009,10 @@ int main(int argc, char ** argv) {
 				newEffects.fogColor = zone.fogColor;
 				newEffects.fogDensity = zone.fogDensity;
 			}
+		}
+		if(!showFog){
+			newEffects.fogDensity = 0.0f;
+			newEffects.fogParams = glm::vec4(0.0f, 1.0f, 0.0f, 0.0f);
 		}
 		// Interpolate between current and new
 		effects = AmbientEffects::mix(effects, newEffects, 0.1f);
