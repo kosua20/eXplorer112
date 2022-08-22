@@ -137,6 +137,9 @@ void World::processEntity(const pugi::xml_node& entity, const glm::mat4& globalF
 		frame = frame * localFrame;
 	}
 
+	const glm::mat4 entityFrame = frame;
+	glm::mat4 mdlFrame(1.0f);
+
 	// Special case for lights
 	if(type == "LIGHT"){
 		const char* mdlPosStr = entity.find_child_by_attribute("name", "modelPosition").child_value();
@@ -144,7 +147,7 @@ void World::processEntity(const pugi::xml_node& entity, const glm::mat4& globalF
 
 		const glm::vec3 mdlPosition = Area::parseVec3(mdlPosStr);
 		const glm::vec3 mdlRotAngles = Area::parseVec3(mdlRotStr) / 180.0f * glm::pi<float>();
-		const glm::mat4 mdlFrame =  glm::translate(glm::mat4(1.0f), mdlPosition)
+		mdlFrame =  glm::translate(glm::mat4(1.0f), mdlPosition)
 			* glm::eulerAngleYXZ(mdlRotAngles[1], mdlRotAngles[0], mdlRotAngles[2]);
 
 		frame = frame * mdlFrame;
@@ -172,9 +175,11 @@ void World::processEntity(const pugi::xml_node& entity, const glm::mat4& globalF
 	   && (type != "LIGHT") && (type != "CAMERA") && (type != "SOLID") ){
 		return;
 	}
-	if(!isEntityVisible(entity)){
-		return;
-	}
+
+	// Some non-visible items are visible in the game (second light outside wake-up room in tutoeco for instance)
+	//if(!isEntityVisible(entity)){
+	//	return;
+	//}
 
 	if(type == "LIGHT"){
 
@@ -183,9 +188,13 @@ void World::processEntity(const pugi::xml_node& entity, const glm::mat4& globalF
 		Log::check(lightType >= 1 && lightType <= 3, "Unexpected type for light %s", objName.c_str());
 
 		Light& light = _lights.emplace_back();
-		light.frame = frame;
+		light.frame = entityFrame;
 		light.name = objName;
 		light.type = (Light::Type)lightType;
+		// Rotation doesn't matter for point lights apparently.
+		//if(light.type == Light::POINT){
+		//	light.frame = glm::translate(glm::mat4(1.0f), glm::vec3(light.frame[3]));
+		//}
 
 		const char* colorTypeStr = entity.find_child_by_attribute("name", "color").child_value();
 		light.color = Area::parseVec3(colorTypeStr, glm::vec3(1.0f));
@@ -295,9 +304,9 @@ bool World::load(const fs::path& path, const fs::path& resourcePath){
 			glm::mat4 frame = getEntityFrame(item);
 			entitiesList[name] = frame;
 
-			if(!isEntityVisible(item)){
-				continue;
-			}
+			//if(!isEntityVisible(item)){
+			//	continue;
+			//}
 
 			std::string xmlFile = item.find_child_by_attribute("name", "template").child_value();
 			TextUtilities::replace(xmlFile, "\\", "/");
