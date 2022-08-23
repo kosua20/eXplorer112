@@ -59,36 +59,31 @@ World::World(const Object& object){
 	_instances.emplace_back(object.name, 0, glm::mat4(1.0f));
 }
 
+std::string getEntityAttribute(const pugi::xml_node& entity, const char* key){
+	std::string val = entity.attribute(key).value();
+	if(!val.empty()){
+		return TextUtilities::lowercase(val);
+	}
+	val = entity.find_child_by_attribute("name", key).child_value();
+	if(!val.empty()){
+		return TextUtilities::lowercase(val);
+	}
+	return "";
+}
+
+const char* getLightAttribute(const pugi::xml_node& parent, const pugi::xml_node& child, const char* key){
+	const char* valStr = child.find_child_by_attribute("name", key).child_value();
+	if(!valStr || valStr[0] == '\0'){
+		valStr = parent.find_child_by_attribute("name", key).child_value();
+	}
+	return valStr;
+}
+
 bool isEntityVisible(const pugi::xml_node& entity){
 	const char* boolVal = entity.find_child_by_attribute("name", "visible").child_value();
 	return Area::parseBool(boolVal, true);
 }
 
-std::string getEntityName(const pugi::xml_node& entity){
-	// Some templates have "name" as a direct attribute
-	std::string name = entity.attribute("name").value();
-	if(!name.empty()){
-		return name;
-	}
-	name = entity.find_child_by_attribute("name", "name").child_value();
-	if(!name.empty()){
-		return name;
-	}
-	return "";
-}
-
-std::string getEntityType(const pugi::xml_node& entity){
-	// Some templates have "type" as a direct attribute
-	std::string type = entity.attribute("type").value();
-	if(!type.empty()){
-		return TextUtilities::uppercase(type);
-	}
-	type = entity.find_child_by_attribute("name", "type").child_value();
-	if(!type.empty()){
-		return TextUtilities::uppercase(type);
-	}
-	return "";
-}
 
 glm::mat4 getEntityFrame(const pugi::xml_node& entity){
 	const char* objPosStr = entity.find_child_by_attribute("name", "position").child_value();
@@ -109,17 +104,19 @@ glm::mat4 getEntityFrame(const pugi::xml_node& entity){
 
 void World::processEntity(const pugi::xml_node& entity, const glm::mat4& globalFrame, bool templated, ObjectReferenceList& objectRefs, EntityFrameList& entitiesList){
 
-	const std::string type = getEntityType(entity);
+	const std::string type = getEntityAttribute(entity, "type");
 	if(type.empty()){
 		return;
 	}
 
-	const std::string objName = getEntityName(entity);
+	const std::string objName = getEntityAttribute(entity, "name");
 	glm::mat4 frame = globalFrame;
 
 	pugi::xml_node linkedEntity = entity.find_child_by_attribute("param", "name", "link");
 	if(linkedEntity){
-		const std::string linkedEntityName(linkedEntity.child_value());
+		std::string linkedEntityName(linkedEntity.child_value());
+		linkedEntityName = TextUtilities::lowercase(linkedEntityName);
+
 		if(!linkedEntity.empty()){
 			auto linkEntityRecord = entitiesList.find(linkedEntityName);
 			if(linkEntityRecord == entitiesList.end()){
@@ -137,28 +134,32 @@ void World::processEntity(const pugi::xml_node& entity, const glm::mat4& globalF
 		frame = frame * localFrame;
 	}
 
+	// Store entity.
+	entitiesList[objName] = frame;
 	const glm::mat4 entityFrame = frame;
 	glm::mat4 mdlFrame(1.0f);
 
 	// Special case for lights
-	if(type == "LIGHT"){
+	if(type == "light"){
 		const char* mdlPosStr = entity.find_child_by_attribute("name", "modelPosition").child_value();
 		const char* mdlRotStr = entity.find_child_by_attribute("name", "modelRotation").child_value();
 
 		const glm::vec3 mdlPosition = Area::parseVec3(mdlPosStr);
 		const glm::vec3 mdlRotAngles = Area::parseVec3(mdlRotStr) / 180.0f * glm::pi<float>();
-		mdlFrame =  glm::translate(glm::mat4(1.0f), mdlPosition)
-			* glm::eulerAngleYXZ(mdlRotAngles[1], mdlRotAngles[0], mdlRotAngles[2]);
+		mdlFrame = glm::translate(glm::mat4(1.0f), mdlPosition)
+				* glm::rotate(glm::mat4(1.0f), mdlRotAngles[2], glm::vec3(0.0f, 0.0f, 1.0f))
+				* glm::rotate(glm::mat4(1.0f), mdlRotAngles[1], glm::vec3(0.0f, 1.0f, 0.0f))
+				* glm::rotate(glm::mat4(1.0f), mdlRotAngles[0], glm::vec3(1.0f, 0.0f, 0.0f));
 
 		frame = frame * mdlFrame;
-	} else if(type == "CAMERA"){
+	} else if(type == "camera"){
 		const char* cam2DRotStr = entity.find_child_by_attribute("name", "cameraInitialRotation").child_value();
 		const glm::vec2 cam2DRot = Area::parseVec2(cam2DRotStr); // Conversion to radians will be done below.
 		glm::mat4 mdlFrame = GameCode::cameraRotationMatrix(cam2DRot[0], cam2DRot[1]);
 		frame = frame * mdlFrame;
 
-		const char* uiName = entity.find_child_by_attribute("name", "uiName").child_value();
-		const std::string camName = uiName ? std::string(uiName) : !objName.empty() ? objName : "Unknown camera";
+		const std::string uiName = entity.find_child_by_attribute("name", "uiName").child_value();
+		const std::string camName = !uiName.empty() ? std::string(uiName) : (!objName.empty() ? objName : "Unknown camera");
 		const char* fovStr = entity.find_child_by_attribute("name", "fov").child_value();
 		float fov = ((fovStr && fovStr[0] != '\0') ? std::stof(fovStr) : 45.0f) * glm::pi<float>() / 180.0f;
 		// Adjust the frame, putting the viewpoint at the front of the default camera.
@@ -167,12 +168,10 @@ void World::processEntity(const pugi::xml_node& entity, const glm::mat4& globalF
 		_cameras.emplace_back(camName, renderFrame, fov);
 	}
 
-	// Store entity.
-	entitiesList[std::string(objName)] = frame;
 
 	// We can't early exit earlier because of linking.
-	if((type != "ACTOR") && (type != "DOOR") && (type != "CREATURE")
-	   && (type != "LIGHT") && (type != "CAMERA") && (type != "SOLID") ){
+	if((type != "actor") && (type != "door") && (type != "creature")
+	   && (type != "light") && (type != "camera") && (type != "solid") ){
 		return;
 	}
 
@@ -181,10 +180,15 @@ void World::processEntity(const pugi::xml_node& entity, const glm::mat4& globalF
 	//	return;
 	//}
 
-	if(type == "LIGHT"){
-
-		const char* lightTypeStr = entity.find_child_by_attribute("name", "lightType").child_value();
-		const int lightType = Area::parseInt(lightTypeStr, 1);
+	if(type == "light"){
+		// Some lights have a child named "light".
+		const pugi::xml_node lightChild =  entity.child("light");
+		// Retrieve type.
+		std::string lightTypeStr = lightChild.attribute("type").value();
+		if(lightTypeStr.empty()){
+			lightTypeStr = entity.find_child_by_attribute("name", "lightType").child_value();
+		}
+		const int lightType = Area::parseInt(lightTypeStr.c_str(), 1);
 		Log::check(lightType >= 1 && lightType <= 3, "Unexpected type for light %s", objName.c_str());
 
 		Light& light = _lights.emplace_back();
@@ -196,23 +200,21 @@ void World::processEntity(const pugi::xml_node& entity, const glm::mat4& globalF
 		//	light.frame = glm::translate(glm::mat4(1.0f), glm::vec3(light.frame[3]));
 		//}
 
-		const char* colorTypeStr = entity.find_child_by_attribute("name", "color").child_value();
-		light.color = Area::parseVec3(colorTypeStr, glm::vec3(1.0f));
+		light.color = Area::parseVec3(getLightAttribute(entity, lightChild, "color"), glm::vec3(1.0f));
 
-		const char* radiusTypeStr = entity.find_child_by_attribute("name", "radius").child_value();
-		light.radius = Area::parseVec3(radiusTypeStr, glm::vec3(10000.0f));
+		light.radius = Area::parseVec3(getLightAttribute(entity, lightChild, "radius"), glm::vec3(10000.0f));
 
-		const char* coneTypeStr = entity.find_child_by_attribute("name", "coneAngle").child_value();
+		const char* coneTypeStr = getLightAttribute(entity, lightChild, "coneAngle");
 		if(!coneTypeStr || coneTypeStr[0] == '\0'){
-			coneTypeStr = entity.find_child_by_attribute("name", "cone angle").child_value();
+			coneTypeStr = getLightAttribute(entity, lightChild, "cone angle");
 		}
 		light.angle = (float)(Area::parseInt(coneTypeStr)) * glm::pi<float>() / 180.0f;
 
-		const char* shadowStr = entity.find_child_by_attribute("name", "shadow").child_value();
+		const char* shadowStr = getLightAttribute(entity, lightChild, "shadow");
 		light.shadow = Area::parseBool(shadowStr);
 
 		light.material = Light::NO_MATERIAL;
-		std::string materialStr = entity.find_child_by_attribute("name", "material").child_value();
+		std::string materialStr = getLightAttribute(entity, lightChild, "material");
 		if(!materialStr.empty()){
 			TextUtilities::replace(materialStr, "\\", "/");
 			materialStr = TextUtilities::trim(materialStr, "/");
@@ -240,27 +242,25 @@ void World::processEntity(const pugi::xml_node& entity, const glm::mat4& globalF
 		}
 	}
 
-	const char* objPathStr = entity.find_child_by_attribute("name", "sourceName").child_value();
+	std::string objPathStr = getEntityAttribute(entity, "sourceName");
 	// Camera model has a few options including  default fallback.
-	if(type == "CAMERA"){
+	if(type == "camera"){
 		objPathStr = entity.find_child_by_attribute("name", "cameramodel").child_value();
-		if(!objPathStr || objPathStr[0] == '\0'){
+		if(objPathStr.empty()){
 			objPathStr = entity.find_child_by_attribute("name", "cameraModel").child_value();
 		}
-		if(!objPathStr || objPathStr[0] == '\0'){
+		if(objPathStr.empty()){
 			objPathStr = "models\\objets\\cameras\\camera.dff";
 		}
 	}
 
 	// Only keep elements linked with a model.
-	if(!objPathStr || objPathStr[0] == '\0')
+	if(objPathStr.empty())
 		return;
 
 	// Cleanup model path.
-	std::string objPathCleaned(objPathStr);
-	TextUtilities::replace(objPathCleaned, "\\", "/");
-	objPathCleaned = TextUtilities::lowercase(objPathCleaned);
-	fs::path objPath = objPathCleaned;
+	TextUtilities::replace(objPathStr, "\\", "/");
+	fs::path objPath = TextUtilities::lowercase(objPathStr);
 	objPath.replace_extension("dff");
 
 	// Has this model already been encountered?
@@ -300,7 +300,7 @@ bool World::load(const fs::path& path, const fs::path& resourcePath){
 			continue;
 		}
 		if(strcmp(item.name(), "instance") == 0){
-			const std::string name = getEntityName(item);
+			const std::string name = getEntityAttribute(item, "name");
 			glm::mat4 frame = getEntityFrame(item);
 			entitiesList[name] = frame;
 
