@@ -11,8 +11,7 @@ layout(push_constant) uniform constants {
 };
 
 layout(location = 0) out INTERFACE {
-	vec3 n; ///< Normal
-	vec2 uv; ///< Texture coordinates.
+	uint index;
 } Out;
 
 
@@ -35,13 +34,12 @@ void main(){
 	MeshInstanceInfos instance = instanceInfos[instanceIndex];
 
 	gl_Position = engine.vp * instance.frame * vec4(v, 1.0);
-	Out.uv = uv;
-	Out.n = inverse(transpose(mat3(instance.frame))) * n; // For now no transformation
+	Out.index = instanceIndex;
 
 	if(engine.selectedMesh >= 0 && DrawIndex != engine.selectedMesh){
-		gl_Position = vec4(10000000.0);
+	//	gl_Position = vec4(10000000.0);
 	}
 	if(engine.selectedInstance >= 0 && instanceIndex != engine.selectedInstance){
-		gl_Position = vec4(10000000.0);
+	//	gl_Position = vec4(10000000.0);
 	}
 }

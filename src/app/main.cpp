@@ -347,8 +347,11 @@ int main(int argc, char ** argv) {
 	Program* texturedInstancedObject = loadProgram("object_instanced_texture", "object_instanced_texture");
 	programPool.push_back(texturedInstancedObject);
 
-	Program* debugInstancedObject = loadProgram("object_instanced_debug", "object_instanced_debug");
+	Program* debugInstancedObject = loadProgram("object_instanced_basic", "object_instanced_debug");
 	programPool.push_back(debugInstancedObject);
+
+	Program* selectionObject = loadProgram("object_instanced_basic", "object_instanced_selection");
+	programPool.push_back(selectionObject);
 
 	Program* drawArgsCompute = loadProgram("draw_arguments_all");
 	programPool.push_back(drawArgsCompute);
@@ -358,6 +361,7 @@ int main(int argc, char ** argv) {
 	glm::vec2 renderingRes = config.resolutionRatio * config.screenResolution;
 	Framebuffer fb(uint(renderingRes[0]), uint(renderingRes[1]), {Layout::RGBA8, Layout::DEPTH_COMPONENT32F}, "sceneRender");
 	Framebuffer textureFramebuffer(512, 512, {Layout::RGBA8}, "textureViewer");
+	Framebuffer selectionFramebuffer(fb.width(), fb.height(), {Layout::RG8, Layout::DEPTH_COMPONENT32F}, "selectionId");
 	textureFramebuffer.clear(glm::vec4(0.0f, 0.0f, 0.0f, 1.0f), 0.0f);
 	std::unique_ptr<Buffer> drawCommands = nullptr;
 	std::unique_ptr<Buffer> drawInstances = nullptr;
@@ -397,6 +401,7 @@ int main(int argc, char ** argv) {
 	bool showDemoWindow = false;
 #endif
 	bool firstFrame = true;
+	bool updateInstanceBoundingBox = false;
 
 	while(window.nextFrame()) {
 
@@ -862,19 +867,10 @@ int main(int argc, char ** argv) {
 
 							const Scene::InstanceCPUInfos& debugInfos = scene.instanceDebugInfos[startRow + row];
 
-							if(ImGui::Selectable(debugInfos.name.c_str(), selected.instance == row, selectableTableFlags)){
-								if(selected.instance != row){
-									selected.instance = row;
-									frameInfos[0].selectedInstance = startRow + row;
-									// Generate a mesh with bounding boxes of the instances.
-									boundingBox.clean();
-									const auto corners = debugInfos.bbox.getCorners();
-									boundingBox.positions = corners;
-									// Setup degenerate triangles for each line of a cube.
-									boundingBox.indices = boxIndices;
-									boundingBox.colors.resize(boundingBox.positions.size(), glm::vec3(1.0f, 0.0f, 0.0f));
-									boundingBox.upload();
-									adjustCameraToBoundingBox(camera, boundingBox.computeBoundingBox());
+							if(ImGui::Selectable(debugInfos.name.c_str(), selected.instance == startRow + row, selectableTableFlags)){
+								if(selected.instance != startRow + row){
+									selected.instance = startRow + row;
+									updateInstanceBoundingBox = true;
 								}
 							}
 							ImGui::PopID();
@@ -991,6 +987,16 @@ int main(int argc, char ** argv) {
 		}
 		ImGui::End();
 
+		if(ImGui::Begin("Debug view", nullptr)){
+			// Adjust the texture display to the window size.
+			ImVec2 winSize = ImGui::GetContentRegionAvail();
+			winSize.x = std::max(winSize.x, 2.f);
+			winSize.y = std::max(winSize.y, 2.f);
+
+			ImGui::ImageButton(*selectionFramebuffer.texture(0), ImVec2(winSize.x, winSize.y), ImVec2(0.0,0.0), ImVec2(1.0,1.0), 0);
+		}
+		ImGui::End();
+
 #ifdef DEBUG
 		if(showDemoWindow){
 			ImGui::ShowDemoWindow();
@@ -1052,7 +1058,7 @@ int main(int argc, char ** argv) {
 			fb.bind(glm::vec4(glm::vec3(effects.fogColor), 1.0f), 1.0f, LoadOperation::DONTCARE);
 			fb.setViewport();
 
-			if(selected.mesh >= 0){
+			if((selected.mesh >= 0 || selected.instance >= 0) && !boundingBox.indices.empty()){
 				coloredDebugDraw->use();
 				coloredDebugDraw->buffer(frameInfos, 0);
 				GPU::setPolygonState(PolygonMode::LINE);
@@ -1157,6 +1163,38 @@ int main(int argc, char ** argv) {
 				}
 			}
 
+			if(Input::manager().released(Input::Mouse::Right)){
+				selectionFramebuffer.resize(fb.width(), fb.height());
+				selectionFramebuffer.setViewport();
+				selectionFramebuffer.bind(glm::vec4(0.0f), 1.0f, LoadOperation::DONTCARE);
+
+				GPU::setPolygonState(PolygonMode::FILL);
+				GPU::setCullState(true, Faces::BACK);
+				GPU::setDepthState(true, TestFunction::LESS, true);
+				GPU::setBlendState(false);
+
+				selectionObject->use();
+				selectionObject->buffer(frameInfos, 0);
+				selectionObject->buffer(*scene.meshInfos, 1);
+				selectionObject->buffer(*scene.instanceInfos, 2);
+				selectionObject->buffer(*scene.materialInfos, 3);
+				selectionObject->buffer(*drawInstances, 4);
+
+				for(uint mid = 0; mid < scene.meshInfos->size(); ++mid){
+					GPU::drawIndirectMesh(scene.globalMesh, *drawCommands, mid);
+				}
+
+				GPU::downloadTextureAsync( *selectionFramebuffer.texture(), glm::uvec2(10,10), glm::uvec2(2), 1, [&selected, &updateInstanceBoundingBox](const Texture& result){
+					const auto& pixels = result.images[0].pixels;
+
+					uint index = uint(pixels[0]) + (uint(pixels[1] ) << 8u);
+					if(index != 0){
+						selected.instance = index-1;
+						updateInstanceBoundingBox = true;
+					}
+				});
+			}
+
 
 		} else {
 			fb.clear(glm::vec4(0.2f, 0.2f, 0.2f, 1.0f), 1.0f);
@@ -1172,6 +1210,20 @@ int main(int argc, char ** argv) {
 			textureQuad->use();
 			textureQuad->buffer(frameInfos, 0);
 			GPU::drawQuad();
+		}
+
+		if(updateInstanceBoundingBox){
+			frameInfos[0].selectedInstance = selected.instance;
+			// Generate a mesh with bounding boxes of the instances.
+
+			boundingBox.clean();
+			const auto corners = scene.instanceDebugInfos[selected.instance].bbox.getCorners();
+			boundingBox.positions = corners;
+			// Setup degenerate triangles for each line of a cube.
+			boundingBox.indices = boxIndices;
+			boundingBox.colors.resize(boundingBox.positions.size(), glm::vec3(1.0f, 0.0f, 0.0f));
+			boundingBox.upload();
+			updateInstanceBoundingBox = false;
 		}
 
 		Framebuffer::backbuffer()->bind(glm::vec4(0.2f, 0.2f, 0.2f, 1.0f), LoadOperation::DONTCARE, LoadOperation::DONTCARE);

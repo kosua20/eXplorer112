@@ -21,7 +21,8 @@ layout(std140, set = 0, binding = 3) readonly buffer MaterialsInfos {
 
 layout(location = 0) out vec4 fragColor; ///< Color.
 
-/** Texture each face. */
 void main(){
-	fragColor = vec4(engine.color.rgb, 1.0);
+	// Avoid 0.
+	uint index = In.index + 1u;
+	fragColor = vec4(index & 0xFF, (index >> 8) & 0xFF, 0.0f, 0.0f) / 255.0f;
 }
