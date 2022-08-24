@@ -150,6 +150,51 @@ void Texture::allocateImages(uint channels, uint firstMip, uint mipCount){
 	}
 }
 
+void Texture::resize(const glm::vec2& res){
+	resize(uint(res[0]), uint(res[1]));
+}
+
+void Texture::resize(uint w, uint h){
+	if(width == w && height == h){
+		return;
+	}
+	if(gpu == nullptr){
+		Log::warning("GPU: texture is not allocated on the GPU.");
+		return;
+	}
+	width = w;
+	height = h;
+	GPU::setupTexture(*this, gpu->typedFormat, true);
+	// TODO: resize CPU.
+}
+
+void Texture::setupRendertarget(Texture& texture, Layout format,uint width, uint height, uint mips, TextureShape shape, uint depth){
+
+	// Check that the shape is supported.
+	if(shape != TextureShape::D2 && shape != TextureShape::Array2D && shape != TextureShape::Cube && shape != TextureShape::ArrayCube){
+		Log::error("GPU: Unsupported framebuffer shape.");
+		return;
+	}
+	
+	// Number of layers based on shape.
+	uint layers = 1;
+	if(shape == TextureShape::Array2D){
+		layers = depth;
+	} else if(shape == TextureShape::Cube){
+		layers = 6;
+	} else if(shape == TextureShape::ArrayCube){
+		layers = 6 * depth;
+	}
+
+	texture.width  = width;
+	texture.height = height;
+	texture.depth  = layers;
+	texture.levels = mips;
+	texture.shape  = shape;
+
+	GPU::setupTexture(texture, format, true);
+}
+
 void Texture::clean() {
 	clearImages();
 	if(gpu) {

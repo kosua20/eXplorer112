@@ -95,11 +95,29 @@ public:
 	 */
 	static void bindProgram(const Program & program);
 
+	static void setViewport(const Texture& texture);
+
 	/** Bind a framebuffer as a draw destination.
 	 \param layer the layer to bind
 	 \param mip the mip level to bind
 	 */
-	static void bindFramebuffer(uint layer, uint mip, const LoadOperation& depthOp, const LoadOperation& stencilOp, const LoadOperation& colorOp, const Texture* depth, const Texture* color0, const Texture* color1 = nullptr, const Texture* color2 = nullptr, const Texture* color3 = nullptr, const Texture* color4 = nullptr, const Texture* color5 = nullptr, const Texture* color6 = nullptr, const Texture* color7 = nullptr);
+	static void bind(const Texture& depthStencil, const LoadOperation& depthOp, const LoadOperation& stencilOp);
+
+	static void bind(const Texture& color0, const LoadOperation& colorOp);
+
+	static void bind(const Texture& color0, const Texture& depthStencil, const LoadOperation& colorOp, const LoadOperation& depthOp, const LoadOperation& stencilOp = {});
+
+	static void bind(const Texture& color0, const Texture& color1, const LoadOperation& colorOp);
+
+	static void bind(const Texture& color0, const Texture& color1, const Texture& depthStencil, const LoadOperation& colorOp, const LoadOperation& depthOp, const LoadOperation& stencilOp = {});
+
+	static void bind(const Texture& color0, const Texture& color1, const Texture& color2, const LoadOperation& colorOp);
+
+	static void bind(const Texture& color0, const Texture& color1, const Texture& color2, const Texture& depthStencil, const LoadOperation& colorOp, const LoadOperation& depthOp, const LoadOperation& stencilOp = {});
+
+	static void bind(const Texture& color0, const Texture& color1, const Texture& color2, const Texture& color3, const LoadOperation& colorOp);
+
+	static void bind(const Texture& color0, const Texture& color1, const Texture& color2, const Texture&  color3, const Texture& depthStencil, const LoadOperation& colorOp, const LoadOperation& depthOp, const LoadOperation& stencilOp = {});
 
 	/** Save a given framebuffer content to the disk.
 	 \param texture the framebuffer to save
@@ -107,7 +125,7 @@ public:
 	 \note The output image extension will be automatically added based on the framebuffer type and format.
 	 \warning Export of small size float framebuffers can create artifacts.
 	 */
-	static void saveFramebuffer(const Texture & texture, const std::string & path);
+	static void saveTexture(const Texture & texture, const std::string & path);
 
 	/** Create a GPU texture with a given layout and allocate it.
 	 \param texture the texture to setup on the GPU
@@ -377,7 +395,10 @@ public:
 	static void cleanup();
 
 private:
-	
+
+
+	static void bindFramebuffer(uint layer, uint mip, const LoadOperation& depthOp, const LoadOperation& stencilOp, const LoadOperation& colorOp, const Texture* depthStencil, const Texture* color0, const Texture* color1, const Texture* color2, const Texture* color3);
+
 	/** If the GPU graphics state has changed, retrieve and bind the pipeline corresponding to the new state. */
 	static void bindGraphicsPipelineIfNeeded();
 

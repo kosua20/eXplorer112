@@ -34,7 +34,11 @@ public:
 	 \param mipCount the number of mip to allocate, up to the texture level count
 	 */
 	void allocateImages(uint channels, uint firstMip = 0, uint mipCount = 0xFFFFFFFF);
-	
+
+	void resize(const glm::vec2& res);
+
+	void resize(uint width, uint height);
+
 	/** Cleanup all data.
 	 \note The dimensions and shape of the texture are preserved.
 	 */
@@ -77,7 +81,9 @@ public:
 	uint levels = 1; ///< The mipmap count.
 	
 	TextureShape shape = TextureShape::D2; ///< Texure type.
-	
+
+	static void setupRendertarget(Texture& texture, Layout format, uint width, uint height, uint mips = 1, TextureShape shape = TextureShape::D2, uint depth = 1);
+
 private:
 		
 	std::string _name; ///< Resource name.

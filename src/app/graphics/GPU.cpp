@@ -430,13 +430,17 @@ void GPU::bindProgram(const Program & program){
 	}
 }
 
-void GPU::bindFramebuffer(uint layer, uint mip, const LoadOperation& depthOp, const LoadOperation& stencilOp, const LoadOperation& colorOp, const Texture* depthStencil, const Texture* color0, const Texture* color1, const Texture* color2, const Texture* color3, const Texture* color4, const Texture* color5, const Texture* color6, const Texture* color7){
+void GPU::setViewport(const Texture& texture){
+	GPU::setViewport(0, 0, int(texture.width), int(texture.height));
+}
+
+void GPU::bindFramebuffer(uint layer, uint mip, const LoadOperation& depthOp, const LoadOperation& stencilOp, const LoadOperation& colorOp, const Texture* depthStencil, const Texture* color0, const Texture* color1, const Texture* color2, const Texture* color3){
 
 	GPU::unbindFramebufferIfNeeded();
 	
 	_state.pass.depthStencil = depthStencil;
 	_state.pass.colors.clear();
-	_state.pass.colors.reserve(8);
+	_state.pass.colors.reserve(4);
 
 	assert(depthStencil != nullptr || color0 != nullptr);
 	if(color0){
@@ -454,22 +458,7 @@ void GPU::bindFramebuffer(uint layer, uint mip, const LoadOperation& depthOp, co
 		assert(color2 != nullptr);
 		_state.pass.colors.push_back(color3);
 	}
-	if(color4){
-		assert(color3 != nullptr);
-		_state.pass.colors.push_back(color4);
-	}
-	if(color5){
-		assert(color4 != nullptr);
-		_state.pass.colors.push_back(color5);
-	}
-	if(color6){
-		assert(color5 != nullptr);
-		_state.pass.colors.push_back(color6);
-	}
-	if(color7){
-		assert(color6 != nullptr);
-		_state.pass.colors.push_back(color7);
-	}
+	
 	_state.pass.mipStart = mip;
 	_state.pass.mipCount = 1;
 	_state.pass.layerStart = layer;
@@ -560,7 +549,44 @@ void GPU::bindFramebuffer(uint layer, uint mip, const LoadOperation& depthOp, co
 
 }
 
-void GPU::saveFramebuffer(const Texture & texture, const std::string & path) {
+void GPU::bind(const Texture& depthStencil, const LoadOperation& depthOp, const LoadOperation& stencilOp){
+	GPU::bindFramebuffer(0, 0, depthOp, stencilOp, LoadOperation::DONTCARE, &depthStencil, nullptr, nullptr, nullptr, nullptr);
+}
+
+void GPU::bind(const Texture& color0, const LoadOperation& colorOp){
+	GPU::bindFramebuffer(0, 0, LoadOperation::DONTCARE, LoadOperation::DONTCARE, colorOp, nullptr, &color0, nullptr, nullptr, nullptr);
+}
+
+void GPU::bind(const Texture& color0, const Texture& depthStencil, const LoadOperation& colorOp, const LoadOperation& depthOp, const LoadOperation& stencilOp){
+	GPU::bindFramebuffer(0, 0, depthOp, stencilOp, colorOp, &depthStencil, &color0, nullptr, nullptr, nullptr);
+}
+
+void GPU::bind(const Texture& color0, const Texture& color1, const LoadOperation& colorOp){
+	GPU::bindFramebuffer(0, 0, LoadOperation::DONTCARE, LoadOperation::DONTCARE, colorOp, nullptr, &color0, &color1, nullptr, nullptr);
+}
+
+void GPU::bind(const Texture& color0, const Texture& color1, const Texture& depthStencil, const LoadOperation& colorOp, const LoadOperation& depthOp, const LoadOperation& stencilOp){
+	GPU::bindFramebuffer(0, 0, depthOp, stencilOp, colorOp, &depthStencil, &color0, &color1, nullptr, nullptr);
+
+}
+
+void GPU::bind(const Texture& color0, const Texture& color1, const Texture& color2, const LoadOperation& colorOp){
+	GPU::bindFramebuffer(0, 0, LoadOperation::DONTCARE, LoadOperation::DONTCARE, colorOp, nullptr, &color0, &color1, &color2, nullptr);
+}
+
+void GPU::bind(const Texture& color0, const Texture& color1, const Texture& color2, const Texture& depthStencil, const LoadOperation& colorOp, const LoadOperation& depthOp, const LoadOperation& stencilOp){
+	GPU::bindFramebuffer(0, 0, depthOp, stencilOp, colorOp, &depthStencil, &color0, &color1, &color2, nullptr);
+}
+
+void GPU::bind(const Texture& color0, const Texture& color1, const Texture& color2, const Texture& color3, const LoadOperation& colorOp){
+	GPU::bindFramebuffer(0, 0, LoadOperation::DONTCARE, LoadOperation::DONTCARE, colorOp, nullptr, &color0, &color1, &color2, &color3);
+}
+
+void GPU::bind(const Texture& color0, const Texture& color1, const Texture& color2, const Texture& color3, const Texture& depthStencil, const LoadOperation& colorOp, const LoadOperation& depthOp, const LoadOperation& stencilOp){
+	GPU::bindFramebuffer(0, 0, depthOp, stencilOp, colorOp, &depthStencil, &color0, &color1, &color2, &color3);
+}
+
+void GPU::saveTexture(const Texture & texture, const std::string & path) {
 	static const std::vector<Layout> hdrLayouts = {
 		Layout::R16F, Layout::RG16F, Layout::RGBA16F, Layout::R32F, Layout::RG32F, Layout::RGBA32F, Layout::A2_BGR10, Layout::A2_RGB10,
 		Layout::DEPTH_COMPONENT32F, Layout::DEPTH24_STENCIL8, Layout::DEPTH_COMPONENT16, Layout::DEPTH_COMPONENT24, Layout::DEPTH32F_STENCIL8,
