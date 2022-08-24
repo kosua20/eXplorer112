@@ -347,7 +347,7 @@ int main(int argc, char ** argv) {
 	Program* texturedInstancedObject = loadProgram("object_instanced_texture", "object_instanced_texture");
 	programPool.push_back(texturedInstancedObject);
 
-	Program* debugInstancedObject = loadProgram("object_instanced_basic", "object_instanced_debug");
+	Program* debugInstancedObject = loadProgram("object_instanced_debug", "object_instanced_debug");
 	programPool.push_back(debugInstancedObject);
 
 	Program* selectionObject = loadProgram("object_instanced_selection", "object_instanced_selection");

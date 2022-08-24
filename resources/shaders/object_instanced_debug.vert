@@ -10,10 +10,6 @@ layout(push_constant) uniform constants {
 	uint DrawIndex;
 };
 
-layout(location = 0) out INTERFACE {
-	uint index;
-} Out;
-
 
 layout(std140, set = 0, binding = 1) readonly buffer MeshesInfos {
 	MeshInfos meshInfos[];
@@ -34,12 +30,11 @@ void main(){
 	MeshInstanceInfos instance = instanceInfos[instanceIndex];
 
 	gl_Position = engine.vp * instance.frame * vec4(v, 1.0);
-	Out.index = instanceIndex;
 
 	if(engine.selectedMesh >= 0 && DrawIndex != engine.selectedMesh){
-	//	gl_Position = vec4(10000000.0);
+		gl_Position = vec4(10000000.0);
 	}
 	if(engine.selectedInstance >= 0 && instanceIndex != engine.selectedInstance){
-	//	gl_Position = vec4(10000000.0);
+		gl_Position = vec4(10000000.0);
 	}
 }
