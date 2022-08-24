@@ -350,7 +350,7 @@ int main(int argc, char ** argv) {
 	Program* debugInstancedObject = loadProgram("object_instanced_basic", "object_instanced_debug");
 	programPool.push_back(debugInstancedObject);
 
-	Program* selectionObject = loadProgram("object_instanced_basic", "object_instanced_selection");
+	Program* selectionObject = loadProgram("object_instanced_selection", "object_instanced_selection");
 	programPool.push_back(selectionObject);
 
 	Program* drawArgsCompute = loadProgram("draw_arguments_all");

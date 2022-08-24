@@ -4,7 +4,7 @@
 #include "engine.glsl"
 
 layout(location = 0) in INTERFACE {
-	uint index;
+	flat uint index;
 } In ;
 
 layout(push_constant) uniform constants {
