@@ -358,11 +358,20 @@ int main(int argc, char ** argv) {
 
 
 	UniformBuffer<FrameData> frameInfos(1, 64);
-	glm::vec2 renderingRes = config.resolutionRatio * config.screenResolution;
-	Framebuffer fb(uint(renderingRes[0]), uint(renderingRes[1]), {Layout::RGBA8, Layout::DEPTH_COMPONENT32F}, "sceneRender");
-	Framebuffer textureFramebuffer(512, 512, {Layout::RGBA8}, "textureViewer");
-	Framebuffer selectionFramebuffer(fb.width(), fb.height(), {Layout::RG8, Layout::DEPTH_COMPONENT32F}, "selectionId");
-	textureFramebuffer.clear(glm::vec4(0.0f, 0.0f, 0.0f, 1.0f), 0.0f);
+	const glm::uvec2 renderRes(config.resolutionRatio * config.screenResolution);
+
+	Texture sceneColor("sceneRender"), sceneDepth("sceneDepth");
+	Texture::setupRendertarget(sceneColor, Layout::RGBA8, renderRes[0], renderRes[1]);
+	Texture::setupRendertarget(sceneDepth, Layout::DEPTH_COMPONENT32F, renderRes[0], renderRes[1]);
+
+	Texture textureView("textureViewer");
+	Texture::setupRendertarget(textureView, Layout::RGBA8, 512, 512);
+	GPU::clearTexture(textureView, glm::vec4(0.0f, 0.0f, 0.0f, 1.0f));
+
+	Texture selectionColor("selection"), selectionDepth("selectionDepth");
+	Texture::setupRendertarget(selectionColor, Layout::RG8, renderRes[0], renderRes[1]);
+	Texture::setupRendertarget(selectionDepth, Layout::DEPTH_COMPONENT32F, renderRes[0], renderRes[1]);
+
 	std::unique_ptr<Buffer> drawCommands = nullptr;
 	std::unique_ptr<Buffer> drawInstances = nullptr;
 
@@ -731,7 +740,7 @@ int main(int argc, char ** argv) {
 									frameInfos[0].selectedTextureLayer = debugInfos.data.layer;
 									zoomPct = 100.f;
 									centerPct = glm::vec2(50.f, 50.0f);
-									textureFramebuffer.resize(arrayTex.width, arrayTex.height);
+									textureView.resize(arrayTex.width, arrayTex.height);
 								}
 
 								ImGui::TableNextColumn();
@@ -896,13 +905,12 @@ int main(int argc, char ** argv) {
 			winSize.x = std::max(winSize.x, 2.f);
 			winSize.y = std::max(winSize.y, 2.f);
 
-			const Texture* tex = textureFramebuffer.texture();
 			const glm::vec2 texCenter = centerPct / 100.f;
 			const glm::vec2 texScale(100.0f / std::max(zoomPct, 1.f));
 			const glm::vec2 miniUV = texCenter - texScale * 0.5f;
 			const glm::vec2 maxiUV = texCenter + texScale * 0.5f;
 
-			ImGui::ImageButton(*tex, ImVec2(winSize.x, winSize.y), miniUV, maxiUV, 0, ImVec4(1.0f, 0.0f, 1.0f, 1.0f));
+			ImGui::ImageButton(textureView, ImVec2(winSize.x, winSize.y), miniUV, maxiUV, 0, ImVec4(1.0f, 0.0f, 1.0f, 1.0f));
 
 		}
 		ImGui::End();
@@ -910,16 +918,19 @@ int main(int argc, char ** argv) {
 		if(ImGui::Begin("Settings")) {
 			int ratioPercentage = int(std::round(config.resolutionRatio * 100.0f));
 
-			ImGui::Text("Rendering at %ux%upx", fb.width(), fb.height());
+			const uint w = sceneColor.width;
+			const uint h = sceneColor.height;
+			ImGui::Text("Rendering at %ux%upx", w, h);
 			if(ImGui::InputInt("Rendering ratio %", &ratioPercentage, 10, 25)) {
 				ratioPercentage = glm::clamp(ratioPercentage, 10, 200);
 
 				const float newRatio = (float)ratioPercentage / 100.0f;
-				glm::vec2 renderRes(fb.width(), fb.height());
-				renderRes = (renderRes / config.resolutionRatio) * newRatio;
+
+				glm::vec2 renderRes = (glm::vec2(w, h) / config.resolutionRatio) * newRatio;
 
 				config.resolutionRatio = newRatio;
-				fb.resize(uint(renderRes[0]), uint(renderRes[1]));
+				sceneColor.resize(renderRes);
+				sceneDepth.resize(renderRes);
 				camera.ratio(renderRes[0]/renderRes[1]);
 			}
 
@@ -969,19 +980,20 @@ int main(int argc, char ** argv) {
 			winSize.x = std::max(winSize.x, 2.f);
 			winSize.y = std::max(winSize.y, 2.f);
 
-			ImGui::ImageButton(*fb.texture(0), ImVec2(winSize.x, winSize.y), ImVec2(0.0,0.0), ImVec2(1.0,1.0), 0);
+			ImGui::ImageButton(sceneColor, ImVec2(winSize.x, winSize.y), ImVec2(0.0,0.0), ImVec2(1.0,1.0), 0);
 			if(ImGui::IsItemHovered()) {
 				ImGui::SetNextFrameWantCaptureMouse(false);
 				ImGui::SetNextFrameWantCaptureKeyboard(false);
 			}
 
 			// If the aspect ratio changed, trigger a resize.
-			const float ratioCurr = float(fb.width()) / float(fb.height());
+			const float ratioCurr = float(sceneColor.width) / float(sceneColor.height);
 			const float ratioWin = winSize.x / winSize.y;
 			// \todo Derive a more robust threshold.
 			if(std::abs(ratioWin - ratioCurr) > 0.01f){
 				const glm::vec2 renderRes = config.resolutionRatio * glm::vec2(winSize.x, winSize.y);
-				fb.resize(renderRes);
+				sceneColor.resize(renderRes);
+				sceneDepth.resize(renderRes);
 				camera.ratio(renderRes[0]/renderRes[1]);
 			}
 		}
@@ -993,7 +1005,7 @@ int main(int argc, char ** argv) {
 			winSize.x = std::max(winSize.x, 2.f);
 			winSize.y = std::max(winSize.y, 2.f);
 
-			ImGui::ImageButton(*selectionFramebuffer.texture(0), ImVec2(winSize.x, winSize.y), ImVec2(0.0,0.0), ImVec2(1.0,1.0), 0);
+			ImGui::ImageButton(selectionColor, ImVec2(winSize.x, winSize.y), ImVec2(0.0,0.0), ImVec2(1.0,1.0), 0);
 		}
 		ImGui::End();
 
@@ -1055,8 +1067,11 @@ int main(int argc, char ** argv) {
 			GPU::dispatch((uint)scene.meshInfos->size(), 1, 1);
 
 			// Determine clearing color by finding the closest area.
-			fb.bind(glm::vec4(glm::vec3(effects.fogColor), 1.0f), 1.0f, LoadOperation::DONTCARE);
-			fb.setViewport();
+			glm::vec4 clearColor = effects.fogColor;
+			clearColor[3] = 1.0f;
+
+			GPU::bind(sceneColor, sceneDepth, clearColor, 1.0f, LoadOperation::DONTCARE);
+			GPU::setViewport(sceneColor);
 
 			if((selected.mesh >= 0 || selected.instance >= 0) && !boundingBox.indices.empty()){
 				coloredDebugDraw->use();
@@ -1164,9 +1179,10 @@ int main(int argc, char ** argv) {
 			}
 
 			if(Input::manager().released(Input::Mouse::Right)){
-				selectionFramebuffer.resize(fb.width(), fb.height());
-				selectionFramebuffer.setViewport();
-				selectionFramebuffer.bind(glm::vec4(0.0f), 1.0f, LoadOperation::DONTCARE);
+				selectionColor.resize(sceneColor.width, sceneColor.height);
+				selectionDepth.resize(sceneColor.width, sceneColor.height);
+				GPU::setViewport(selectionColor);
+				GPU::bind(selectionColor, selectionDepth, glm::vec4(0.0f), 1.0f, LoadOperation::DONTCARE);
 
 				GPU::setPolygonState(PolygonMode::FILL);
 				GPU::setCullState(true, Faces::BACK);
@@ -1184,7 +1200,7 @@ int main(int argc, char ** argv) {
 					GPU::drawIndirectMesh(scene.globalMesh, *drawCommands, mid);
 				}
 
-				GPU::downloadTextureAsync( *selectionFramebuffer.texture(), glm::uvec2(10,10), glm::uvec2(2), 1, [&selected, &updateInstanceBoundingBox](const Texture& result){
+				GPU::downloadTextureAsync( selectionColor, glm::uvec2(10,10), glm::uvec2(2), 1, [&selected, &updateInstanceBoundingBox](const Texture& result){
 					const auto& pixels = result.images[0].pixels;
 
 					uint index = uint(pixels[0]) + (uint(pixels[1] ) << 8u);
@@ -1197,12 +1213,13 @@ int main(int argc, char ** argv) {
 
 
 		} else {
-			fb.clear(glm::vec4(0.2f, 0.2f, 0.2f, 1.0f), 1.0f);
+			GPU::clearTexture(sceneColor, glm::vec4(0.2f, 0.2f, 0.2f, 1.0f));
+			GPU::clearDepth(sceneDepth, 1.0f);
 		}
 
 		if(selected.texture >= 0){
-			textureFramebuffer.bind(glm::vec4(1.0f, 0.0f, 0.5f, 1.0f), LoadOperation::DONTCARE, LoadOperation::DONTCARE);
-			textureFramebuffer.setViewport();
+			GPU::setViewport(textureView);
+			GPU::bind(textureView, glm::vec4(1.0f, 0.0f, 0.5f, 1.0f));
 			GPU::setDepthState(false);
 			GPU::setCullState(true);
 			GPU::setPolygonState(PolygonMode::FILL);
@@ -1226,7 +1243,8 @@ int main(int argc, char ** argv) {
 			updateInstanceBoundingBox = false;
 		}
 
-		Framebuffer::backbuffer()->bind(glm::vec4(0.2f, 0.2f, 0.2f, 1.0f), LoadOperation::DONTCARE, LoadOperation::DONTCARE);
+		window.bind(glm::vec4(0.2f, 0.2f, 0.2f, 1.0f), LoadOperation::DONTCARE, LoadOperation::DONTCARE);
+		
 		firstFrame = false;
 	}
 
