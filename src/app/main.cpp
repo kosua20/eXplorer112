@@ -7,7 +7,6 @@
 
 #include "system/Window.hpp"
 #include "graphics/GPU.hpp"
-#include "graphics/Framebuffer.hpp"
 #include "input/Input.hpp"
 #include "input/ControllableCamera.hpp"
 #include "Common.hpp"
@@ -974,11 +973,17 @@ int main(int argc, char ** argv) {
 		}
 		ImGui::End();
 
+		glm::vec4 mainViewport(0.0f);
+
 		if(ImGui::Begin("Main view", nullptr)){
 			// Adjust the texture display to the window size.
 			ImVec2 winSize = ImGui::GetContentRegionAvail();
 			winSize.x = std::max(winSize.x, 2.f);
 			winSize.y = std::max(winSize.y, 2.f);
+			mainViewport.x = ImGui::GetWindowPos().x + ImGui::GetCursorPos().x;
+			mainViewport.y = ImGui::GetWindowPos().y + ImGui::GetCursorPos().y;
+			mainViewport.z = winSize.x;
+			mainViewport.w = winSize.y;
 
 			ImGui::ImageButton(sceneColor, ImVec2(winSize.x, winSize.y), ImVec2(0.0,0.0), ImVec2(1.0,1.0), 0);
 			if(ImGui::IsItemHovered()) {
@@ -1179,36 +1184,50 @@ int main(int argc, char ** argv) {
 			}
 
 			if(Input::manager().released(Input::Mouse::Right)){
-				selectionColor.resize(sceneColor.width, sceneColor.height);
-				selectionDepth.resize(sceneColor.width, sceneColor.height);
-				GPU::setViewport(selectionColor);
-				GPU::bind(selectionColor, selectionDepth, glm::vec4(0.0f), 1.0f, LoadOperation::DONTCARE);
 
-				GPU::setPolygonState(PolygonMode::FILL);
-				GPU::setCullState(true, Faces::BACK);
-				GPU::setDepthState(true, TestFunction::LESS, true);
-				GPU::setBlendState(false);
+				// Compute mouse coordinates.
+				glm::vec2 mousePos = Input::manager().mouse();
+				// Convert to pixels
+				const glm::vec2 winSize = Input::manager().size();
+				mousePos *= winSize / Input::manager().density();
+				// Scale to main viewport.
+				mousePos = (mousePos - glm::vec2(mainViewport.x, mainViewport.y)) / glm::vec2(mainViewport.z, mainViewport.w);
+				// Check that we are in the viewport.
+				if(glm::all(glm::lessThan(mousePos, glm::vec2(1.0f))) && glm::all(glm::greaterThan(mousePos, glm::vec2(0.0f)))){
 
-				selectionObject->use();
-				selectionObject->buffer(frameInfos, 0);
-				selectionObject->buffer(*scene.meshInfos, 1);
-				selectionObject->buffer(*scene.instanceInfos, 2);
-				selectionObject->buffer(*scene.materialInfos, 3);
-				selectionObject->buffer(*drawInstances, 4);
+					selectionColor.resize(sceneColor.width, sceneColor.height);
+					GPU::setViewport(selectionColor);
+					GPU::bind(selectionColor, sceneDepth, glm::vec4(0.0f), LoadOperation::LOAD, LoadOperation::DONTCARE);
 
-				for(uint mid = 0; mid < scene.meshInfos->size(); ++mid){
-					GPU::drawIndirectMesh(scene.globalMesh, *drawCommands, mid);
-				}
+					GPU::setPolygonState(PolygonMode::FILL);
+					GPU::setCullState(true, Faces::BACK);
+					GPU::setDepthState(true, TestFunction::EQUAL, false);
+					GPU::setBlendState(false);
 
-				GPU::downloadTextureAsync( selectionColor, glm::uvec2(10,10), glm::uvec2(2), 1, [&selected, &updateInstanceBoundingBox](const Texture& result){
-					const auto& pixels = result.images[0].pixels;
+					selectionObject->use();
+					selectionObject->buffer(frameInfos, 0);
+					selectionObject->buffer(*scene.meshInfos, 1);
+					selectionObject->buffer(*scene.instanceInfos, 2);
+					selectionObject->buffer(*scene.materialInfos, 3);
+					selectionObject->buffer(*drawInstances, 4);
 
-					uint index = uint(pixels[0]) + (uint(pixels[1] ) << 8u);
-					if(index != 0){
-						selected.instance = index-1;
-						updateInstanceBoundingBox = true;
+					for(uint mid = 0; mid < scene.meshInfos->size(); ++mid){
+						GPU::drawIndirectMesh(scene.globalMesh, *drawCommands, mid);
 					}
-				});
+
+					const glm::vec2 texSize(selectionColor.width, selectionColor.height);
+					glm::uvec2 readbackCoords = mousePos * texSize;
+					readbackCoords = glm::min(readbackCoords, glm::uvec2(texSize) - 2u);
+					GPU::downloadTextureAsync( selectionColor, readbackCoords, glm::uvec2(2u), 1, [&selected, &updateInstanceBoundingBox](const Texture& result){
+						const auto& pixels = result.images[0].pixels;
+
+						uint index = uint(pixels[0]) + (uint(pixels[1] ) << 8u);
+						if(index != 0){
+							selected.instance = index-1;
+							updateInstanceBoundingBox = true;
+						}
+					});
+				}
 			}
 
 
