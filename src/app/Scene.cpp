@@ -360,7 +360,7 @@ void Scene::load(const fs::path& worldPath, const GameFiles& files){
 void Scene::loadFile(const fs::path& filePath, const GameFiles& files){
 
 	Object obj;
-	const std::string extension = filePath.extension();
+	const std::string extension = filePath.extension().string();
 	if(extension == ".dff"){
 		if(!Dff::load(filePath, obj)){
 			return;
