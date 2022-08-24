@@ -2,6 +2,7 @@
 #include "system/Config.hpp"
 #include "core/Common.hpp"
 #include "core/System.hpp"
+#include "graphics/GPUTypes.hpp"
 
 struct GLFWwindow;
 struct ImGui_ImplVulkan_InitInfo;
@@ -43,6 +44,8 @@ public:
 	 \note If the frame is invalid, the window should be cleaned and closed.
 	 */
 	bool nextFrame();
+
+	void bind(const LoadOperation& colorOp, const LoadOperation& depthOp, const LoadOperation& stencilOp);
 	
 	/** Copy constructor.*/
 	Window(const Window &) = delete;

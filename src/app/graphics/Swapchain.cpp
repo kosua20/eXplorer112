@@ -155,51 +155,22 @@ void Swapchain::setup(uint32_t width, uint32_t height){
 
 	Layout colorFormat = VkUtils::convertFormat(surfaceParams.format);
 
-	_framebuffers.resize(_imageCount);
+	_colors.reserve(_imageCount);
 
 	for(uint i = 0; i < _imageCount; ++i){
-		_framebuffers[i].reset(new Framebuffer());
-		
-		Framebuffer& fb = *_framebuffers[i];
 
-		fb._width = extent.width;
-		fb._height = extent.height;
-		fb._mips = 1;
-		fb._layers = 1;
-		fb._shape = TextureShape::D2;
-		fb._name = "Backbuffer " + std::to_string(i);
-		fb._hasDepth = true;
-		fb._isBackbuffer = true;
-		
-		fb._depth = Texture("Depth");
-		fb._depth.width = extent.width;
-		fb._depth.height = extent.height;
-		fb._depth.depth = 1;
-		fb._depth.levels = 1;
-		fb._depth.shape = TextureShape::D2;
-		fb._depth.gpu.reset(new GPUTexture(_depth.gpu->typedFormat));
-		fb._depth.gpu->name = fb._depth.name();
-		fb._depth.gpu->owned = false;
-		fb._depth.gpu->image = _depth.gpu->image;
-		fb._depth.gpu->data = _depth.gpu->data;
-		fb._depth.gpu->view = _depth.gpu->view;
-		fb._depth.gpu->views = _depth.gpu->views;
-		fb._depth.gpu->layouts = _depth.gpu->layouts;
-		fb._depth.gpu->defaultLayout = _depth.gpu->defaultLayout;
-
-		fb._colors.clear();
-		fb._colors.emplace_back("Color");
-		fb._colors[0].width = extent.width;
-		fb._colors[0].height = extent.height;
-		fb._colors[0].depth = 1;
-		fb._colors[0].levels = 1;
-		fb._colors[0].shape = TextureShape::D2;
-		fb._colors[0].gpu.reset(new GPUTexture(colorFormat));
-		fb._colors[0].gpu->name = fb._colors[0].name();
-		fb._colors[0].gpu->owned = false;
-		fb._colors[0].gpu->image = colorImages[i];
-		fb._colors[0].gpu->layouts.resize(1, std::vector<VkImageLayout>(1, VK_IMAGE_LAYOUT_UNDEFINED));
-		fb._colors[0].gpu->defaultLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+		Texture& color = _colors.emplace_back("Color");
+		color.width = extent.width;
+		color.height = extent.height;
+		color.depth = 1;
+		color.levels = 1;
+		color.shape = TextureShape::D2;
+		color.gpu.reset(new GPUTexture(colorFormat));
+		color.gpu->name = color.name();
+		color.gpu->owned = false;
+		color.gpu->image = colorImages[i];
+		color.gpu->layouts.resize(1, std::vector<VkImageLayout>(1, VK_IMAGE_LAYOUT_UNDEFINED));
+		color.gpu->defaultLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
 
 		VkImageViewCreateInfo viewInfo = {};
 		viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
@@ -211,10 +182,10 @@ void Swapchain::setup(uint32_t width, uint32_t height){
 		viewInfo.subresourceRange.levelCount = 1;
 		viewInfo.subresourceRange.baseArrayLayer = 0;
 		viewInfo.subresourceRange.layerCount = 1;
-		VK_RET(vkCreateImageView(_context->device, &viewInfo, nullptr, &(fb._colors[0].gpu->view)));
+		VK_RET(vkCreateImageView(_context->device, &viewInfo, nullptr, &(color.gpu->view)));
 
-		fb._colors[0].gpu->views.resize(1);
-		fb._colors[0].gpu->views[0].views.resize(1);
+		color.gpu->views.resize(1);
+		color.gpu->views[0].views.resize(1);
 		VkImageViewCreateInfo viewInfoMip = {};
 		viewInfoMip.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
 		viewInfoMip.image = colorImages[i];
@@ -225,8 +196,8 @@ void Swapchain::setup(uint32_t width, uint32_t height){
 		viewInfoMip.subresourceRange.levelCount = 1;
 		viewInfoMip.subresourceRange.baseArrayLayer = 0;
 		viewInfoMip.subresourceRange.layerCount = 1;
-		VK_RET(vkCreateImageView(_context->device, &viewInfoMip, nullptr, &(fb._colors[0].gpu->views[0].mipView)));
-		VK_RET(vkCreateImageView(_context->device, &viewInfoMip, nullptr, &(fb._colors[0].gpu->views[0].views[0])));
+		VK_RET(vkCreateImageView(_context->device, &viewInfoMip, nullptr, &(color.gpu->views[0].mipView)));
+		VK_RET(vkCreateImageView(_context->device, &viewInfoMip, nullptr, &(color.gpu->views[0].views[0])));
 
 	}
 
@@ -265,7 +236,7 @@ void Swapchain::resize(uint width, uint height){
 }
 
 void Swapchain::getFormats(VkFormat& color, VkFormat& depth, VkFormat& stencil){
-	color = _framebuffers[0]->texture(0)->gpu->format;
+	color = _colors[0].gpu->format;
 	depth = _depth.gpu->format;
 	if(_depth.gpu->typedFormat == Layout::DEPTH24_STENCIL8 || _depth.gpu->typedFormat == Layout::DEPTH32F_STENCIL8){
 		stencil = depth;
@@ -284,7 +255,7 @@ bool Swapchain::finishFrame(){
 		VK_PIPELINE_STAGE_TRANSFER_BIT | VK_PIPELINE_STAGE_VERTEX_SHADER_BIT, 0, 0, nullptr, 0, nullptr, 0, nullptr);
 
 	// Make sure that the backbuffer is presentable.
-	VkUtils::imageLayoutBarrier(_context->getRenderCommandBuffer(), *(Framebuffer::backbuffer()->texture(0)->gpu), VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, 0, 1, 0, 1);
+	VkUtils::imageLayoutBarrier(_context->getRenderCommandBuffer(), *(_backbuffer->gpu), VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, 0, 1, 0, 1);
 
 	// Finish the command buffers for this frame.
 	VK_RET(vkEndCommandBuffer(_context->getRenderCommandBuffer()));
@@ -370,7 +341,7 @@ bool Swapchain::nextFrame(){
 	GPU::beginFrameCommandBuffers();
 	
 	_frameStarted = true;
-	Framebuffer::_backbuffer = _framebuffers[_imageIndex].get();
+	_backbuffer = &_colors[_imageIndex];
 
 	// Reset queries for the current frame (we need the command buffer to be active).
 	for(auto& alloc : _context->queryAllocators){
@@ -394,14 +365,14 @@ void Swapchain::clean() {
 	// Wait for all queues to be idle.
 	VK_RET(vkDeviceWaitIdle(_context->device));
 
-	// We have to manually delete the framebuffers, because they don't own their color images (system created) nor their depth texture (shared).
+	// We have to manually delete the color textures, because they don't own their color images (system created) nor their depth texture (shared).
 	for(size_t i = 0; i < _imageCount; ++i) {
 		// Destroy the view but not the image, as we don't own it (and there is no sampler).
-		vkDestroyImageView(_context->device, _framebuffers[i]->_colors[0].gpu->view, nullptr);
-		vkDestroyImageView(_context->device, _framebuffers[i]->_colors[0].gpu->views[0].mipView, nullptr);
-		vkDestroyImageView(_context->device, _framebuffers[i]->_colors[0].gpu->views[0].views[0], nullptr);
+		vkDestroyImageView(_context->device, _colors[i].gpu->view, nullptr);
+		vkDestroyImageView(_context->device, _colors[i].gpu->views[0].mipView, nullptr);
+		vkDestroyImageView(_context->device, _colors[i].gpu->views[0].views[0], nullptr);
 	}
-	_framebuffers.clear();
+	_colors.clear();
 
 	// We own the shared depth, clean it.
 	_depth.clean();

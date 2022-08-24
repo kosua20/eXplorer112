@@ -168,13 +168,17 @@ void Window::perform(Action action) {
 	}
 }
 
+void Window::bind(const LoadOperation& colorOp, const LoadOperation& depthOp, const LoadOperation& stencilOp){
+	GPU::bind(_swapchain->color(), _swapchain->depth(), colorOp, depthOp, stencilOp);
+}
+
 bool Window::nextFrame() {
 	if(_frameStarted){
 		// Render the interface.
 		ImGui::Render();
 
 		// Draw ImGui.
-		Framebuffer::backbuffer()->bind(LoadOperation::LOAD, LoadOperation::LOAD, LoadOperation::LOAD);
+		bind(LoadOperation::LOAD, LoadOperation::LOAD, LoadOperation::LOAD);
 		ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), GPU::getInternal()->getRenderCommandBuffer());
 		
 	}

@@ -45,6 +45,9 @@ public:
 	/** Destructor. */
 	~Swapchain();
 
+	Texture& color(){ return *_backbuffer; }
+	Texture& depth(){ return _depth; }
+
 	void getFormats(VkFormat& color, VkFormat& depth, VkFormat& stencil);
 
 private:
@@ -66,8 +69,9 @@ private:
 	GPUContext* _context = nullptr; ///< The GPU internal context.
 	VkSwapchainKHR _swapchain = VK_NULL_HANDLE; ///< Native handle.
 
-	std::vector<std::shared_ptr<Framebuffer>> _framebuffers; ///< Backbuffers.
+	std::vector<Texture> _colors; ///< Backbuffers.
 	Texture _depth; ///< The shared depth texture.
+	Texture* _backbuffer = nullptr; ///< The current backbuffer.
 
 	std::vector<VkSemaphore> _imagesAvailable; ///< Semaphores signaling when swapchain images are available for a new frame.
 	std::vector<VkSemaphore> _framesFinished; ///< Semaphores signaling when a frame has been completed.
