@@ -1,7 +1,6 @@
 #pragma once
 
 #include "core/Common.hpp"
-#include "graphics/Framebuffer.hpp"
 #include "graphics/GPUObjects.hpp"
 #include "system/Config.hpp"
 

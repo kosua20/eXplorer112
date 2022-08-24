@@ -172,7 +172,7 @@ void Texture::setupRendertarget(Texture& texture, Layout format,uint width, uint
 
 	// Check that the shape is supported.
 	if(shape != TextureShape::D2 && shape != TextureShape::Array2D && shape != TextureShape::Cube && shape != TextureShape::ArrayCube){
-		Log::error("GPU: Unsupported framebuffer shape.");
+		Log::error("GPU: Unsupported render texture shape.");
 		return;
 	}
 	

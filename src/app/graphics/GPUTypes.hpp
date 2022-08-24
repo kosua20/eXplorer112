@@ -281,10 +281,10 @@ STD_HASH(Layout);
 
 
 
-/// \brief Detailed operation to perform when binding a framebuffer (starting a renderpass).
+/// \brief Detailed operation to perform when binding a texture (starting a renderpass).
 struct LoadOperation {
 
-	/** \brief Type of operation to perform when binding a framebuffer (starting a renderpass).
+	/** \brief Type of operation to perform when binding a texture (starting a renderpass).
 	*  \sa LoadOperation
 	*/
 	enum Operation : uint {

@@ -25,7 +25,7 @@ class GPU {
 	friend class GPUBuffer; ///< Access to deletion notifier for cached state update.
 	friend class GPUMesh; ///< Access to deletion notifier for cached state update.
 	friend class Program; ///< Access to metrics.
-	friend class Swapchain; ///< Access to framebuffer cleanup.
+	friend class Swapchain; ///< Access to texture cleanup.
 	friend class PipelineCache; ///< Access to metrics.
 
 public:
@@ -46,7 +46,7 @@ public:
 		unsigned long long pipelineBindings = 0; ///< Number of pipeline set operations.
 		unsigned long long renderPasses = 0; ///< Number of render passes.
 		unsigned long long meshBindings = 0; ///< Number of mesh bindings.
-		unsigned long long blitCount = 0; ///< Framebuffer blitting operations.
+		unsigned long long blitCount = 0; ///< Texture blitting operations.
 
 		/// Reset metrics that are measured over one frame.
 		void resetPerFrameMetrics(){
@@ -97,9 +97,7 @@ public:
 
 	static void setViewport(const Texture& texture);
 
-	/** Bind a framebuffer as a draw destination.
-	 \param layer the layer to bind
-	 \param mip the mip level to bind
+	/** Bind textures as a draw destination.
 	 */
 	static void bind(const Texture& depthStencil, const LoadOperation& depthOp, const LoadOperation& stencilOp);
 
@@ -119,11 +117,11 @@ public:
 
 	static void bind(const Texture& color0, const Texture& color1, const Texture& color2, const Texture&  color3, const Texture& depthStencil, const LoadOperation& colorOp, const LoadOperation& depthOp, const LoadOperation& stencilOp = {});
 
-	/** Save a given framebuffer content to the disk.
-	 \param texture the framebuffer to save
+	/** Save a given texture content to the disk.
+	 \param texture the texture to save
 	 \param path the output image path
-	 \note The output image extension will be automatically added based on the framebuffer type and format.
-	 \warning Export of small size float framebuffers can create artifacts.
+	 \note The output image extension will be automatically added based on the texture type and format.
+	 \warning Export of small size float texture can create artifacts.
 	 */
 	static void saveTexture(const Texture & texture, const std::string & path);
 
@@ -352,26 +350,26 @@ public:
 	static const Metrics & getMetrics();
 
 	/** Blit the content of a depthbuffer into another one.
-	 \param src the source framebuffer
-	 \param dst the destination framebuffer
+	 \param src the source depth texture
+	 \param dst the destination depth texture
 	 \note Depth is necessarily filtered using nearest neighbour.
 	 \warning This treat the current depth buffer setup as a 2D texture.
 	 */
 	static void blitDepth(const Texture & src, const Texture & dst);
 
 
-	/** Blit the content of a framebuffer into another one, resizing the content accordingly.
-	 \param src the source framebuffer
-	 \param dst the destination framebuffer
+	/** Blit the content of a texture into another one, resizing the content accordingly.
+	 \param src the source texture
+	 \param dst the destination texture
 	 \param lSrc the src layer to copy
 	 \param lDst the dst layer to copy to
 	 \param filter the filtering to use for resizing
 	 */
 	static void blit(const Texture & src, const Texture & dst, size_t lSrc, size_t lDst, Filter filter);
 
-	/** Blit the content of a framebuffer into another one, resizing the content accordingly.
-	 \param src the source framebuffer
-	 \param dst the destination framebuffer
+	/** Blit the content of a texture into another one, resizing the content accordingly.
+	 \param src the source texture
+	 \param dst the destination texture
 	 \param lSrc the src layer to copy
 	 \param lDst the dst layer to copy to
 	 \param mipSrc the src mip level to copy

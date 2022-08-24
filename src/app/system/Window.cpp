@@ -3,7 +3,6 @@
 #include "input/InputCallbacks.hpp"
 #include "input/Input.hpp"
 #include "graphics/GPU.hpp"
-#include "graphics/Framebuffer.hpp"
 #include "graphics/GPUInternal.hpp"
 #include "graphics/Swapchain.hpp"
 #include "core/System.hpp"
