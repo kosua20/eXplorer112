@@ -258,6 +258,7 @@ void Scene::upload(const World& world, const GameFiles& files){
 				InstanceCPUInfos& debugInfos = instanceDebugInfos[currentInstanceId];
 				debugInfos.name = instance.name + "_" + parentDebugInfos.name;
 				debugInfos.bbox = parentDebugInfos.bbox.transformed(instance.frame);
+				debugInfos.meshIndex = currentMeshId;
 				++currentInstanceId;
 			}
 			++currentMeshId;

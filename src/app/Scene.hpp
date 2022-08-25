@@ -72,6 +72,7 @@ public:
 	struct InstanceCPUInfos {
 		std::string name;
 		BoundingBox bbox;
+		uint meshIndex;
 	};
 	struct TextureCPUInfos {
 		std::string name;
