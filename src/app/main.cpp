@@ -1004,6 +1004,7 @@ int main(int argc, char ** argv) {
 		}
 		ImGui::End();
 
+#ifdef DEBUG
 		if(ImGui::Begin("Debug view", nullptr)){
 			// Adjust the texture display to the window size.
 			ImVec2 winSize = ImGui::GetContentRegionAvail();
@@ -1013,8 +1014,7 @@ int main(int argc, char ** argv) {
 			ImGui::ImageButton(selectionColor, ImVec2(winSize.x, winSize.y), ImVec2(0.0,0.0), ImVec2(1.0,1.0), 0);
 		}
 		ImGui::End();
-
-#ifdef DEBUG
+		
 		if(showDemoWindow){
 			ImGui::ShowDemoWindow();
 		}
@@ -1077,7 +1077,6 @@ int main(int argc, char ** argv) {
 
 			GPU::bind(sceneColor, sceneDepth, clearColor, 0.0f, LoadOperation::DONTCARE);
 			GPU::setViewport(sceneColor);
-
 
 			GPU::setPolygonState(PolygonMode::FILL);
 			GPU::setCullState(true);
@@ -1154,38 +1153,25 @@ int main(int argc, char ** argv) {
 				}
 			}
 
-
-			if( ( selected.mesh >= 0 || selected.instance >= 0 ) && !boundingBox.indices.empty() )
 			{
-				coloredDebugDraw->use();
-				coloredDebugDraw->buffer( frameInfos, 0 );
+				GPU::bind(sceneColor, sceneDepth, LoadOperation::LOAD, LoadOperation::LOAD, LoadOperation::DONTCARE);
+				GPU::setViewport(sceneColor);
 				GPU::setPolygonState( PolygonMode::LINE );
 				GPU::setCullState( false );
 				GPU::setDepthState( true, TestFunction::GEQUAL, false );
 				GPU::setBlendState( false );
-				GPU::drawMesh( boundingBox );
-			}
-
-			if( showLights && !debugLights.indices.empty() )
-			{
 				coloredDebugDraw->use();
 				coloredDebugDraw->buffer( frameInfos, 0 );
-				GPU::setPolygonState( PolygonMode::LINE );
-				GPU::setCullState( false );
-				GPU::setDepthState( true, TestFunction::GEQUAL, false );
-				GPU::setBlendState( false );
-				GPU::drawMesh( debugLights );
-			}
 
-			if( showZones && !debugZones.indices.empty() )
-			{
-				coloredDebugDraw->use();
-				coloredDebugDraw->buffer( frameInfos, 0 );
-				GPU::setPolygonState( PolygonMode::LINE );
-				GPU::setCullState( false );
-				GPU::setDepthState( true, TestFunction::GEQUAL, false );
-				GPU::setBlendState( false );
-				GPU::drawMesh( debugZones );
+				if((selected.mesh >= 0 || selected.instance >= 0) && !boundingBox.indices.empty()){
+					GPU::drawMesh( boundingBox );
+				}
+				if(showLights && !debugLights.indices.empty()){
+					GPU::drawMesh( debugLights );
+				}
+				if(showZones && !debugZones.indices.empty()){
+					GPU::drawMesh( debugZones );
+				}
 			}
 
 			if(Input::manager().released(Input::Mouse::Right)){
@@ -1199,7 +1185,7 @@ int main(int argc, char ** argv) {
 				mousePos = (mousePos - glm::vec2(mainViewport.x, mainViewport.y)) / glm::vec2(mainViewport.z, mainViewport.w);
 				// Check that we are in the viewport.
 				if(glm::all(glm::lessThan(mousePos, glm::vec2(1.0f))) && glm::all(glm::greaterThan(mousePos, glm::vec2(0.0f)))){
-					// Rneder to selection ID texture
+					// Render to selection ID texture
 					{
 						selectionColor.resize( sceneColor.width, sceneColor.height );
 						GPU::setViewport( selectionColor );
@@ -1232,6 +1218,7 @@ int main(int argc, char ** argv) {
 						uint index = uint(pixels[0]) + (uint(pixels[1] ) << 8u);
 						if(index != 0){
 							selected.instance = index-1;
+							selected.mesh = -1;
 							updateInstanceBoundingBox = true;
 						}
 					});
@@ -1257,8 +1244,8 @@ int main(int argc, char ** argv) {
 
 		if(updateInstanceBoundingBox){
 			frameInfos[0].selectedInstance = selected.instance;
+			frameInfos[0].selectedMesh = selected.mesh;
 			// Generate a mesh with bounding boxes of the instances.
-
 			boundingBox.clean();
 			const auto corners = scene.instanceDebugInfos[selected.instance].bbox.getCorners();
 			boundingBox.positions = corners;
