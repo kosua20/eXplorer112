@@ -9502,6 +9502,10 @@ void ImGui::ScrollToItem(ImGuiScrollFlags flags)
     ScrollToRectEx(window, g.LastItemData.NavRect, flags);
 }
 
+void ImGui::ScrollToItem(){
+	ScrollToItem(ImGuiScrollFlags_KeepVisibleCenterY);
+}
+
 void ImGui::ScrollToRect(ImGuiWindow* window, const ImRect& item_rect, ImGuiScrollFlags flags)
 {
     ScrollToRectEx(window, item_rect, flags);
