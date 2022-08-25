@@ -410,6 +410,7 @@ int main(int argc, char ** argv) {
 #endif
 	bool firstFrame = true;
 	bool updateInstanceBoundingBox = false;
+	bool scrollToItem = false;
 
 	while(window.nextFrame()) {
 
@@ -694,6 +695,9 @@ int main(int argc, char ** argv) {
 										adjustCameraToBoundingBox(camera, boundingBox.computeBoundingBox());
 									}
 								}
+								if(scrollToItem && (selected.mesh == row)){
+									ImGui::ScrollToItem();
+								}
 
 								ImGui::TableNextColumn();
 								ImGui::Text("%u", meshInfos.indexCount / 3u);
@@ -873,13 +877,18 @@ int main(int argc, char ** argv) {
 							ImGui::TableNextColumn();
 							ImGui::PushID(row);
 
-							const Scene::InstanceCPUInfos& debugInfos = scene.instanceDebugInfos[startRow + row];
+							const uint fullInstanceIndex = startRow + row;
+							const Scene::InstanceCPUInfos& debugInfos = scene.instanceDebugInfos[fullInstanceIndex];
 
-							if(ImGui::Selectable(debugInfos.name.c_str(), selected.instance == startRow + row, selectableTableFlags)){
-								if(selected.instance != startRow + row){
-									selected.instance = startRow + row;
+							if(ImGui::Selectable(debugInfos.name.c_str(), selected.instance == fullInstanceIndex, selectableTableFlags)){
+								if(selected.instance != fullInstanceIndex){
+									selected.instance = fullInstanceIndex;
 									updateInstanceBoundingBox = true;
 								}
+							}
+
+							if(scrollToItem && (selected.instance == fullInstanceIndex)){
+								ImGui::ScrollToItem();
 							}
 							ImGui::PopID();
 						}
@@ -1212,13 +1221,13 @@ int main(int argc, char ** argv) {
 					const glm::vec2 texSize(selectionColor.width, selectionColor.height);
 					glm::uvec2 readbackCoords = mousePos * texSize;
 					readbackCoords = glm::min(readbackCoords, glm::uvec2(texSize) - 2u);
-					GPU::downloadTextureAsync( selectionColor, readbackCoords, glm::uvec2(2u), 1, [&selected, &updateInstanceBoundingBox](const Texture& result){
+					GPU::downloadTextureAsync( selectionColor, readbackCoords, glm::uvec2(2u), 1, [&selected, &updateInstanceBoundingBox, &scene](const Texture& result){
 						const auto& pixels = result.images[0].pixels;
 
 						uint index = uint(pixels[0]) + (uint(pixels[1] ) << 8u);
 						if(index != 0){
 							selected.instance = index-1;
-							selected.mesh = -1;
+							selected.mesh = scene.instanceDebugInfos[selected.instance].meshIndex;
 							updateInstanceBoundingBox = true;
 						}
 					});
@@ -1242,6 +1251,7 @@ int main(int argc, char ** argv) {
 			GPU::drawQuad();
 		}
 
+		scrollToItem = false;
 		if(updateInstanceBoundingBox){
 			frameInfos[0].selectedInstance = selected.instance;
 			frameInfos[0].selectedMesh = selected.mesh;
@@ -1254,6 +1264,7 @@ int main(int argc, char ** argv) {
 			boundingBox.colors.resize(boundingBox.positions.size(), glm::vec3(1.0f, 0.0f, 0.0f));
 			boundingBox.upload();
 			updateInstanceBoundingBox = false;
+			scrollToItem = true;
 		}
 
 		window.bind(glm::vec4(0.2f, 0.2f, 0.2f, 1.0f), LoadOperation::DONTCARE, LoadOperation::DONTCARE);
