@@ -1075,42 +1075,13 @@ int main(int argc, char ** argv) {
 			glm::vec4 clearColor = effects.fogColor;
 			clearColor[3] = 1.0f;
 
-			GPU::bind(sceneColor, sceneDepth, clearColor, 1.0f, LoadOperation::DONTCARE);
+			GPU::bind(sceneColor, sceneDepth, clearColor, 0.0f, LoadOperation::DONTCARE);
 			GPU::setViewport(sceneColor);
 
-			if((selected.mesh >= 0 || selected.instance >= 0) && !boundingBox.indices.empty()){
-				coloredDebugDraw->use();
-				coloredDebugDraw->buffer(frameInfos, 0);
-				GPU::setPolygonState(PolygonMode::LINE);
-				GPU::setCullState(false);
-				GPU::setDepthState(true, TestFunction::LESS, true);
-				GPU::setBlendState(false);
-				GPU::drawMesh(boundingBox);
-			}
-
-			if(showLights && !debugLights.indices.empty()){
-				coloredDebugDraw->use();
-				coloredDebugDraw->buffer(frameInfos, 0);
-				GPU::setPolygonState(PolygonMode::LINE);
-				GPU::setCullState(false);
-				GPU::setDepthState(true, TestFunction::LESS, true);
-				GPU::setBlendState(false);
-				GPU::drawMesh(debugLights);
-			}
-
-			if(showZones && !debugZones.indices.empty()){
-				coloredDebugDraw->use();
-				coloredDebugDraw->buffer(frameInfos, 0);
-				GPU::setPolygonState(PolygonMode::LINE);
-				GPU::setCullState(false);
-				GPU::setDepthState(true, TestFunction::LESS, true);
-				GPU::setBlendState(false);
-				GPU::drawMesh(debugZones);
-			}
 
 			GPU::setPolygonState(PolygonMode::FILL);
 			GPU::setCullState(true);
-			GPU::setDepthState(true, TestFunction::LESS, true);
+			GPU::setDepthState(true, TestFunction::GEQUAL, true);
 			GPU::setBlendState(false);
 			GPU::setColorState(true, true, true, false);
 
@@ -1137,7 +1108,7 @@ int main(int argc, char ** argv) {
 			if(showDecals){
 				// Decal textures seem to have no alpha channel at all. White is used for background. Use min blending.
 				// Alternative possibility: src * dst, but this makes some decals appear as black squares.
-				GPU::setDepthState(true, TestFunction::LEQUAL, false);
+				GPU::setDepthState(true, TestFunction::GEQUAL, false);
 				GPU::setCullState(true);
 				GPU::setBlendState(true, BlendEquation::MIN, BlendFunction::ONE, BlendFunction::ONE);
 				for(uint mid = 0; mid < scene.meshInfos->size(); ++mid){
@@ -1151,7 +1122,7 @@ int main(int argc, char ** argv) {
 
 			if(showTransparents){
 				// Alternative possibility: real alpha blend and object sorting.
-				GPU::setDepthState(true, TestFunction::LEQUAL, false);
+				GPU::setDepthState(true, TestFunction::GEQUAL, false);
 				GPU::setCullState(false);
 				GPU::setBlendState(true, BlendEquation::ADD, BlendFunction::SRC_ALPHA, BlendFunction::ONE_MINUS_SRC_ALPHA);
 				for(uint mid = 0; mid < scene.meshInfos->size(); ++mid){
@@ -1168,7 +1139,7 @@ int main(int argc, char ** argv) {
 
 				GPU::setPolygonState(PolygonMode::LINE);
 				GPU::setCullState(false);
-				GPU::setDepthState(true, TestFunction::LESS, true);
+				GPU::setDepthState(true, TestFunction::GEQUAL, false);
 				GPU::setBlendState(false);
 
 				debugInstancedObject->use();
@@ -1183,6 +1154,40 @@ int main(int argc, char ** argv) {
 				}
 			}
 
+
+			if( ( selected.mesh >= 0 || selected.instance >= 0 ) && !boundingBox.indices.empty() )
+			{
+				coloredDebugDraw->use();
+				coloredDebugDraw->buffer( frameInfos, 0 );
+				GPU::setPolygonState( PolygonMode::LINE );
+				GPU::setCullState( false );
+				GPU::setDepthState( true, TestFunction::GEQUAL, false );
+				GPU::setBlendState( false );
+				GPU::drawMesh( boundingBox );
+			}
+
+			if( showLights && !debugLights.indices.empty() )
+			{
+				coloredDebugDraw->use();
+				coloredDebugDraw->buffer( frameInfos, 0 );
+				GPU::setPolygonState( PolygonMode::LINE );
+				GPU::setCullState( false );
+				GPU::setDepthState( true, TestFunction::GEQUAL, false );
+				GPU::setBlendState( false );
+				GPU::drawMesh( debugLights );
+			}
+
+			if( showZones && !debugZones.indices.empty() )
+			{
+				coloredDebugDraw->use();
+				coloredDebugDraw->buffer( frameInfos, 0 );
+				GPU::setPolygonState( PolygonMode::LINE );
+				GPU::setCullState( false );
+				GPU::setDepthState( true, TestFunction::GEQUAL, false );
+				GPU::setBlendState( false );
+				GPU::drawMesh( debugZones );
+			}
+
 			if(Input::manager().released(Input::Mouse::Right)){
 
 				// Compute mouse coordinates.
@@ -1194,25 +1199,28 @@ int main(int argc, char ** argv) {
 				mousePos = (mousePos - glm::vec2(mainViewport.x, mainViewport.y)) / glm::vec2(mainViewport.z, mainViewport.w);
 				// Check that we are in the viewport.
 				if(glm::all(glm::lessThan(mousePos, glm::vec2(1.0f))) && glm::all(glm::greaterThan(mousePos, glm::vec2(0.0f)))){
+					// Rneder to selection ID texture
+					{
+						selectionColor.resize( sceneColor.width, sceneColor.height );
+						GPU::setViewport( selectionColor );
+						GPU::bind( selectionColor, sceneDepth, glm::vec4( 0.0f ), LoadOperation::LOAD, LoadOperation::DONTCARE );
 
-					selectionColor.resize(sceneColor.width, sceneColor.height);
-					GPU::setViewport(selectionColor);
-					GPU::bind(selectionColor, sceneDepth, glm::vec4(0.0f), LoadOperation::LOAD, LoadOperation::DONTCARE);
+						GPU::setPolygonState( PolygonMode::FILL );
+						GPU::setCullState( true, Faces::BACK );
+						GPU::setDepthState( true, TestFunction::EQUAL, false );
+						GPU::setBlendState( false );
 
-					GPU::setPolygonState(PolygonMode::FILL);
-					GPU::setCullState(true, Faces::BACK);
-					GPU::setDepthState(true, TestFunction::EQUAL, false);
-					GPU::setBlendState(false);
+						selectionObject->use();
+						selectionObject->buffer( frameInfos, 0 );
+						selectionObject->buffer( *scene.meshInfos, 1 );
+						selectionObject->buffer( *scene.instanceInfos, 2 );
+						selectionObject->buffer( *scene.materialInfos, 3 );
+						selectionObject->buffer( *drawInstances, 4 );
 
-					selectionObject->use();
-					selectionObject->buffer(frameInfos, 0);
-					selectionObject->buffer(*scene.meshInfos, 1);
-					selectionObject->buffer(*scene.instanceInfos, 2);
-					selectionObject->buffer(*scene.materialInfos, 3);
-					selectionObject->buffer(*drawInstances, 4);
-
-					for(uint mid = 0; mid < scene.meshInfos->size(); ++mid){
-						GPU::drawIndirectMesh(scene.globalMesh, *drawCommands, mid);
+						for( uint mid = 0; mid < scene.meshInfos->size(); ++mid )
+						{
+							GPU::drawIndirectMesh( scene.globalMesh, *drawCommands, mid );
+						}
 					}
 
 					const glm::vec2 texSize(selectionColor.width, selectionColor.height);
@@ -1233,7 +1241,6 @@ int main(int argc, char ** argv) {
 
 		} else {
 			GPU::clearTexture(sceneColor, glm::vec4(0.2f, 0.2f, 0.2f, 1.0f));
-			GPU::clearDepth(sceneDepth, 1.0f);
 		}
 
 		if(selected.texture >= 0){

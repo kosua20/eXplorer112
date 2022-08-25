@@ -50,7 +50,7 @@ void Camera::pixelShifts(glm::vec3 & corner, glm::vec3 & dx, glm::vec3 & dy) con
 
 void Camera::updateProjection() {
 	// Perspective projection.
-	_projection = Frustum::perspective(_fov, _ratio, _clippingPlanes[0], _clippingPlanes[1]);
+	_projection = Frustum::perspective(_fov, _ratio, _clippingPlanes[1], _clippingPlanes[0]);
 }
 
 void Camera::updateView() {

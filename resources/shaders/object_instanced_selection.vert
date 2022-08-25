@@ -32,7 +32,8 @@ void main(){
 	MeshInfos mesh = meshInfos[DrawIndex];
 	uint instanceIndex = drawInstanceInfos[mesh.firstInstanceIndex + gl_InstanceIndex];
 	MeshInstanceInfos instance = instanceInfos[instanceIndex];
-
-	gl_Position = engine.vp * instance.frame * vec4(v, 1.0);
+	
+	vec4 worldPos = instance.frame * vec4(v, 1.0);
+	gl_Position = engine.vp * worldPos;
 	Out.index = instanceIndex;
 }
