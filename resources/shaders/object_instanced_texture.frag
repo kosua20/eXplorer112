@@ -24,6 +24,7 @@ layout(std140, set = 0, binding = 3) readonly buffer MaterialsInfos {
 
 layout(set = 2, binding = 0) uniform texture2D fogXYMap;
 layout(set = 2, binding = 1) uniform texture2D fogZMap;
+layout(set = 2, binding = 2, rgba32ui) uniform readonly uimage3D lightClusters;
 layout(set = 3, binding = 0) uniform texture2DArray textures[]; ///< Color textures.
 
 layout(location = 0) out vec4 fragColor; ///< Color.
@@ -81,6 +82,16 @@ void main(){
 		color.a = 1.0;
 	}
 
+	uvec3 clusterCoords = clusterCellFromScreenspace(gl_FragCoord.xyz);
+	uvec4 flags = imageLoad(lightClusters, ivec3(clusterCoords));
+	uint count = 0;
+	for(uint i = 0; i < 4; ++i){
+		for(uint j = 0; j < 32; ++j){
+			if((flags[i] & (1u << j)) != 0){
+				++count;
+			}
+		}
+	}
 
 	fragColor = vec4((diffuse + ambient) * color.rgb + specular, color.a);
 	// Height fog.

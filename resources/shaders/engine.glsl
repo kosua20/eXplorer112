@@ -83,3 +83,11 @@ struct DrawCommand {
 	uint firstInstance;
 };
 
+
+uvec3 clusterCellFromScreenspace(vec3 fragCoord){
+	float invViewDepth = fragCoord.z * engine.camPlanes.z + engine.camPlanes.w;
+	float zRange = -log(invViewDepth) * engine.clustersParams.x - engine.clustersParams.y;
+	uint zSlice = uint(floor(zRange));
+	uvec2 xyCell = uvec2(fragCoord.xy - 0.5) / engine.clustersSize.w;
+	return uvec3(xyCell.x, engine.clustersSize.y - 1 - xyCell.y, zSlice);
+}
