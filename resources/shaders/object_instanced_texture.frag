@@ -22,6 +22,10 @@ layout(std140, set = 0, binding = 3) readonly buffer MaterialsInfos {
 	MaterialInfos materialInfos[];
 };
 
+layout(std140, set = 0, binding = 5) readonly buffer LightsInfos {
+	LightInfos lightInfos[];
+};
+
 layout(set = 2, binding = 0) uniform texture2D fogXYMap;
 layout(set = 2, binding = 1) uniform texture2D fogZMap;
 layout(set = 2, binding = 2, rgba32ui) uniform readonly uimage3D lightClusters;
@@ -58,19 +62,51 @@ void main(){
 	}
 
 	vec3 ambient = vec3(0.0);
-	float diffuse = 1.0;
-	float specular = 0.0;
+	vec3 diffuse = vec3(1.0);
+	vec3 specular = vec3(0.0);
 
 	if(engine.shadingMode == MODE_SHADING_LIGHT){
-		vec3 l = normalize(vec3(1.0, 1.0, 1.0)); // World space for now
 		vec3 v = normalize(In.viewDir.xyz);
 		// Ambient. TODO: fetch based on position relative to list of areas, area index passed from the vertex shader, or reading a 3D texture containing indices.
-		ambient = engine.ambientColor.rgb;
-		// Diffuse (based on game shader)
-		diffuse = dot(n, l) * 0.5 + 0.5;
-		diffuse *= diffuse;
-		// Specular (based on game shader)
-		specular = pow(clamp(dot(reflect(v, n), -l), 0.0, 1.0), 4.0);
+		ambient  = engine.ambientColor.rgb;
+		diffuse  = vec3(0.0);
+		specular = vec3(0.0);
+
+		uvec3 clusterCoords = clusterCellFromScreenspace(gl_FragCoord.xyz);
+		uvec4 flags = imageLoad(lightClusters, ivec3(clusterCoords));
+		uint count = 0;
+		for(uint i = 0; i < 4; ++i){
+			// Early exit :D
+			if(flags[i] == 0){
+				continue;
+			}
+
+			for(uint j = 0; j < 32; ++j){
+				if((flags[i] & (1u << j)) == 0){
+					continue;
+				}
+				uint lightIndex = 32 * i + j;
+				if(lightIndex >= engine.lightsCount){
+					break;
+				}
+				LightInfos light = lightInfos[lightIndex];
+				vec3 lightPos = light.positionAndRadius.xyz;
+				float lightRad = light.positionAndRadius.w;
+				vec3 l = (lightPos - In.worldPos.xyz);
+				// Compute attenuation (based on game shader)
+				float attenuation = 1.0 - clamp(dot(l, l) / (lightRad * lightRad), 0.0, 1.0);
+				l = normalize(l);
+				// Diffuse (based on game shader)
+				float localDiffuse = dot(n, l) * 0.5 + 0.5;
+				localDiffuse *= localDiffuse;
+				diffuse += localDiffuse * attenuation * light.color.xyz;
+				// Specular (based on game shader)
+				float localSpecular = pow(clamp(dot(reflect(v, n), -l), 0.0, 1.0), 4.0);
+				localSpecular *= localDiffuse; // ?
+				specular += localSpecular * attenuation * light.color.xyz;
+			}
+		}
+		// Modulate based on 'roughness' stored in alpha channel of normal map.
 		specular *= normalAndR.a;
 	}
 
@@ -80,17 +116,6 @@ void main(){
 	} else if(engine.albedoMode == MODE_ALBEDO_NORMAL){
 		color.rgb = n * 0.5 + 0.5;
 		color.a = 1.0;
-	}
-
-	uvec3 clusterCoords = clusterCellFromScreenspace(gl_FragCoord.xyz);
-	uvec4 flags = imageLoad(lightClusters, ivec3(clusterCoords));
-	uint count = 0;
-	for(uint i = 0; i < 4; ++i){
-		for(uint j = 0; j < 32; ++j){
-			if((flags[i] & (1u << j)) != 0){
-				++count;
-			}
-		}
 	}
 
 	fragColor = vec4((diffuse + ambient) * color.rgb + specular, color.a);
