@@ -154,9 +154,13 @@ void Texture::resize(const glm::vec2& res){
 	resize(uint(res[0]), uint(res[1]));
 }
 
-void Texture::resize(uint w, uint h){
-	if(width == w && height == h){
+void Texture::resize(uint w, uint h, uint d){
+	if(width == w && height == h && depth == d){
 		return;
+	}
+	if(d != 1 && (shape == TextureShape::D2 || shape == TextureShape::D1)){
+		Log::warning("GPU: attempting to change texture shape.");
+		d = 1;
 	}
 	if(gpu == nullptr){
 		Log::warning("GPU: texture is not allocated on the GPU.");
@@ -164,6 +168,7 @@ void Texture::resize(uint w, uint h){
 	}
 	width = w;
 	height = h;
+	depth = d;
 	GPU::setupTexture(*this, gpu->typedFormat, true);
 	// TODO: resize CPU.
 }

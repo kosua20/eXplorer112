@@ -37,7 +37,7 @@ public:
 
 	void resize(const glm::vec2& res);
 
-	void resize(uint width, uint height);
+	void resize(uint width, uint height, uint depth = 1u);
 
 	/** Cleanup all data.
 	 \note The dimensions and shape of the texture are preserved.

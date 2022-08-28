@@ -304,7 +304,7 @@ void Program::transitionResourcesTo(Program::Type type){
 		for(const auto& texInfos : _textures){
 			// Transition proper subresource.
 			const uint mip = texInfos.second.mip;
-			const VkImageLayout tgtLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+			const VkImageLayout tgtLayout = texInfos.second.storage ? VK_IMAGE_LAYOUT_GENERAL : VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 			for(const Texture* tex : texInfos.second.textures){
 				if(mip == Program::ALL_MIPS){
 					VkUtils::textureLayoutBarrier(commandBuffer, *tex, tgtLayout);
