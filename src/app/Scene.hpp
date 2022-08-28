@@ -64,6 +64,11 @@ public:
 		uint pad0, pad1, pad2;
 	};
 
+	struct LightInfos {
+		glm::vec4 positionAndRadius;
+		//TODO: texture, type,...
+	};
+
 	// CPU data.
 	struct MeshCPUInfos {
 		std::string name;
@@ -114,6 +119,7 @@ public:
 	std::unique_ptr<StructuredBuffer<MeshInfos>> meshInfos;
 	std::unique_ptr<StructuredBuffer<MeshInstanceInfos>> instanceInfos;
 	std::unique_ptr<StructuredBuffer<MaterialInfos>> materialInfos;
+	std::unique_ptr<StructuredBuffer<LightInfos>> lightInfos;
 
 	std::vector<MeshCPUInfos> meshDebugInfos;
 	std::vector<InstanceCPUInfos> instanceDebugInfos;

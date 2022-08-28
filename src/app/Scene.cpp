@@ -43,6 +43,7 @@ void Scene::clean(){
 	meshInfos.reset();
 	instanceInfos.reset();
 	materialInfos.reset();
+	lightInfos.reset();
 
 	for(Texture& tex : textures ){
 		tex.clean();
@@ -341,11 +342,24 @@ void Scene::upload(const World& world, const GameFiles& files){
 		}
 	}
 
+	// Lights
+	{
+		const uint lightsCount = world.lights().size();
+		lightInfos = std::make_unique<StructuredBuffer<LightInfos>>(lightsCount, BufferType::STORAGE);
+		for(uint i = 0; i < lightsCount; ++i){
+			const World::Light& light = world.lights()[i];
+			const float maxRadius = std::max(light.radius.x, std::max(light.radius.y, light.radius.z));
+			const glm::vec3 lightPos = glm::vec3(light.frame[3]);
+			(*lightInfos)[i].positionAndRadius = glm::vec4(lightPos, maxRadius);
+		}
+	}
+
 	// Send data to the GPU.
 	globalMesh.upload();
 	instanceInfos->upload();
 	meshInfos->upload();
 	materialInfos->upload();
+	lightInfos->upload();
 
 	GPU::registerTextures( textures );
 }

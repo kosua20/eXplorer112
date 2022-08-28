@@ -61,6 +61,10 @@ struct MaterialInfos {
 	uint pad0, pad1, pad2;
 };
 
+struct LightInfos {
+	vec4 positionAndRadius;
+};
+
 struct DrawCommand {
 	uint indexCount;
 	uint instanceCount;
