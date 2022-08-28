@@ -66,6 +66,7 @@ public:
 
 	struct LightInfos {
 		glm::vec4 positionAndRadius;
+		glm::vec4 color;
 		//TODO: texture, type,...
 	};
 

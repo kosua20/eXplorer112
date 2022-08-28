@@ -73,6 +73,7 @@ struct MaterialInfos {
 
 struct LightInfos {
 	vec4 positionAndRadius;
+	vec4 color;
 };
 
 struct DrawCommand {

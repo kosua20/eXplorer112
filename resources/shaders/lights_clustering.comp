@@ -69,9 +69,7 @@ void main(){
 			// Test the light sphere against the bounding box.
 			vec3 lightPos = vec3(engine.v * vec4(lightInfos[lightIndex].positionAndRadius.xyz, 1.0));
 			float lightRad = lightInfos[lightIndex].positionAndRadius.w;
-			//if(all(greaterThanEqual(lightPos, minBox)) &&  all(lessThanEqual(lightPos, maxBox))){
-			//	lightFlags[i] |= (1u << j);
-			//}
+			
 			if(sphereIntersectsBox(lightPos, lightRad, minBox, maxBox)){
 				lightFlags[i] |= (1u << j);
 			}

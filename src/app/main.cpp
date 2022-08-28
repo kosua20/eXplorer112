@@ -1159,6 +1159,7 @@ int main(int argc, char ** argv) {
 			texturedInstancedObject->buffer(*scene.instanceInfos, 2);
 			texturedInstancedObject->buffer(*scene.materialInfos, 3);
 			texturedInstancedObject->buffer(*drawInstances, 4);
+			texturedInstancedObject->buffer(*scene.lightInfos, 5);
 			texturedInstancedObject->texture(fogXYTexture, 0);
 			texturedInstancedObject->texture(fogZTexture, 1);
 			texturedInstancedObject->texture(lightClusters, 2);
