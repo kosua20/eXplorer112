@@ -1,10 +1,14 @@
 
 layout(set = 0, binding = 0) uniform EngineData {
+	mat4 v;
 	mat4 vp; ///< The transformation matrix.
 	mat4 vpCulling; ///< The transformation matrix.
-	mat4 ivp; ///< Inverse
+	mat4 ip; ///< Inverse
+	mat4 nvp; ///< Normal transformation matrix
+	vec4 resolution;
 	vec4 color;
 	vec4 camPos;
+	vec4 camPlanes; // n, f/n, (f-n)/(f*n), 1/f
 
 	vec4 ambientColor;
 	vec4 fogColor;
@@ -14,6 +18,12 @@ layout(set = 0, binding = 0) uniform EngineData {
 	// Shading settings.
 	uint shadingMode;
 	uint albedoMode;
+
+	// Clustering
+	uint  lightsCount;
+	uvec4 clustersSize; // w, h, d, tile size in w
+	vec4  clustersParams;
+
 	// Selection data.
 	int selectedMesh;
 	int selectedInstance;

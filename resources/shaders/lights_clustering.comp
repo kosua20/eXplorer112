@@ -1,0 +1,88 @@
+
+#include "engine.glsl"
+
+layout(local_size_x=1, local_size_y=1, local_size_z=1) in;
+
+layout(std140, set = 0, binding = 1) readonly buffer LightInfosBuffer {
+	LightInfos lightInfos[];
+};
+
+layout(set = 2, binding = 0, rgba32ui) uniform writeonly uimage3D outClusters;
+
+vec3 pixelToView(vec2 pix){
+	vec2 ndc = pix / engine.resolution.xy * 2.0 - 1.0;
+	ndc.y *= -1.0;
+	vec4 clip = vec4(ndc, -1.0, 1.0);
+	vec4 view = engine.ip * clip;
+	return view.xyz / view.w;
+}
+
+vec3 intersectZPlane(vec3 p, float z){
+	// General equation: c + (z - dot(n,c)) / dot(n, p - c) * (p - c)
+	return z / p.z * p;
+}
+
+bool sphereIntersectsBox(vec3 p, float radius, vec3 minBox, vec3 maxBox){
+	vec3 minDists = max(vec3(0.0), minBox - p);
+	vec3 maxDists = max(vec3(0.0), p - maxBox);
+	float dist2 = dot(minDists, minDists) + dot(maxDists, maxDists);
+	return dist2 <= radius * radius;
+}
+
+void main(){
+	// Safety exit.
+	if(any(greaterThanEqual(gl_GlobalInvocationID, engine.clustersSize.xyz ))){
+		return;
+	}
+
+	// Compute cluster frustum and AABB
+	float tileSize = float(engine.clustersSize.w);
+	vec2 minCornerPixel = tileSize * gl_GlobalInvocationID.xy;
+	vec2 maxCornerPixel = minCornerPixel + tileSize;
+	// Convert to viewspace.
+	vec3 minCorner = pixelToView(minCornerPixel);
+	vec3 maxCorner = pixelToView(maxCornerPixel);
+	// Compute near and far plane in viewspace.
+	float sliceCount = float(engine.clustersSize.z);
+	float near = -engine.camPlanes.x * pow(engine.camPlanes.y, float(gl_GlobalInvocationID.z) / sliceCount);
+	float far  = -engine.camPlanes.x * pow(engine.camPlanes.y, float(gl_GlobalInvocationID.z + 1u) / sliceCount);
+	// Intersect the lines going through the two corners with the local near and far planes
+	vec3 minNear = intersectZPlane(minCorner, near);
+	vec3 minFar  = intersectZPlane(minCorner, far);
+	vec3 maxNear = intersectZPlane(maxCorner, near);
+	vec3 maxFar  = intersectZPlane(maxCorner, far);
+	// Bounding box
+	vec3 minBox = min(min(minNear, minFar), min(maxNear, maxFar));
+	vec3 maxBox = max(max(minNear, minFar), max(maxNear, maxFar));
+
+	// Cull all lights against the bounding box.
+	uvec4 lightFlags = uvec4(0u);
+
+	for(uint i = 0; i < 4; ++i){
+		bool stop = false;
+		for(uint j = 0; j < 32; ++j){
+			uint lightIndex = 32 * i + j;
+			if(lightIndex >= engine.lightsCount){
+				stop = true;
+				break;
+			}
+			// Test the light sphere against the bounding box.
+			vec3 lightPos = vec3(engine.v * vec4(lightInfos[lightIndex].positionAndRadius.xyz, 1.0));
+			float lightRad = lightInfos[lightIndex].positionAndRadius.w;
+			//if(all(greaterThanEqual(lightPos, minBox)) &&  all(lessThanEqual(lightPos, maxBox))){
+			//	lightFlags[i] |= (1u << j);
+			//}
+			if(sphereIntersectsBox(lightPos, lightRad, minBox, maxBox)){
+				lightFlags[i] |= (1u << j);
+			}
+		}
+		if(stop){
+			break;
+		}
+	}
+
+	imageStore(outClusters, ivec3(gl_GlobalInvocationID), lightFlags);
+
+	// Later on: use local storage to load in threads
+	// Even later: write to a list of indices with offset if space is an issue.
+}

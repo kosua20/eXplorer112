@@ -20,6 +20,8 @@
 #define MODE_ALBEDO_NORMAL 1
 #define MODE_ALBEDO_TEXTURE 2
 
+#define CLUSTER_XY_SIZE 64
+#define CLUSTER_Z_COUNT 32
 
 static const std::vector<uint> boxIndices = { 0, 1, 0, 0, 2, 0,
 	1, 3, 1, 2, 3, 2,
@@ -59,11 +61,15 @@ public:
 
 
 struct FrameData {
+	glm::mat4 v{1.0f};
 	glm::mat4 vp{1.0f};
 	glm::mat4 vpCulling{1.0f};
-	glm::mat4 ivp{1.0f};
+	glm::mat4 ip{1.0f};
+	glm::mat4 nvp{1.0f};
+	glm::vec4 resolution{0.0f};
 	glm::vec4 color{1.0f};
 	glm::vec4 camPos{1.0f};
+	glm::vec4 camPlanes{0.0f};
 
 	glm::vec4 ambientColor{0.0f};
 	glm::vec4 fogColor{0.0f};
@@ -73,6 +79,10 @@ struct FrameData {
 	// Shading settings.
 	uint shadingMode = 0;
 	uint albedoMode = 0;
+	// Clustering
+	uint lightsCount;
+	glm::uvec4 clustersSize{1u}; // tile size in w
+	glm::vec4 clustersParams{0.0f};
 	// Selection data.
 	int selectedMesh = -1;
 	int selectedInstance= -1;
@@ -297,6 +307,11 @@ void loadEngineTextures(const GameFiles& gameFiles, Texture& fogXYTexture, Textu
 	fogZTexture.upload(Layout::RGBA8, false);
 }
 
+
+uint roundUp(uint a, uint step){
+	return std::floor(int(a) - 1) / int(step) + 1;
+}
+
 int main(int argc, char ** argv) {
 	// First, init/parse/load configuration.
 	ViewerConfig config(std::vector<std::string>(argv, argv + argc));
@@ -355,6 +370,9 @@ int main(int argc, char ** argv) {
 	Program* drawArgsCompute = loadProgram("draw_arguments_all");
 	programPool.push_back(drawArgsCompute);
 
+	Program* clustersCompute = loadProgram("lights_clustering");
+	programPool.push_back(clustersCompute);
+
 
 	UniformBuffer<FrameData> frameInfos(1, 64);
 	const glm::uvec2 renderRes(config.resolutionRatio * config.screenResolution);
@@ -370,6 +388,17 @@ int main(int argc, char ** argv) {
 	Texture selectionColor("selection"), selectionDepth("selectionDepth");
 	Texture::setupRendertarget(selectionColor, Layout::RG8, renderRes[0], renderRes[1]);
 	Texture::setupRendertarget(selectionDepth, Layout::DEPTH_COMPONENT32F, renderRes[0], renderRes[1]);
+
+
+	glm::ivec2 clusterDims(CLUSTER_XY_SIZE, CLUSTER_Z_COUNT);
+
+	Texture lightClusters("lightClusters");
+	lightClusters.width = roundUp(renderRes[0], clusterDims.x);
+	lightClusters.height = roundUp(renderRes[1], clusterDims.x);
+	lightClusters.depth = clusterDims.y;
+	lightClusters.shape = TextureShape::D3;
+	lightClusters.levels = 1;
+	GPU::setupTexture(lightClusters, Layout::RGBA32UI, false);
 
 	std::unique_ptr<Buffer> drawCommands = nullptr;
 	std::unique_ptr<Buffer> drawInstances = nullptr;
@@ -877,13 +906,15 @@ int main(int argc, char ** argv) {
 							ImGui::TableNextColumn();
 							ImGui::PushID(row);
 
-							const uint fullInstanceIndex = startRow + row;
+							const int fullInstanceIndex = startRow + row;
 							const Scene::InstanceCPUInfos& debugInfos = scene.instanceDebugInfos[fullInstanceIndex];
 
 							if(ImGui::Selectable(debugInfos.name.c_str(), selected.instance == fullInstanceIndex, selectableTableFlags)){
 								if(selected.instance != fullInstanceIndex){
 									selected.instance = fullInstanceIndex;
 									updateInstanceBoundingBox = true;
+									const BoundingBox& bbox = scene.instanceDebugInfos[selected.instance].bbox;
+									adjustCameraToBoundingBox(camera, bbox);
 								}
 							}
 
@@ -939,7 +970,11 @@ int main(int argc, char ** argv) {
 				config.resolutionRatio = newRatio;
 				sceneColor.resize(renderRes);
 				sceneDepth.resize(renderRes);
+				lightClusters.resize(roundUp(renderRes[0], clusterDims.x), roundUp(renderRes[1], clusterDims.x), clusterDims.y);
 				camera.ratio(renderRes[0]/renderRes[1]);
+			}
+			if(ImGui::SliderInt2("Cluster params", &clusterDims[0], 2, 128)){
+				lightClusters.resize(roundUp(sceneColor.width, clusterDims.x), roundUp(sceneColor.height, clusterDims.x), clusterDims.y);
 			}
 
 			ImGui::Text("Shading"); ImGui::SameLine();
@@ -1008,6 +1043,7 @@ int main(int argc, char ** argv) {
 				const glm::vec2 renderRes = config.resolutionRatio * glm::vec2(winSize.x, winSize.y);
 				sceneColor.resize(renderRes);
 				sceneDepth.resize(renderRes);
+				lightClusters.resize(roundUp(renderRes[0], clusterDims.x), roundUp(renderRes[1], clusterDims.x), clusterDims.y);
 				camera.ratio(renderRes[0]/renderRes[1]);
 			}
 		}
@@ -1051,12 +1087,15 @@ int main(int argc, char ** argv) {
 
 		// Camera.
 		const glm::mat4 vp		   = camera.projection() * camera.view();
+		frameInfos[0].v = camera.view();
 		frameInfos[0].vp = vp;
 		// Only update the culling VP if needed.
 		if(!freezeCulling){
 			frameInfos[0].vpCulling = vp;
 		}
-		frameInfos[0].ivp = glm::transpose(glm::inverse(vp));
+		frameInfos[0].ip = glm::inverse(camera.projection());
+		frameInfos[0].nvp = glm::transpose(glm::inverse(vp));
+		frameInfos[0].resolution = glm::vec4(sceneColor.width, sceneColor.height, 0u, 0u);
 
 		frameInfos[0].ambientColor = effects.color;
 		frameInfos[0].fogParams = effects.fogParams;
@@ -1065,8 +1104,18 @@ int main(int argc, char ** argv) {
 
 		frameInfos[0].color = glm::vec4(1.0f);
 		frameInfos[0].camPos = glm::vec4(camera.position(), 1.0f);
+		const glm::vec2 nearFar = camera.clippingPlanes();
+		frameInfos[0].camPlanes = glm::vec4(nearFar.x, nearFar.y / nearFar.x,
+											(nearFar.y - nearFar.x)/(nearFar.x*nearFar.y),
+											1.0f/nearFar.y );
+
 		frameInfos[0].albedoMode = albedoMode;
 		frameInfos[0].shadingMode = shadingMode;
+		frameInfos[0].lightsCount = uint(scene.world.lights().size());
+		frameInfos[0].clustersSize = glm::uvec4(lightClusters.width, lightClusters.height, lightClusters.depth, clusterDims.x);
+		const float logRatio = float(clusterDims.y) / std::log(nearFar.y / nearFar.x);
+		frameInfos[0].clustersParams = glm::vec4(logRatio, std::log(nearFar.x) * logRatio, 0.0f, 0.0f);
+
 		frameInfos.upload();
 
 		if(selected.item >= 0){
@@ -1079,6 +1128,17 @@ int main(int argc, char ** argv) {
 			drawArgsCompute->buffer(*drawCommands, 3);
 			drawArgsCompute->buffer(*drawInstances, 4);
 			GPU::dispatch((uint)scene.meshInfos->size(), 1, 1);
+
+			clustersCompute->use();
+			clustersCompute->buffer(frameInfos, 0);
+			clustersCompute->buffer(*scene.lightInfos, 1);
+			clustersCompute->texture(lightClusters, 0);
+			// We need one thread per cluster cell.
+			const glm::uvec3 groupSize = clustersCompute->size();
+			const uint cw = roundUp(lightClusters.width, groupSize.x);
+			const uint ch = roundUp(lightClusters.height, groupSize.y);
+			const uint cd = roundUp(lightClusters.depth, groupSize.z);
+			GPU::dispatch(cw, ch, cd);
 
 			// Determine clearing color by finding the closest area.
 			glm::vec4 clearColor = effects.fogColor;
@@ -1101,6 +1161,7 @@ int main(int argc, char ** argv) {
 			texturedInstancedObject->buffer(*drawInstances, 4);
 			texturedInstancedObject->texture(fogXYTexture, 0);
 			texturedInstancedObject->texture(fogZTexture, 1);
+			texturedInstancedObject->texture(lightClusters, 2);
 
 			if(showOpaques){
 				for(uint mid = 0; mid < scene.meshInfos->size(); ++mid){
