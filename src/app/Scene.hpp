@@ -65,9 +65,11 @@ public:
 	};
 
 	struct LightInfos {
-		glm::vec4 positionAndRadius;
-		glm::vec4 color;
-		//TODO: texture, type,...
+		glm::vec4 positionAndMaxRadius;
+		glm::vec4 colorAndType;
+		glm::vec4 axisAndRadiusX;
+		glm::vec4 axisAndRadiusY;
+		glm::vec4 axisAndRadiusZ;
 	};
 
 	// CPU data.

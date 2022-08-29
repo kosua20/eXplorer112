@@ -72,8 +72,11 @@ struct MaterialInfos {
 };
 
 struct LightInfos {
-	vec4 positionAndRadius;
-	vec4 color;
+	vec4 positionAndMaxRadius;
+	vec4 colorAndType;
+	vec4 axisAndRadiusX;
+	vec4 axisAndRadiusY;
+	vec4 axisAndRadiusZ;
 };
 
 struct DrawCommand {
