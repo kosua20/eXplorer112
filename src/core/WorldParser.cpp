@@ -102,7 +102,7 @@ glm::mat4 getEntityFrame(const pugi::xml_node& entity){
 	return frame;
 }
 
-void World::processEntity(const pugi::xml_node& entity, const glm::mat4& globalFrame, bool templated, ObjectReferenceList& objectRefs, EntityFrameList& entitiesList){
+void World::processEntity(const pugi::xml_node& entity, const glm::mat4& globalFrame, bool templated, const fs::path& resourcePath, ObjectReferenceList& objectRefs, EntityFrameList& entitiesList){
 
 	const std::string type = getEntityAttribute(entity, "type");
 	if(type.empty()){
@@ -195,10 +195,6 @@ void World::processEntity(const pugi::xml_node& entity, const glm::mat4& globalF
 		light.frame = entityFrame;
 		light.name = objName;
 		light.type = (Light::Type)lightType;
-		// Rotation doesn't matter for point lights apparently.
-		//if(light.type == Light::POINT){
-		//	light.frame = glm::translate(glm::mat4(1.0f), glm::vec3(light.frame[3]));
-		//}
 
 		light.color = Area::parseVec3(getLightAttribute(entity, lightChild, "color"), glm::vec3(1.0f));
 
@@ -218,11 +214,37 @@ void World::processEntity(const pugi::xml_node& entity, const glm::mat4& globalF
 		if(!materialStr.empty()){
 			TextUtilities::replace(materialStr, "\\", "/");
 			materialStr = TextUtilities::trim(materialStr, "/");
-			const fs::path texturePath = materialStr;
-			const std::string extension = texturePath.filename().extension().string();
-			if(extension == ".tga" || extension == ".dds" || extension == ".png"){
+
+			const fs::path materialPath = materialStr;
+			const std::string extension = TextUtilities::lowercase(materialPath.filename().extension().string());
+			// Two possibilities: either a texture file, or a material definition.
+			// In both cases we want to retrieve a non-empty texture name.
+			std::string textureName;
+
+			if(extension == ".mtl"){
+				// Load the mtl XML file.
+				const fs::path mtlPath = resourcePath / materialPath;
+				pugi::xml_document mtlDef;
+				if(mtlDef.load_file(mtlPath.c_str())){
+					pugi::xml_node frame = mtlDef.child("matDef").child("framelist").first_child();
+					// Extract texture name, assume it is unique.
+					std::string textureStr = frame.attribute("sourcename").value();
+					if(!textureStr.empty()){
+						TextUtilities::replace(textureStr, "\\", "/");
+						const fs::path texturePath = TextUtilities::trim(textureStr, "/");
+						textureName = texturePath.filename().replace_extension().string();
+					}
+				} else {
+					Log::error("Unable to load mtl file at path %s", mtlPath.string().c_str());
+				}
+
+			} else if(extension == ".tga" || extension == ".dds" || extension == ".png"){
+				textureName = materialPath.filename().replace_extension().string();
+			}
+
+			if(!textureName.empty()){
 				Object::Material material;
-				material.color = texturePath.filename().replace_extension().string();
+				material.color = textureName;
 				material.normal = "";
 				material.type = Object::Material::LIGHT;
 
@@ -296,7 +318,7 @@ bool World::load(const fs::path& path, const fs::path& resourcePath){
 
 	for(const auto& item : items){
 		if(strcmp(item.name(), "entity") == 0){
-			processEntity(item, glm::mat4(1.0f), false, referencedObjects, entitiesList);
+			processEntity(item, glm::mat4(1.0f), false, resourcePath, referencedObjects, entitiesList);
 			continue;
 		}
 		if(strcmp(item.name(), "instance") == 0){
@@ -323,7 +345,7 @@ bool World::load(const fs::path& path, const fs::path& resourcePath){
 			// Use a local entity list.
 			EntityFrameList templateEntitiesList;
 			for(const auto& entity : entities.children("entity")){
-				processEntity(entity, frame, true, referencedObjects, templateEntitiesList);
+				processEntity(entity, frame, true, resourcePath, referencedObjects, templateEntitiesList);
 			}
 			continue;
 		}

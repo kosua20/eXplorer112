@@ -23,12 +23,14 @@ struct GameFiles {
 	fs::path templatesPath;
 	fs::path zonesPath;
 	fs::path worldsPath;
+	fs::path materialsPath;
 
 	std::vector<fs::path> worldsList;
 	std::vector<fs::path> modelsList;
 	std::vector<fs::path> texturesList;
 	std::vector<fs::path> templatesList;
 	std::vector<fs::path> areasList;
+	std::vector<fs::path> materialsList;
 
 };
 
@@ -65,11 +67,14 @@ public:
 	};
 
 	struct LightInfos {
+		glm::mat4 vp;
 		glm::vec4 positionAndMaxRadius;
 		glm::vec4 colorAndType;
 		glm::vec4 axisAndRadiusX;
 		glm::vec4 axisAndRadiusY;
 		glm::vec4 axisAndRadiusZ;
+		uint materialIndex;
+		uint pad0, pad1, pad2;
 	};
 
 	// CPU data.

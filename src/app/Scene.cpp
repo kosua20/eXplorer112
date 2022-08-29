@@ -17,6 +17,7 @@ GameFiles::GameFiles(const fs::path& installPath){
 	templatesPath = resourcesPath / "templates";
 	zonesPath = resourcesPath / "zones";
 	worldsPath = zonesPath / "world";
+	materialsPath = resourcesPath / "materials";
 
 	System::listAllFilesOfType(worldsPath, ".world", worldsList);
 	System::listAllFilesOfType(modelsPath, ".dff", modelsList);
@@ -28,14 +29,15 @@ GameFiles::GameFiles(const fs::path& installPath){
 	System::listAllFilesOfType(texturesPath, ".dds", texturesList);
 	System::listAllFilesOfType(texturesPath, ".tga", texturesList);
 	System::listAllFilesOfType(texturesPath, ".png", texturesList);
+
 	System::listAllFilesOfType(zonesPath, ".rf3", areasList);
+	System::listAllFilesOfType(materialsPath, ".mtl", materialsList);
 
 	std::sort(modelsList.begin(), modelsList.end());
 	std::sort(worldsList.begin(), worldsList.end());
 	std::sort(areasList.begin(), areasList.end());
+	std::sort(materialsList.begin(), materialsList.end());
 }
-
-
 
 void Scene::clean(){
 	globalMesh.clean();
@@ -351,6 +353,7 @@ void Scene::upload(const World& world, const GameFiles& files){
 			const float maxRadius = std::max(light.radius.x, std::max(light.radius.y, light.radius.z));
 			const glm::vec3 lightPos = glm::vec3(light.frame[3]);
 			LightInfos& info = (*lightInfos)[i];
+			info.vp = Frustum::perspective(std::max(light.angle, 1.0f), 1.0f, 1.0f, 1000.0f) * glm::inverse(light.frame);
 			info.positionAndMaxRadius = glm::vec4(lightPos, maxRadius);
 			info.colorAndType = glm::vec4(light.color, float(light.type));
 			const glm::vec3 axisX = glm::normalize(glm::vec3(light.frame[0]));
@@ -359,6 +362,7 @@ void Scene::upload(const World& world, const GameFiles& files){
 			info.axisAndRadiusX = glm::vec4(axisX / light.radius.x, 0.0f);
 			info.axisAndRadiusY = glm::vec4(axisY / light.radius.y, 0.0f);
 			info.axisAndRadiusZ = glm::vec4(axisZ / light.radius.z, 0.0f);
+			info.materialIndex = light.material;
 		}
 	}
 

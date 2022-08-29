@@ -80,7 +80,7 @@ private:
 	using ObjectReferenceList = std::map<fs::path, uint>;
 	using EntityFrameList = std::unordered_map<std::string, glm::mat4>;
 	
-	void processEntity(const pugi::xml_node& entity, const glm::mat4& globalFrame, bool templated, ObjectReferenceList& objectRefs, EntityFrameList& entitiesList);
+	void processEntity(const pugi::xml_node& entity, const glm::mat4& globalFrame, bool templated, const fs::path& resourcePath, ObjectReferenceList& objectRefs, EntityFrameList& entitiesList);
 
 	std::vector<Object> _objects;
 	std::vector<Instance> _instances;

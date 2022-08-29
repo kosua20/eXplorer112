@@ -42,6 +42,8 @@ layout(set = 0, binding = 0) uniform EngineData {
 #define MODE_ALBEDO_NORMAL 1
 #define MODE_ALBEDO_TEXTURE 2
 
+const uint NO_MATERIAL = 0xFFFF;
+
 struct MeshInfos {
 	vec4 bboxMin;
 	vec4 bboxMax;
@@ -72,11 +74,14 @@ struct MaterialInfos {
 };
 
 struct LightInfos {
+	mat4 vp;
 	vec4 positionAndMaxRadius;
 	vec4 colorAndType;
 	vec4 axisAndRadiusX;
 	vec4 axisAndRadiusY;
 	vec4 axisAndRadiusZ;
+	uint materialIndex;
+	uint pad0, pad1, pad2;
 };
 
 struct DrawCommand {
