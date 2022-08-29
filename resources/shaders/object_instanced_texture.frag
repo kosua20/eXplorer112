@@ -110,9 +110,22 @@ void main(){
 					attenuation = 1.0 - clamp(dot(attenAxes, attenAxes), 0.0, 1.0);
 					l = normalize(l);
 
-					// In the initial spot shader : clip(lightspace * position)
-					if(lightType == 2 && attenAxes.z > 0.0){
-						attenuation = 0.0;
+
+					if((lightType == 2)){
+						vec4 projectedPos = light.vp * vec4(In.worldPos.xyz, 1.0);
+						projectedPos.xyz = projectedPos.xyz / projectedPos.w;
+						attenuation = clamp(projectedPos.x * 0.5 + 0.5, 0.0, 1.0);
+						lightColor = light.colorAndType.xyz;
+
+//						if(light.materialIndex != NO_MATERIAL){
+//							MaterialInfos lightMaterial =  materialInfos[light.materialIndex];
+//
+//							vec3 lightUV = vec3(projectedPos.xy / projectedPos.w, lightMaterial.color.layer);
+//							vec4 lightPattern = texture(sampler2DArray(textures[lightMaterial.color.index], sRepeatLinearLinear), lightUV);
+//							lightColor = lightPattern.rgb * 5.0;
+//
+//						}
+
 					}
 
 				} else if(lightType == 3){ // Directional
