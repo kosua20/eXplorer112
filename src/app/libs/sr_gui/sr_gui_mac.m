@@ -35,6 +35,10 @@ void sr_gui_show_message(const char* title, const char* message, int level) {
 }
 
 void sr_gui_show_notification(const char* title, const char* message) {
+
+
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
 	NSUserNotification* notif = [[NSUserNotification alloc] init];
 	notif.identifier		  = [[NSUUID UUID] UUIDString];
 	notif.title				  = [[NSString alloc] initWithUTF8String:title];
@@ -43,6 +47,7 @@ void sr_gui_show_notification(const char* title, const char* message) {
 
 	[[NSUserNotificationCenter defaultUserNotificationCenter] scheduleNotification:notif];
 	[notif release];
+#pragma clang diagnostic pop
 }
 
 int sr_gui_ask_directory(const char* title, const char* startDir, char** outPath) {
