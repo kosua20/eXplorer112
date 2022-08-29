@@ -90,20 +90,45 @@ void main(){
 					break;
 				}
 				LightInfos light = lightInfos[lightIndex];
-				vec3 lightPos = light.positionAndRadius.xyz;
-				float lightRad = light.positionAndRadius.w;
-				vec3 l = (lightPos - In.worldPos.xyz);
-				// Compute attenuation (based on game shader)
-				float attenuation = 1.0 - clamp(dot(l, l) / (lightRad * lightRad), 0.0, 1.0);
-				l = normalize(l);
+				vec3 lightPos = light.positionAndMaxRadius.xyz;
+				float lightRad = light.positionAndMaxRadius.w;
+				vec3 lightColor = light.colorAndType.xyz;
+				uint lightType = uint(light.colorAndType.w);
+
+				vec3 l = vec3(0.0);
+
+				float attenuation = 12000.0;
+				if(lightType == 1 || lightType == 2){ // Point & Spot
+					l = (lightPos - In.worldPos.xyz);
+					// Attenuation along the local axes (pre-divided by the radii)
+					vec3 attenAxes;
+					attenAxes.x = dot(light.axisAndRadiusX.xyz, l);
+					attenAxes.y = dot(light.axisAndRadiusY.xyz, l);
+					attenAxes.z = dot(light.axisAndRadiusZ.xyz, l);
+
+					// Compute attenuation (based on game shader)
+					attenuation = 1.0 - clamp(dot(attenAxes, attenAxes), 0.0, 1.0);
+					l = normalize(l);
+
+					// In the initial spot shader : clip(lightspace * position)
+					if(lightType == 2 && attenAxes.z > 0.0){
+						attenuation = 0.0;
+					}
+
+				} else if(lightType == 3){ // Directional
+					attenuation = 1.0;
+					l = normalize(-light.axisAndRadiusZ.xyz);
+				}
+
+
 				// Diffuse (based on game shader)
 				float localDiffuse = dot(n, l) * 0.5 + 0.5;
 				localDiffuse *= localDiffuse;
-				diffuse += localDiffuse * attenuation * light.color.xyz;
+				diffuse += localDiffuse * attenuation * lightColor;
 				// Specular (based on game shader)
 				float localSpecular = pow(clamp(dot(reflect(v, n), -l), 0.0, 1.0), 4.0);
 				localSpecular *= localDiffuse; // ?
-				specular += localSpecular * attenuation * light.color.xyz;
+				specular += localSpecular * attenuation * lightColor;
 			}
 		}
 		// Modulate based on 'roughness' stored in alpha channel of normal map.
