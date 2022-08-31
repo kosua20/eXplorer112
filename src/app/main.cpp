@@ -1361,25 +1361,24 @@ int main(int argc, char ** argv) {
 				if(glm::all(glm::lessThan(mousePos, glm::vec2(1.0f))) && glm::all(glm::greaterThan(mousePos, glm::vec2(0.0f)))){
 					// Render to selection ID texture
 					{
-						selectionColor.resize( sceneColor.width, sceneColor.height );
-						GPU::setViewport( selectionColor );
-						GPU::bind( selectionColor, sceneDepth, glm::vec4( 0.0f ), LoadOperation::LOAD, LoadOperation::DONTCARE );
+						selectionColor.resize(sceneColor.width, sceneColor.height);
+						GPU::setViewport(selectionColor);
+						GPU::bind(selectionColor, sceneDepth, glm::vec4(0.0f), LoadOperation::LOAD, LoadOperation::DONTCARE);
 
-						GPU::setPolygonState( PolygonMode::FILL );
-						GPU::setCullState( true, Faces::BACK );
-						GPU::setDepthState( true, TestFunction::EQUAL, false );
-						GPU::setBlendState( false );
+						GPU::setPolygonState(PolygonMode::FILL);
+						GPU::setCullState(true, Faces::BACK);
+						GPU::setDepthState(true, TestFunction::EQUAL, false);
+						GPU::setBlendState(false);
 
 						selectionObject->use();
-						selectionObject->buffer( frameInfos, 0 );
-						selectionObject->buffer( *scene.meshInfos, 1 );
-						selectionObject->buffer( *scene.instanceInfos, 2 );
-						selectionObject->buffer( *scene.materialInfos, 3 );
-						selectionObject->buffer( *drawInstances, 4 );
+						selectionObject->buffer(frameInfos, 0 );
+						selectionObject->buffer(*scene.meshInfos, 1);
+						selectionObject->buffer(*scene.instanceInfos, 2);
+						selectionObject->buffer(*scene.materialInfos, 3);
+						selectionObject->buffer(*drawInstances, 4);
 
-						for( uint mid = 0; mid < scene.meshInfos->size(); ++mid )
-						{
-							GPU::drawIndirectMesh( scene.globalMesh, *drawCommands, mid );
+						for(uint mid = 0; mid < scene.meshInfos->size(); ++mid){
+							GPU::drawIndirectMesh(scene.globalMesh, *drawCommands, mid);
 						}
 					}
 
