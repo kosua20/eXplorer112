@@ -353,7 +353,7 @@ void Scene::upload(const World& world, const GameFiles& files){
 			const float maxRadius = std::max(light.radius.x, std::max(light.radius.y, light.radius.z));
 			const glm::vec3 lightPos = glm::vec3(light.frame[3]);
 			LightInfos& info = (*lightInfos)[i];
-			info.vp = Frustum::perspective(std::max(light.angle, 1.0f), 1.0f, 1.0f, 1000.0f) * glm::inverse(light.frame);
+			info.vp = Frustum::perspective(std::max(light.angle, 0.1f), 1.0f, 1.0f, 10000.0f) * glm::inverse(light.frame);
 			info.positionAndMaxRadius = glm::vec4(lightPos, maxRadius);
 			info.colorAndType = glm::vec4(light.color, float(light.type));
 			const glm::vec3 axisX = glm::normalize(glm::vec3(light.frame[0]));
