@@ -389,6 +389,8 @@ int main(int argc, char ** argv) {
 	programPool.push_back(loadProgram("object_instanced_texture", "object_instanced_texture"));
 	Program* texturedInstancedObject = programPool.back().program;
 
+	programPool.push_back(loadProgram("object_instanced_shadow", "object_instanced_shadow"));
+	Program* shadowInstancedObject = programPool.back().program;
 
 	programPool.push_back(loadProgram("object_instanced_debug", "object_instanced_debug"));
 	Program* debugInstancedObject = programPool.back().program;
@@ -404,6 +406,7 @@ int main(int argc, char ** argv) {
 
 
 	UniformBuffer<FrameData> frameInfos(1, 64);
+	UniformBuffer<FrameData> shadowInfos(1, 2);
 	const glm::uvec2 renderRes(config.resolutionRatio * config.screenResolution);
 
 	Texture sceneColor("sceneRender"), sceneDepth("sceneDepth");
@@ -417,6 +420,8 @@ int main(int argc, char ** argv) {
 	Texture selectionColor("selection");
 	Texture::setupRendertarget(selectionColor, Layout::RG8, renderRes[0], renderRes[1]);
 
+	Texture shadowMaps("shadowMaps");
+	Texture::setupRendertarget(shadowMaps, Layout::DEPTH_COMPONENT32F, 256, 256, 1, TextureShape::Array2D, 16);
 
 	glm::ivec2 clusterDims(CLUSTER_XY_SIZE, CLUSTER_Z_COUNT);
 
@@ -457,6 +462,8 @@ int main(int argc, char ** argv) {
 	bool showZones = false;
 
 	AmbientEffects effects;
+	uint currentShadowcastingLight = 0u;
+	uint currentShadowMapLayer = 0u;
 
 	Texture fogXYTexture("fogXYMap");
 	Texture fogZTexture("fogZMap");
@@ -621,6 +628,17 @@ int main(int argc, char ** argv) {
 										const size_t instanceCount = scene.instanceInfos->size();
 										drawCommands = std::make_unique<Buffer>(meshCount * sizeof(GPU::DrawCommand), BufferType::INDIRECT);
 										drawInstances = std::make_unique<Buffer>(instanceCount * sizeof(uint), BufferType::STORAGE);
+
+										uint shadowCount = 0u;
+										currentShadowcastingLight = 0u;
+										currentShadowMapLayer = 0u;
+										for(const World::Light& light : scene.world.lights()){
+											if(light.shadow){
+												++shadowCount;
+											}
+										}
+										shadowCount = std::max(shadowCount, 1u);
+										shadowMaps.resize(shadowMaps.width, shadowMaps.height, shadowCount);
 
 										// Center camera
 										if(scene.world.cameras().empty()){
@@ -1150,6 +1168,59 @@ int main(int argc, char ** argv) {
 		frameInfos.upload();
 
 		if(selected.item >= 0){
+			// Bruteforce shadow map once per frame.
+			const uint lightsCount = scene.world.lights().size();
+			
+			if(currentShadowcastingLight < lightsCount){
+				// Find the next shadow casting light.
+				for(; currentShadowcastingLight < lightsCount; ++currentShadowcastingLight){
+					if(scene.world.lights()[currentShadowcastingLight].shadow){
+						break;
+					}
+				}
+
+				const Scene::LightInfos& infos = (*scene.lightInfos)[currentShadowcastingLight];
+
+				// Shadow map projection
+				shadowInfos[0].vp = infos.vp;
+				shadowInfos[0].vpCulling = infos.vp;
+				shadowInfos.upload();
+
+				// Draw commands for the shadow maps.
+				drawArgsCompute->use();
+				drawArgsCompute->buffer(shadowInfos, 0);
+				drawArgsCompute->buffer(*scene.meshInfos, 1);
+				drawArgsCompute->buffer(*scene.instanceInfos, 2);
+				drawArgsCompute->buffer(*drawCommands, 3);
+				drawArgsCompute->buffer(*drawInstances, 4);
+				GPU::dispatch((uint)scene.meshInfos->size(), 1, 1);
+
+				GPU::bindFramebuffer(currentShadowMapLayer, 0, 1.0f, LoadOperation::DONTCARE, LoadOperation::DONTCARE, &shadowMaps, nullptr, nullptr, nullptr, nullptr);
+				GPU::setViewport(shadowMaps);
+
+				GPU::setPolygonState(PolygonMode::FILL);
+				GPU::setCullState(true);
+				GPU::setDepthState(true, TestFunction::GEQUAL, true);
+				GPU::setBlendState(false);
+				GPU::setColorState(false, false, false, false);
+
+				shadowInstancedObject->use();
+				shadowInstancedObject->buffer(shadowInfos, 0);
+				shadowInstancedObject->buffer(*scene.meshInfos, 1);
+				shadowInstancedObject->buffer(*scene.instanceInfos, 2);
+				shadowInstancedObject->buffer(*scene.materialInfos, 3);
+				shadowInstancedObject->buffer(*drawInstances, 4);
+
+				for(uint mid = 0; mid < scene.meshInfos->size(); ++mid){
+					const uint materialIndex = (*scene.meshInfos)[mid].materialIndex;
+					if((*scene.materialInfos)[materialIndex].type != Object::Material::OPAQUE){
+						continue;
+					}
+					GPU::drawIndirectMesh(scene.globalMesh, *drawCommands, mid);
+				}
+				++currentShadowMapLayer;
+				++currentShadowcastingLight;
+			}
 
 			// Populate drawCommands and drawInstancesby using a compute shader that performs culling.
 			drawArgsCompute->use();
@@ -1194,6 +1265,7 @@ int main(int argc, char ** argv) {
 			texturedInstancedObject->texture(fogXYTexture, 0);
 			texturedInstancedObject->texture(fogZTexture, 1);
 			texturedInstancedObject->texture(lightClusters, 2);
+			texturedInstancedObject->texture(shadowMaps, 3);
 
 			if(showOpaques){
 				for(uint mid = 0; mid < scene.meshInfos->size(); ++mid){
