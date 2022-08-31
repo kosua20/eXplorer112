@@ -57,6 +57,27 @@ World::World(const Object& object){
 	}
 
 	_instances.emplace_back(object.name, 0, glm::mat4(1.0f));
+
+	// Default zone.
+	Zone& zone = _zones.emplace_back();
+	zone.name = "Default";
+	zone.bbox = BoundingBox(glm::vec3(-100000.0f), glm::vec3(100000.0f));
+	zone.ambientColor = glm::vec4(0.1f);
+	zone.fogColor = glm::vec4(0.2f);
+	zone.fogParams = glm::vec4(0.0f);
+	zone.fogDensity = 0.0f;
+	
+	// Default light.
+	Light& light = _lights.emplace_back();
+	glm::quat alignment = glm::rotation(glm::vec3(0.0f, 0.0f, 1.0f), -glm::normalize(glm::vec3(1.0f, 1.0f, 1.0f)));
+	light.frame = glm::mat4(alignment);
+	light.type = Light::DIRECTIONAL;
+	light.color = glm::vec3(1.0f);
+	light.name = "Default";
+	light.radius = glm::vec3(100000.0f);
+	light.angle = 0.0f;
+	light.shadow = false;
+	light.material = Light::NO_MATERIAL;
 }
 
 std::string getEntityAttribute(const pugi::xml_node& entity, const char* key){
