@@ -117,6 +117,8 @@ public:
 
 	static void bind(const Texture& color0, const Texture& color1, const Texture& color2, const Texture&  color3, const Texture& depthStencil, const LoadOperation& colorOp, const LoadOperation& depthOp, const LoadOperation& stencilOp = {});
 
+	static void bindFramebuffer(uint layer, uint mip, const LoadOperation& depthOp, const LoadOperation& stencilOp, const LoadOperation& colorOp, const Texture* depthStencil, const Texture* color0, const Texture* color1, const Texture* color2, const Texture* color3);
+
 	/** Save a given texture content to the disk.
 	 \param texture the texture to save
 	 \param path the output image path
@@ -393,9 +395,6 @@ public:
 	static void cleanup();
 
 private:
-
-
-	static void bindFramebuffer(uint layer, uint mip, const LoadOperation& depthOp, const LoadOperation& stencilOp, const LoadOperation& colorOp, const Texture* depthStencil, const Texture* color0, const Texture* color1, const Texture* color2, const Texture* color3);
 
 	/** If the GPU graphics state has changed, retrieve and bind the pipeline corresponding to the new state. */
 	static void bindGraphicsPipelineIfNeeded();
