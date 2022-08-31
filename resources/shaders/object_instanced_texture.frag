@@ -29,6 +29,7 @@ layout(std140, set = 0, binding = 5) readonly buffer LightsInfos {
 layout(set = 2, binding = 0) uniform texture2D fogXYMap;
 layout(set = 2, binding = 1) uniform texture2D fogZMap;
 layout(set = 2, binding = 2, rgba32ui) uniform readonly uimage3D lightClusters;
+layout(set = 2, binding = 3) uniform texture2DArray shadowMaps;
 layout(set = 3, binding = 0) uniform texture2DArray textures[]; ///< Color textures.
 
 layout(location = 0) out vec4 fragColor; ///< Color.
@@ -67,7 +68,7 @@ void main(){
 
 	if(engine.shadingMode == MODE_SHADING_LIGHT){
 		vec3 v = normalize(In.viewDir.xyz);
-		// Ambient. TODO: fetch based on position relative to list of areas, area index passed from the vertex shader, or reading a 3D texture containing indices.
+		// Ambient.
 		ambient  = engine.ambientColor.rgb;
 		diffuse  = vec3(0.0);
 		specular = vec3(0.0);
@@ -97,7 +98,19 @@ void main(){
 
 				vec3 l = vec3(0.0);
 
-				float attenuation = 12000.0;
+				float attenuation = 1.0;
+				vec4 projectedPos = light.vp * vec4(In.worldPos.xyz, 1.0);
+				projectedPos.xy /= projectedPos.w;
+
+				if(light.shadow != NO_SHADOW){
+					vec3 lightUV = vec3(projectedPos.xy * 0.5 + 0.5, light.shadow);
+					float refDepth = texture(sampler2DArray(shadowMaps, sClampLinear), lightUV).r;
+					float currDepth = projectedPos.z / projectedPos.w;
+					if(refDepth < currDepth){ // or something...
+						attenuation = 0.0;
+					}
+				}
+
 				if(lightType == 1 || lightType == 2){ // Point & Spot
 					l = (lightPos - In.worldPos.xyz);
 					// Attenuation along the local axes (pre-divided by the radii)
@@ -107,15 +120,14 @@ void main(){
 					attenAxes.z = dot(light.axisAndRadiusZ.xyz, l);
 
 					// Compute attenuation (based on game shader)
-					attenuation = 1.0 - clamp(dot(attenAxes, attenAxes), 0.0, 1.0);
+					attenuation *= 1.0 - clamp(dot(attenAxes, attenAxes), 0.0, 1.0);
 					l = normalize(l);
 
 
 					if((lightType == 2)){
-						vec4 projectedPos = light.vp * vec4(In.worldPos.xyz, 1.0);
-						projectedPos.xy /= projectedPos.w;
+
 						if(any(greaterThan(abs(projectedPos.xy), vec2(1.0))) || projectedPos.z >= 0.0){
-							attenuation = 0.0;
+							attenuation *= 0.0;
 						}
 
 						if(light.materialIndex != NO_MATERIAL){
@@ -130,7 +142,7 @@ void main(){
 					}
 
 				} else if(lightType == 3){ // Directional
-					attenuation = 1.0;
+					attenuation *= 1.0;
 					l = normalize(-light.axisAndRadiusZ.xyz);
 				}
 
