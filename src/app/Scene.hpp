@@ -74,7 +74,8 @@ public:
 		glm::vec4 axisAndRadiusY;
 		glm::vec4 axisAndRadiusZ;
 		uint materialIndex;
-		uint pad0, pad1, pad2;
+		uint shadow;
+		uint pad1, pad2;
 	};
 
 	// CPU data.

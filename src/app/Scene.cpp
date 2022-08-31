@@ -348,12 +348,26 @@ void Scene::upload(const World& world, const GameFiles& files){
 	{
 		const uint lightsCount = world.lights().size();
 		lightInfos = std::make_unique<StructuredBuffer<LightInfos>>(lightsCount, BufferType::STORAGE);
+		uint shadowIndex = 0u;
 		for(uint i = 0; i < lightsCount; ++i){
 			const World::Light& light = world.lights()[i];
 			const float maxRadius = std::max(light.radius.x, std::max(light.radius.y, light.radius.z));
 			const glm::vec3 lightPos = glm::vec3(light.frame[3]);
 			LightInfos& info = (*lightInfos)[i];
-			info.vp = Frustum::perspective(std::max(light.angle, 0.1f), 1.0f, 1.0f, 10000.0f) * glm::inverse(light.frame);
+
+			const glm::mat4 view = glm::inverse(light.frame);
+			glm::mat4 proj = glm::mat4(1.0f);
+			info.shadow = light.shadow ? shadowIndex++ : World::Light::NO_SHADOW;
+			if(light.type == World::Light::SPOT){
+				proj = Frustum::perspective(std::max(light.angle, 0.1f), 1.0f, 1.0f, 10000.0f);
+			} else if(light.type == World::Light::DIRECTIONAL){
+				proj = Frustum::ortho(-light.radius.x, light.radius.x, -light.radius.y, light.radius.y, 1.0f, 10000.0f);
+			} else {
+				// TODO
+				info.shadow = World::Light::NO_SHADOW;
+			}
+			info.vp = proj * view;
+
 			info.positionAndMaxRadius = glm::vec4(lightPos, maxRadius);
 			info.colorAndType = glm::vec4(light.color, float(light.type));
 			const glm::vec3 axisX = glm::normalize(glm::vec3(light.frame[0]));
