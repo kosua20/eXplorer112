@@ -113,20 +113,47 @@ struct AmbientEffects {
 	}
 };
 
-Program* loadProgram(const std::string& vertName, const std::string& fragName){
-	std::vector<fs::path> names;
-	const std::string vertContent = System::getStringWithIncludes(APP_RESOURCE_DIRECTORY / "shaders" / (vertName + ".vert"), names);
-	names.clear();
-	const std::string fragContent = System::getStringWithIncludes(APP_RESOURCE_DIRECTORY / "shaders" / (fragName + ".frag"), names);
+struct ProgramInfos {
+	Program* program;
+	std::vector<std::string> names;
 
-	return new Program(vertName + "_" + fragName, vertContent, fragContent);
+	void use(){
+		program->use();
+	}
+};
+
+#define SHADERS_DIRECTORY (APP_RESOURCE_DIRECTORY / "shaders")
+
+ProgramInfos loadProgram(const std::string& vertName, const std::string& fragName){
+	std::vector<fs::path> names;
+	const std::string vertContent = System::getStringWithIncludes(SHADERS_DIRECTORY / (vertName + ".vert"), names);
+	names.clear();
+	const std::string fragContent = System::getStringWithIncludes(SHADERS_DIRECTORY / (fragName + ".frag"), names);
+
+	Program* prog = new Program(vertName + "_" + fragName, vertContent, fragContent);
+	return {prog, {vertName, fragName}};
 }
 
-Program* loadProgram(const std::string& computeName){
+ProgramInfos loadProgram(const std::string& computeName){
 	std::vector<fs::path> names;
-	const std::string compContent = System::getStringWithIncludes(APP_RESOURCE_DIRECTORY / "shaders" / (computeName + ".comp"), names);
+	const std::string compContent = System::getStringWithIncludes(SHADERS_DIRECTORY / (computeName + ".comp"), names);
+	Program* prog =  new Program(computeName, compContent);
+	return {prog, {computeName}};
+}
 
-	return new Program(computeName, compContent);
+void reload(ProgramInfos& infos){
+	if(infos.program->type() == Program::Type::COMPUTE){
+		std::vector<fs::path> names;
+		const std::string compContent = System::getStringWithIncludes(SHADERS_DIRECTORY / (infos.names[0] + ".comp"), names);
+		infos.program->reload(compContent);
+	} else {
+		std::vector<fs::path> names;
+		const std::string vertContent = System::getStringWithIncludes(SHADERS_DIRECTORY / (infos.names[0] + ".vert"), names);
+		names.clear();
+		const std::string fragContent = System::getStringWithIncludes(SHADERS_DIRECTORY / (infos.names[1] + ".frag"), names);
+		infos.program->reload(vertContent, fragContent);
+	}
+
 }
 
 void addLightGizmo(Mesh& mesh, const World::Light& light){
@@ -350,28 +377,30 @@ int main(int argc, char ** argv) {
 	camera.ratio(config.screenResolution[0] / config.screenResolution[1]);
 
 	// Rendering
-	std::vector<Program*> programPool;
 
-	Program* textureQuad = loadProgram("texture_passthrough", "texture_debug");
-	programPool.push_back(textureQuad);
+	std::vector<ProgramInfos> programPool;
 
-	Program* coloredDebugDraw = loadProgram("object_color", "object_color");
-	programPool.push_back(coloredDebugDraw);
+	programPool.push_back(loadProgram("texture_passthrough", "texture_debug"));
+	Program* textureQuad = programPool.back().program;
 
-	Program* texturedInstancedObject = loadProgram("object_instanced_texture", "object_instanced_texture");
-	programPool.push_back(texturedInstancedObject);
+	programPool.push_back(loadProgram("object_color", "object_color"));
+	Program* coloredDebugDraw = programPool.back().program;
 
-	Program* debugInstancedObject = loadProgram("object_instanced_debug", "object_instanced_debug");
-	programPool.push_back(debugInstancedObject);
+	programPool.push_back(loadProgram("object_instanced_texture", "object_instanced_texture"));
+	Program* texturedInstancedObject = programPool.back().program;
 
-	Program* selectionObject = loadProgram("object_instanced_selection", "object_instanced_selection");
-	programPool.push_back(selectionObject);
 
-	Program* drawArgsCompute = loadProgram("draw_arguments_all");
-	programPool.push_back(drawArgsCompute);
+	programPool.push_back(loadProgram("object_instanced_debug", "object_instanced_debug"));
+	Program* debugInstancedObject = programPool.back().program;
 
-	Program* clustersCompute = loadProgram("lights_clustering");
-	programPool.push_back(clustersCompute);
+	programPool.push_back(loadProgram("object_instanced_selection", "object_instanced_selection"));
+	Program* selectionObject = programPool.back().program;
+
+	programPool.push_back(loadProgram("draw_arguments_all"));
+	Program* drawArgsCompute = programPool.back().program;
+
+	programPool.push_back(loadProgram("lights_clustering"));
+	Program* clustersCompute = programPool.back().program;
 
 
 	UniformBuffer<FrameData> frameInfos(1, 64);
@@ -385,9 +414,8 @@ int main(int argc, char ** argv) {
 	Texture::setupRendertarget(textureView, Layout::RGBA8, 512, 512);
 	GPU::clearTexture(textureView, glm::vec4(0.0f, 0.0f, 0.0f, 1.0f));
 
-	Texture selectionColor("selection"), selectionDepth("selectionDepth");
+	Texture selectionColor("selection");
 	Texture::setupRendertarget(selectionColor, Layout::RG8, renderRes[0], renderRes[1]);
-	Texture::setupRendertarget(selectionDepth, Layout::DEPTH_COMPONENT32F, renderRes[0], renderRes[1]);
 
 
 	glm::ivec2 clusterDims(CLUSTER_XY_SIZE, CLUSTER_Z_COUNT);
@@ -455,6 +483,9 @@ int main(int argc, char ** argv) {
 
 		if(Input::manager().triggered(Input::Key::P)) {
 			// Load something.
+			for(ProgramInfos& infos : programPool){
+				reload(infos);
+			}
 		}
 
 		// Compute new time.
@@ -1335,9 +1366,9 @@ int main(int argc, char ** argv) {
 	}
 
 	scene.clean();
-	for(Program* program : programPool){
-		program->clean();
-		delete program;
+	for(ProgramInfos& infos : programPool){
+		infos.program->clean();
+		delete infos.program;
 	}
 
 	return 0;
