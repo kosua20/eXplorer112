@@ -34,6 +34,7 @@ public:
 	struct Light {
 
 		static const uint NO_MATERIAL = 0xFFFF;
+		static const uint NO_SHADOW = 0xFFFF;
 
 		enum Type {
 			POINT = 1, SPOT = 2, DIRECTIONAL = 3

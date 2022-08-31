@@ -59,9 +59,16 @@ World::World(const Object& object){
 	_instances.emplace_back(object.name, 0, glm::mat4(1.0f));
 
 	// Default zone.
+	BoundingBox bbox;
+	const auto& positions = object.positions;
+	for(const glm::vec3& pos : positions){
+		bbox.merge(pos);
+	}
+
+
 	Zone& zone = _zones.emplace_back();
 	zone.name = "Default";
-	zone.bbox = BoundingBox(glm::vec3(-100000.0f), glm::vec3(100000.0f));
+	zone.bbox = bbox;
 	zone.ambientColor = glm::vec4(0.1f);
 	zone.fogColor = glm::vec4(0.2f);
 	zone.fogParams = glm::vec4(0.0f);
@@ -74,9 +81,9 @@ World::World(const Object& object){
 	light.type = Light::DIRECTIONAL;
 	light.color = glm::vec3(1.0f);
 	light.name = "Default";
-	light.radius = glm::vec3(100000.0f);
+	light.radius = glm::vec3(glm::length(bbox.getSize()));
 	light.angle = 0.0f;
-	light.shadow = false;
+	light.shadow = true;
 	light.material = Light::NO_MATERIAL;
 }
 
