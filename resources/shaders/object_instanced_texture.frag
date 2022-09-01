@@ -101,14 +101,15 @@ void main(){
 				float attenuation = 1.0;
 				vec4 projectedPos = light.vp * vec4(In.worldPos.xyz, 1.0);
 				projectedPos.xy /= projectedPos.w;
+				vec2 projectedUV = projectedPos.xy * 0.5 + 0.5;
 
 				if(light.shadow != NO_SHADOW){
-					vec3 lightUV = vec3(projectedPos.xy * 0.5 + 0.5, light.shadow);
-					float refDepth = texture(sampler2DArray(shadowMaps, sClampLinear), lightUV).r;
+					vec3 lightUV = vec3(projectedUV, light.shadow);
+					float refDepth = textureLod(sampler2DArray(shadowMaps, sClampLinear), lightUV, 0.0).r;
+
 					float currDepth = projectedPos.z / projectedPos.w;
-					if(refDepth < currDepth){ // or something...
-						attenuation = 0.0;
-					}
+					const float bias = 0.0001;
+					attenuation *= float(refDepth - bias <= currDepth);
 				}
 
 				if(lightType == 1 || lightType == 2){ // Point & Spot
@@ -126,14 +127,14 @@ void main(){
 
 					if((lightType == 2)){
 
-						if(any(greaterThan(abs(projectedPos.xy), vec2(1.0))) || projectedPos.z >= 0.0){
+						if(any(greaterThan(abs(projectedPos.xy), vec2(1.0))) || projectedPos.z < 0.0){
 							attenuation *= 0.0;
 						}
 
 						if(light.materialIndex != NO_MATERIAL){
 							MaterialInfos lightMaterial =  materialInfos[light.materialIndex];
 
-							vec3 lightUV = vec3(projectedPos.xy * 0.5 + 0.5, lightMaterial.color.layer);
+							vec3 lightUV = vec3(projectedUV, lightMaterial.color.layer);
 							vec4 lightPattern = texture(sampler2DArray(textures[lightMaterial.color.index], sRepeatLinearLinear), lightUV);
 							lightColor *= lightPattern.rgb;
 
