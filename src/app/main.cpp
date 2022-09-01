@@ -421,7 +421,7 @@ int main(int argc, char ** argv) {
 	Texture::setupRendertarget(selectionColor, Layout::RG8, renderRes[0], renderRes[1]);
 
 	Texture shadowMaps("shadowMaps");
-	Texture::setupRendertarget(shadowMaps, Layout::DEPTH_COMPONENT32F, 256, 256, 1, TextureShape::Array2D, 16);
+	Texture::setupRendertarget(shadowMaps, Layout::DEPTH_COMPONENT32F, 512, 512, 1, TextureShape::Array2D, 16);
 
 	glm::ivec2 clusterDims(CLUSTER_XY_SIZE, CLUSTER_Z_COUNT);
 
@@ -1171,7 +1171,7 @@ int main(int argc, char ** argv) {
 			// Bruteforce shadow map once per frame.
 			const uint lightsCount = scene.world.lights().size();
 			
-			if(currentShadowcastingLight < lightsCount){
+			if(currentShadowcastingLight < lightsCount && currentShadowMapLayer < shadowMaps.levels){
 				// Find the next shadow casting light.
 				for(; currentShadowcastingLight < lightsCount; ++currentShadowcastingLight){
 					if(scene.world.lights()[currentShadowcastingLight].shadow){
@@ -1195,7 +1195,7 @@ int main(int argc, char ** argv) {
 				drawArgsCompute->buffer(*drawInstances, 4);
 				GPU::dispatch((uint)scene.meshInfos->size(), 1, 1);
 
-				GPU::bindFramebuffer(currentShadowMapLayer, 0, 1.0f, LoadOperation::DONTCARE, LoadOperation::DONTCARE, &shadowMaps, nullptr, nullptr, nullptr, nullptr);
+				GPU::bindFramebuffer(currentShadowMapLayer, 0, 0.0f, LoadOperation::DONTCARE, LoadOperation::DONTCARE, &shadowMaps, nullptr, nullptr, nullptr, nullptr);
 				GPU::setViewport(shadowMaps);
 
 				GPU::setPolygonState(PolygonMode::FILL);
