@@ -64,6 +64,7 @@ World::World(const Object& object){
 	for(const glm::vec3& pos : positions){
 		bbox.merge(pos);
 	}
+	BoundingSphere bsphere = bbox.getSphere();
 
 
 	Zone& zone = _zones.emplace_back();
@@ -76,9 +77,17 @@ World::World(const Object& object){
 	
 	// Default light.
 	Light& light = _lights.emplace_back();
-	glm::quat alignment = glm::rotation(glm::vec3(0.0f, 0.0f, 1.0f), -glm::normalize(glm::vec3(1.0f, 1.0f, 1.0f)));
-	light.frame = glm::mat4(alignment);
 	light.type = Light::DIRECTIONAL;
+
+	const glm::vec3 position = bsphere.center + glm::normalize(glm::vec3(1.0f, 1.0f, 1.0f)) * bsphere.radius;
+	glm::mat4 view = glm::lookAt(position, bsphere.center, glm::vec3(0.0f, 1.0f, 0.0f));
+	// Handedness.
+	view[0][2] *= -1.0f;
+	view[2][2] *= -1.0f;
+	view[1][2] *= -1.0f;
+	view[3][2] *= -1.0f;
+	
+	light.frame = glm::inverse(view);
 	light.color = glm::vec3(1.0f);
 	light.name = "Default";
 	light.radius = glm::vec3(glm::length(bbox.getSize()));

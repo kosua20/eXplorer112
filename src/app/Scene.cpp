@@ -346,6 +346,8 @@ void Scene::upload(const World& world, const GameFiles& files){
 
 	// Lights
 	{
+		const float sceneRadius = computeBoundingBox().getSphere().radius;
+
 		const uint lightsCount = world.lights().size();
 		lightInfos = std::make_unique<StructuredBuffer<LightInfos>>(lightsCount, BufferType::STORAGE);
 		uint shadowIndex = 0u;
@@ -355,13 +357,17 @@ void Scene::upload(const World& world, const GameFiles& files){
 			const glm::vec3 lightPos = glm::vec3(light.frame[3]);
 			LightInfos& info = (*lightInfos)[i];
 
-			const glm::mat4 view = glm::inverse(light.frame);
+			glm::mat4 view = glm::inverse(light.frame);
+			view[0][2] *= -1.0f;
+			view[1][2] *= -1.0f;
+			view[2][2] *= -1.0f;
+			view[3][2] *= -1.0f;
 			glm::mat4 proj = glm::mat4(1.0f);
 			info.shadow = light.shadow ? shadowIndex++ : World::Light::NO_SHADOW;
 			if(light.type == World::Light::SPOT){
-				proj = Frustum::perspective(std::max(light.angle, 0.1f), 1.0f, 1.0f, 10000.0f);
+				proj = Frustum::perspective(std::max(light.angle, 0.1f), 1.0f, 2.0f*sceneRadius, 1.0f);
 			} else if(light.type == World::Light::DIRECTIONAL){
-				proj = Frustum::ortho(-light.radius.x, light.radius.x, -light.radius.y, light.radius.y, 1.0f, 10000.0f);
+				proj = Frustum::ortho(-light.radius.x, light.radius.x, -light.radius.y, light.radius.y, 2.0f*sceneRadius, 1.0f);
 			} else {
 				// TODO
 				info.shadow = World::Light::NO_SHADOW;
