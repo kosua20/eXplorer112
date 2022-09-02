@@ -121,7 +121,7 @@ bool GPU::setup(const std::string & appName) {
 		// Ask for anisotropy and tessellation.
 		VkPhysicalDeviceFeatures features;
 		vkGetPhysicalDeviceFeatures(device, &features);
-		const bool hasFeatures = features.samplerAnisotropy && features.tessellationShader && features.imageCubeArray && features.multiDrawIndirect && features.fillModeNonSolid;
+		const bool hasFeatures = features.samplerAnisotropy && features.tessellationShader && features.imageCubeArray && features.multiDrawIndirect && features.fillModeNonSolid && features.shaderSampledImageArrayDynamicIndexing;
 
 		if(supportExtensions && hasFeatures){
 			// Prefere a discrete GPU if possible.
@@ -204,6 +204,7 @@ bool GPU::setupWindow(Window * window){
 	features.imageCubeArray = VK_TRUE;
 	features.fillModeNonSolid = VK_TRUE;
 	features.multiDrawIndirect = VK_TRUE;
+	features.shaderSampledImageArrayDynamicIndexing = VK_TRUE;
 	deviceInfo.pEnabledFeatures = &features;
 
 	VkPhysicalDeviceDynamicRenderingFeaturesKHR dynamicRenderingFeature { };
