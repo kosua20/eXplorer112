@@ -242,7 +242,12 @@ void World::processEntity(const pugi::xml_node& entity, const glm::mat4& globalF
 			coneTypeStr = getLightAttribute(entity, lightChild, "cone angle");
 		}
 		light.angle = (float)(Area::parseInt(coneTypeStr)) * glm::pi<float>() / 180.0f;
-
+		// Fallback based on radii if angle is null for a spotlight.
+		if((light.type == Light::SPOT) && (light.angle < 0.001f)){
+			glm::vec2 angles = glm::atan2(glm::vec2(light.radius.z), glm::vec2(light.radius));
+			angles = glm::abs(angles);
+			light.angle = 2.0f * std::max(angles.x, angles.y);
+		}
 		const char* shadowStr = getLightAttribute(entity, lightChild, "shadow");
 		light.shadow = Area::parseBool(shadowStr);
 
