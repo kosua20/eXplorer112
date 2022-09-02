@@ -350,9 +350,9 @@ int main(int argc, char ** argv) {
 #ifdef DEBUG
 	allowEscapeQuit = true;
 #endif
+	const std::string iniPath = (APP_RESOURCE_DIRECTORY / "imgui.ini").string();
 
 	Window window("eXperience112 viewer", config, allowEscapeQuit);
-	const std::string iniPath = (APP_RESOURCE_DIRECTORY / "imgui.ini").string();
 	ImGui::GetIO().IniFilename = iniPath.c_str();
 
 	// Try to load configuration.
