@@ -1171,7 +1171,7 @@ int main(int argc, char ** argv) {
 			// Bruteforce shadow map once per frame.
 			const uint lightsCount = scene.world.lights().size();
 			
-			if(currentShadowcastingLight < lightsCount && currentShadowMapLayer < shadowMaps.levels){
+			if(currentShadowcastingLight < lightsCount && currentShadowMapLayer < shadowMaps.depth){
 				// Find the next shadow casting light.
 				for(; currentShadowcastingLight < lightsCount; ++currentShadowcastingLight){
 					if(scene.world.lights()[currentShadowcastingLight].shadow){
