@@ -364,10 +364,12 @@ void Scene::upload(const World& world, const GameFiles& files){
 			view[3][2] *= -1.0f;
 			glm::mat4 proj = glm::mat4(1.0f);
 			info.shadow = light.shadow ? shadowIndex++ : World::Light::NO_SHADOW;
+			const float near = 1.0f;
+			const float far = 2.0f * sceneRadius;
 			if(light.type == World::Light::SPOT){
-				proj = Frustum::perspective(std::max(light.angle, 0.1f), 1.0f, 2.0f*sceneRadius, 1.0f);
+				proj = Frustum::perspective(std::max(light.angle, 0.1f), 1.0f, far, near);
 			} else if(light.type == World::Light::DIRECTIONAL){
-				proj = Frustum::ortho(-light.radius.x, light.radius.x, -light.radius.y, light.radius.y, 2.0f*sceneRadius, 1.0f);
+				proj = Frustum::ortho(-light.radius.x, light.radius.x, -light.radius.y, light.radius.y, far, near);
 			} else {
 				// TODO
 				info.shadow = World::Light::NO_SHADOW;
