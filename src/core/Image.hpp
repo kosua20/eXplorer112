@@ -42,7 +42,8 @@ public:
 	 */
 	bool save(const fs::path & path) const;
 	
-	static void generateDefaultImage(Image & image);
+	static void generateDefaultColorImage(Image & image);
+	static void generateDefaultNormalImage(Image & image);
 
 	/** Copy assignment operator (disabled).
 	 \return a reference to the object assigned to

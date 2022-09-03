@@ -79,7 +79,13 @@ uint Scene::retrieveTexture(const std::string& textureName, const GameFiles& fil
 	// If nothing was loaded, populate with default data.
 	if(tex.images.empty()){
 		tex.images.emplace_back();
-		Image::generateDefaultImage(tex.images[0]);
+		Log::warning("Unable to find texture named: %s", tex.name().c_str());
+		// Try to be clever
+		if(TextUtilities::hasSuffix(tex.name(), "_n")){
+			Image::generateDefaultNormalImage(tex.images[0]);
+		} else {
+			Image::generateDefaultColorImage(tex.images[0]);
+		}
 	}
 	// Update texture parameters.
 	tex.width = tex.images[0].width;

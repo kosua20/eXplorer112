@@ -16,7 +16,7 @@
 //#include <crnlib/inc/crnlib.h>
 #include <unordered_map>
 
-void Image::generateDefaultImage(Image& image){
+void Image::generateDefaultColorImage(Image& image){
 
 	image = Image(4, 4, 4, 0);
 	image.pixels = {
@@ -24,6 +24,18 @@ void Image::generateDefaultImage(Image& image){
 		255,   0, 255, 255, 255,   0, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
 		255, 255, 255, 255, 255, 255, 255, 255, 255,   0, 255, 255, 255,   0, 255, 255,
 		255, 255, 255, 255, 255, 255, 255, 255, 255,   0, 255, 255, 255,   0, 255, 255
+	};
+
+}
+
+void Image::generateDefaultNormalImage(Image& image){
+
+	image = Image(4, 4, 4, 0);
+	image.pixels = {
+		128, 128, 255, 255, 128, 128, 255, 255, 128, 128, 255, 255, 128, 128, 255, 255,
+		128, 128, 255, 255, 128, 128, 255, 255, 128, 128, 255, 255, 128, 128, 255, 255,
+		128, 128, 255, 255, 128, 128, 255, 255, 128, 128, 255, 255, 128, 128, 255, 255,
+		128, 128, 255, 255, 128, 128, 255, 255, 128, 128, 255, 255, 128, 128, 255, 255
 	};
 
 }
