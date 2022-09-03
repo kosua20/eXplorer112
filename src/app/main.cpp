@@ -62,8 +62,10 @@ public:
 
 struct FrameData {
 	glm::mat4 v{1.0f};
+	glm::mat4 p{1.0f};
 	glm::mat4 vp{1.0f};
 	glm::mat4 vpCulling{1.0f};
+	glm::mat4 iv{1.0f};
 	glm::mat4 ip{1.0f};
 	glm::mat4 nvp{1.0f};
 	glm::vec4 resolution{0.0f};
@@ -386,8 +388,11 @@ int main(int argc, char ** argv) {
 	programPool.push_back(loadProgram("object_color", "object_color"));
 	Program* coloredDebugDraw = programPool.back().program;
 
-	programPool.push_back(loadProgram("object_instanced_texture", "object_instanced_texture"));
-	Program* texturedInstancedObject = programPool.back().program;
+	programPool.push_back(loadProgram("object_instanced_gbuffer", "object_instanced_gbuffer"));
+	Program* gbufferInstancedObject = programPool.back().program;
+
+	programPool.push_back(loadProgram("object_instanced_forward", "object_instanced_forward"));
+	Program* forwardInstancedObject = programPool.back().program;
 
 	programPool.push_back(loadProgram("object_instanced_shadow", "object_instanced_shadow"));
 	Program* shadowInstancedObject = programPool.back().program;
@@ -404,14 +409,24 @@ int main(int argc, char ** argv) {
 	programPool.push_back(loadProgram("lights_clustering"));
 	Program* clustersCompute = programPool.back().program;
 
+	programPool.push_back(loadProgram("lighting_gbuffer"));
+	Program* lightingCompute = programPool.back().program;
+
 
 	UniformBuffer<FrameData> frameInfos(1, 64);
 	UniformBuffer<FrameData> shadowInfos(1, 2);
 	const glm::uvec2 renderRes(config.resolutionRatio * config.screenResolution);
 
-	Texture sceneColor("sceneRender"), sceneDepth("sceneDepth");
+	// Gbuffer
+	Texture sceneColor("sceneColor"), sceneNormal("sceneNormal"), sceneDepth("sceneDepth");
 	Texture::setupRendertarget(sceneColor, Layout::RGBA8, renderRes[0], renderRes[1]);
+	Texture::setupRendertarget(sceneNormal, Layout::RGBA16F, renderRes[0], renderRes[1]);
 	Texture::setupRendertarget(sceneDepth, Layout::DEPTH_COMPONENT32F, renderRes[0], renderRes[1]);
+
+	// Lit result
+	Texture sceneLit("sceneLit");
+	// No HDR for now
+	Texture::setupRendertarget(sceneLit, Layout::RGBA8, renderRes[0], renderRes[1]);
 
 	Texture textureView("textureViewer");
 	Texture::setupRendertarget(textureView, Layout::RGBA8, 512, 512);
@@ -1006,8 +1021,8 @@ int main(int argc, char ** argv) {
 		if(ImGui::Begin("Settings")) {
 			int ratioPercentage = int(std::round(config.resolutionRatio * 100.0f));
 
-			const uint w = sceneColor.width;
-			const uint h = sceneColor.height;
+			const uint w = sceneLit.width;
+			const uint h = sceneLit.height;
 			ImGui::Text("Rendering at %ux%upx", w, h);
 			if(ImGui::InputInt("Rendering ratio %", &ratioPercentage, 10, 25)) {
 				ratioPercentage = glm::clamp(ratioPercentage, 10, 200);
@@ -1018,12 +1033,14 @@ int main(int argc, char ** argv) {
 
 				config.resolutionRatio = newRatio;
 				sceneColor.resize(renderRes);
+				sceneNormal.resize(renderRes);
 				sceneDepth.resize(renderRes);
+				sceneLit.resize(renderRes);
 				lightClusters.resize(roundUp(renderRes[0], clusterDims.x), roundUp(renderRes[1], clusterDims.x), clusterDims.y);
 				camera.ratio(renderRes[0]/renderRes[1]);
 			}
 			if(ImGui::SliderInt2("Cluster params", &clusterDims[0], 2, 128)){
-				lightClusters.resize(roundUp(sceneColor.width, clusterDims.x), roundUp(sceneColor.height, clusterDims.x), clusterDims.y);
+				lightClusters.resize(roundUp(sceneLit.width, clusterDims.x), roundUp(sceneLit.height, clusterDims.x), clusterDims.y);
 			}
 
 			ImGui::Text("Shading"); ImGui::SameLine();
@@ -1078,20 +1095,22 @@ int main(int argc, char ** argv) {
 			mainViewport.z = winSize.x;
 			mainViewport.w = winSize.y;
 
-			ImGui::ImageButton(sceneColor, ImVec2(winSize.x, winSize.y), ImVec2(0.0,0.0), ImVec2(1.0,1.0), 0);
+			ImGui::ImageButton(sceneLit, ImVec2(winSize.x, winSize.y), ImVec2(0.0,0.0), ImVec2(1.0,1.0), 0);
 			if(ImGui::IsItemHovered()) {
 				ImGui::SetNextFrameWantCaptureMouse(false);
 				ImGui::SetNextFrameWantCaptureKeyboard(false);
 			}
 
 			// If the aspect ratio changed, trigger a resize.
-			const float ratioCurr = float(sceneColor.width) / float(sceneColor.height);
+			const float ratioCurr = float(sceneLit.width) / float(sceneLit.height);
 			const float ratioWin = winSize.x / winSize.y;
 			// \todo Derive a more robust threshold.
 			if(std::abs(ratioWin - ratioCurr) > 0.01f){
 				const glm::vec2 renderRes = config.resolutionRatio * glm::vec2(winSize.x, winSize.y);
 				sceneColor.resize(renderRes);
+				sceneNormal.resize(renderRes);
 				sceneDepth.resize(renderRes);
+				sceneLit.resize(renderRes);
 				lightClusters.resize(roundUp(renderRes[0], clusterDims.x), roundUp(renderRes[1], clusterDims.x), clusterDims.y);
 				camera.ratio(renderRes[0]/renderRes[1]);
 			}
@@ -1137,14 +1156,16 @@ int main(int argc, char ** argv) {
 		// Camera.
 		const glm::mat4 vp		   = camera.projection() * camera.view();
 		frameInfos[0].v = camera.view();
+		frameInfos[0].p = camera.projection();
 		frameInfos[0].vp = vp;
 		// Only update the culling VP if needed.
 		if(!freezeCulling){
 			frameInfos[0].vpCulling = vp;
 		}
-		frameInfos[0].ip = glm::inverse(camera.projection());
-		frameInfos[0].nvp = glm::transpose(glm::inverse(vp));
-		frameInfos[0].resolution = glm::vec4(sceneColor.width, sceneColor.height, 0u, 0u);
+		frameInfos[0].iv = glm::inverse(frameInfos[0].v);
+		frameInfos[0].ip = glm::inverse(frameInfos[0].p);
+		frameInfos[0].nvp = glm::transpose(glm::inverse(frameInfos[0].vp));
+		frameInfos[0].resolution = glm::vec4(sceneLit.width, sceneLit.height, 0u, 0u);
 
 		frameInfos[0].ambientColor = effects.color;
 		frameInfos[0].fogParams = effects.fogParams;
@@ -1223,117 +1244,154 @@ int main(int argc, char ** argv) {
 			}
 
 			// Populate drawCommands and drawInstancesby using a compute shader that performs culling.
-			drawArgsCompute->use();
-			drawArgsCompute->buffer(frameInfos, 0);
-			drawArgsCompute->buffer(*scene.meshInfos, 1);
-			drawArgsCompute->buffer(*scene.instanceInfos, 2);
-			drawArgsCompute->buffer(*drawCommands, 3);
-			drawArgsCompute->buffer(*drawInstances, 4);
-			GPU::dispatch((uint)scene.meshInfos->size(), 1, 1);
+			{
+				drawArgsCompute->use();
+				drawArgsCompute->buffer(frameInfos, 0);
+				drawArgsCompute->buffer(*scene.meshInfos, 1);
+				drawArgsCompute->buffer(*scene.instanceInfos, 2);
+				drawArgsCompute->buffer(*drawCommands, 3);
+				drawArgsCompute->buffer(*drawInstances, 4);
+				GPU::dispatch((uint)scene.meshInfos->size(), 1, 1);
 
-			clustersCompute->use();
-			clustersCompute->buffer(frameInfos, 0);
-			clustersCompute->buffer(*scene.lightInfos, 1);
-			clustersCompute->texture(lightClusters, 0);
-			// We need one thread per cluster cell.
-			const glm::uvec3 groupSize = clustersCompute->size();
-			const uint cw = roundUp(lightClusters.width, groupSize.x);
-			const uint ch = roundUp(lightClusters.height, groupSize.y);
-			const uint cd = roundUp(lightClusters.depth, groupSize.z);
-			GPU::dispatch(cw, ch, cd);
-
-			// Determine clearing color by finding the closest area.
-			glm::vec4 clearColor = effects.fogColor;
-			clearColor[3] = 1.0f;
-
-			GPU::bind(sceneColor, sceneDepth, clearColor, 0.0f, LoadOperation::DONTCARE);
-			GPU::setViewport(sceneColor);
-
-			GPU::setPolygonState(PolygonMode::FILL);
-			GPU::setCullState(true);
-			GPU::setDepthState(true, TestFunction::GEQUAL, true);
-			GPU::setBlendState(false);
-			GPU::setColorState(true, true, true, false);
-
-			texturedInstancedObject->use();
-			texturedInstancedObject->buffer(frameInfos, 0);
-			texturedInstancedObject->buffer(*scene.meshInfos, 1);
-			texturedInstancedObject->buffer(*scene.instanceInfos, 2);
-			texturedInstancedObject->buffer(*scene.materialInfos, 3);
-			texturedInstancedObject->buffer(*drawInstances, 4);
-			texturedInstancedObject->buffer(*scene.lightInfos, 5);
-			texturedInstancedObject->texture(fogXYTexture, 0);
-			texturedInstancedObject->texture(fogZTexture, 1);
-			texturedInstancedObject->texture(lightClusters, 2);
-			texturedInstancedObject->texture(shadowMaps, 3);
-
-			if(showOpaques){
-				for(uint mid = 0; mid < scene.meshInfos->size(); ++mid){
-					const uint materialIndex = (*scene.meshInfos)[mid].materialIndex;
-					if((*scene.materialInfos)[materialIndex].type != Object::Material::OPAQUE){
-						continue;
-					}
-					GPU::drawIndirectMesh(scene.globalMesh, *drawCommands, mid);
-				}
-			}
-
-			// Render decals on top with specific blending mode.
-			if(showDecals){
-				// Decal textures seem to have no alpha channel at all. White is used for background. Use min blending.
-				// Alternative possibility: src * dst, but this makes some decals appear as black squares.
-				GPU::setDepthState(true, TestFunction::GEQUAL, false);
-				GPU::setCullState(true);
-				GPU::setBlendState(true, BlendEquation::MIN, BlendFunction::ONE, BlendFunction::ONE);
-				for(uint mid = 0; mid < scene.meshInfos->size(); ++mid){
-					const uint materialIndex = (*scene.meshInfos)[mid].materialIndex;
-					if((*scene.materialInfos)[materialIndex].type != Object::Material::DECAL){
-						continue;
-					}
-					GPU::drawIndirectMesh(scene.globalMesh, *drawCommands, mid);
-				}
-			}
-
-			if(showTransparents){
-				// Alternative possibility: real alpha blend and object sorting.
-				GPU::setDepthState(true, TestFunction::GEQUAL, false);
-				GPU::setCullState(false);
-				GPU::setBlendState(true, BlendEquation::ADD, BlendFunction::SRC_ALPHA, BlendFunction::ONE_MINUS_SRC_ALPHA);
-				for(uint mid = 0; mid < scene.meshInfos->size(); ++mid){
-					const uint materialIndex = (*scene.meshInfos)[mid].materialIndex;
-					if((*scene.materialInfos)[materialIndex].type != Object::Material::TRANSPARENT){
-						continue;
-					}
-					GPU::drawIndirectMesh(scene.globalMesh, *drawCommands, mid);
-				}
-			}
-
-			// Debug view.
-			if(showWireframe){
-
-				GPU::setPolygonState(PolygonMode::LINE);
-				GPU::setCullState(false);
-				GPU::setDepthState(true, TestFunction::GEQUAL, false);
-				GPU::setBlendState(false);
-
-				debugInstancedObject->use();
-				debugInstancedObject->buffer(frameInfos, 0);
-				debugInstancedObject->buffer(*scene.meshInfos, 1);
-				debugInstancedObject->buffer(*scene.instanceInfos, 2);
-				debugInstancedObject->buffer(*scene.materialInfos, 3);
-				debugInstancedObject->buffer(*drawInstances, 4);
-
-				for(uint mid = 0; mid < scene.meshInfos->size(); ++mid){
-					GPU::drawIndirectMesh(scene.globalMesh, *drawCommands, mid);
-				}
+				clustersCompute->use();
+				clustersCompute->buffer(frameInfos, 0);
+				clustersCompute->buffer(*scene.lightInfos, 1);
+				clustersCompute->texture(lightClusters, 0);
+				// We need one thread per cluster cell.
+				const glm::uvec3 groupSize = clustersCompute->size();
+				const uint cw = roundUp(lightClusters.width, groupSize.x);
+				const uint ch = roundUp(lightClusters.height, groupSize.y);
+				const uint cd = roundUp(lightClusters.depth, groupSize.z);
+				GPU::dispatch(cw, ch, cd);
 			}
 
 			{
-				GPU::bind(sceneColor, sceneDepth, LoadOperation::LOAD, LoadOperation::LOAD, LoadOperation::DONTCARE);
+				// Determine clearing color by finding the closest area.
+				glm::vec4 clearColor = effects.fogColor;
+				clearColor[3] = 0.0f;
+
+				GPU::bind(sceneColor, sceneNormal, sceneDepth, clearColor, 0.0f, LoadOperation::DONTCARE);
 				GPU::setViewport(sceneColor);
+
+				GPU::setPolygonState(PolygonMode::FILL);
+				GPU::setCullState(true);
+				GPU::setDepthState(true, TestFunction::GEQUAL, true);
+				GPU::setBlendState(false);
+				GPU::setColorState(true, true, true, true);
+
+				gbufferInstancedObject->use();
+				gbufferInstancedObject->buffer(frameInfos, 0);
+				gbufferInstancedObject->buffer(*scene.meshInfos, 1);
+				gbufferInstancedObject->buffer(*scene.instanceInfos, 2);
+				gbufferInstancedObject->buffer(*scene.materialInfos, 3);
+				gbufferInstancedObject->buffer(*drawInstances, 4);
+
+				if(showOpaques){
+					for(uint mid = 0; mid < scene.meshInfos->size(); ++mid){
+						const uint materialIndex = (*scene.meshInfos)[mid].materialIndex;
+						if((*scene.materialInfos)[materialIndex].type != Object::Material::OPAQUE){
+							continue;
+						}
+						GPU::drawIndirectMesh(scene.globalMesh, *drawCommands, mid);
+					}
+				}
+
+				// Render decals on top with specific blending mode.
+				if(showDecals){
+					// Decal textures seem to have no alpha channel at all. White is used for background. Use min blending.
+					// Alternative possibility: src * dst, but this makes some decals appear as black squares.
+					GPU::setDepthState(true, TestFunction::GEQUAL, false);
+					GPU::setCullState(true);
+					GPU::setBlendState(true, BlendEquation::MIN, BlendFunction::ONE, BlendFunction::ONE);
+					for(uint mid = 0; mid < scene.meshInfos->size(); ++mid){
+						const uint materialIndex = (*scene.meshInfos)[mid].materialIndex;
+						if((*scene.materialInfos)[materialIndex].type != Object::Material::DECAL){
+							continue;
+						}
+						GPU::drawIndirectMesh(scene.globalMesh, *drawCommands, mid);
+					}
+				}
+			}
+
+			// Lighting
+			{
+				lightingCompute->use();
+				lightingCompute->buffer(frameInfos, 0);
+				lightingCompute->buffer(*scene.lightInfos, 1);
+				lightingCompute->buffer(*scene.materialInfos, 2);
+
+				lightingCompute->texture(sceneColor, 0);
+				lightingCompute->texture(sceneNormal, 1);
+				lightingCompute->texture(sceneDepth, 2);
+				lightingCompute->texture(sceneLit, 3);
+
+				lightingCompute->texture(fogXYTexture, 4);
+				lightingCompute->texture(fogZTexture, 5);
+				lightingCompute->texture(lightClusters, 6);
+				lightingCompute->texture(shadowMaps, 7);
+
+				const glm::uvec3 groupSize = clustersCompute->size();
+				const uint cw = roundUp(sceneLit.width, groupSize.x);
+				const uint ch = roundUp(sceneLit.height, groupSize.y);
+				GPU::dispatch(cw, ch, 1u);
+			}
+
+			{
+				GPU::bind(sceneLit, sceneDepth, LoadOperation::LOAD, LoadOperation::LOAD, LoadOperation::DONTCARE);
+				GPU::setViewport(sceneLit);
+
+				if(showTransparents){
+					// Alternative possibility: real alpha blend and object sorting.
+					GPU::setDepthState(true, TestFunction::GEQUAL, false);
+					GPU::setCullState(false);
+					GPU::setBlendState(true, BlendEquation::ADD, BlendFunction::SRC_ALPHA, BlendFunction::ONE_MINUS_SRC_ALPHA);
+					GPU::setColorState(true, true, true, false);
+
+					forwardInstancedObject->use();
+					forwardInstancedObject->buffer(frameInfos, 0);
+					forwardInstancedObject->buffer(*scene.meshInfos, 1);
+					forwardInstancedObject->buffer(*scene.instanceInfos, 2);
+					forwardInstancedObject->buffer(*scene.materialInfos, 3);
+					forwardInstancedObject->buffer(*drawInstances, 4);
+					forwardInstancedObject->buffer(*scene.lightInfos, 5);
+					forwardInstancedObject->texture(fogXYTexture, 0);
+					forwardInstancedObject->texture(fogZTexture, 1);
+					forwardInstancedObject->texture(lightClusters, 2);
+					forwardInstancedObject->texture(shadowMaps, 3);
+
+
+					for(uint mid = 0; mid < scene.meshInfos->size(); ++mid){
+						const uint materialIndex = (*scene.meshInfos)[mid].materialIndex;
+						if((*scene.materialInfos)[materialIndex].type != Object::Material::TRANSPARENT){
+							continue;
+						}
+						GPU::drawIndirectMesh(scene.globalMesh, *drawCommands, mid);
+					}
+				}
+
+				// Debug view.
+
 				GPU::setPolygonState( PolygonMode::LINE );
 				GPU::setCullState( false );
 				GPU::setDepthState( true, TestFunction::GEQUAL, false );
 				GPU::setBlendState( false );
+				GPU::setColorState(true, true, true, true);
+
+				if(showWireframe){
+					debugInstancedObject->use();
+					debugInstancedObject->buffer(frameInfos, 0);
+					debugInstancedObject->buffer(*scene.meshInfos, 1);
+					debugInstancedObject->buffer(*scene.instanceInfos, 2);
+					debugInstancedObject->buffer(*scene.materialInfos, 3);
+					debugInstancedObject->buffer(*drawInstances, 4);
+
+					for(uint mid = 0; mid < scene.meshInfos->size(); ++mid){
+						GPU::drawIndirectMesh(scene.globalMesh, *drawCommands, mid);
+					}
+				}
+
+				GPU::bind(sceneLit, sceneDepth, LoadOperation::LOAD, LoadOperation::LOAD, LoadOperation::DONTCARE);
+				GPU::setViewport(sceneLit);
 				coloredDebugDraw->use();
 				coloredDebugDraw->buffer( frameInfos, 0 );
 
@@ -1359,9 +1417,10 @@ int main(int argc, char ** argv) {
 				mousePos = (mousePos - glm::vec2(mainViewport.x, mainViewport.y)) / glm::vec2(mainViewport.z, mainViewport.w);
 				// Check that we are in the viewport.
 				if(glm::all(glm::lessThan(mousePos, glm::vec2(1.0f))) && glm::all(glm::greaterThan(mousePos, glm::vec2(0.0f)))){
+
 					// Render to selection ID texture
 					{
-						selectionColor.resize(sceneColor.width, sceneColor.height);
+						selectionColor.resize(sceneLit.width, sceneLit.height);
 						GPU::setViewport(selectionColor);
 						GPU::bind(selectionColor, sceneDepth, glm::vec4(0.0f), LoadOperation::LOAD, LoadOperation::DONTCARE);
 
@@ -1400,7 +1459,7 @@ int main(int argc, char ** argv) {
 
 
 		} else {
-			GPU::clearTexture(sceneColor, glm::vec4(0.2f, 0.2f, 0.2f, 1.0f));
+			GPU::clearTexture(sceneLit, glm::vec4(0.2f, 0.2f, 0.2f, 1.0f));
 		}
 
 		if(selected.texture >= 0){

@@ -1,8 +1,10 @@
 
 layout(set = 0, binding = 0) uniform EngineData {
 	mat4 v;
+	mat4 p; ///< The transformation matrix.
 	mat4 vp; ///< The transformation matrix.
 	mat4 vpCulling; ///< The transformation matrix.
+	mat4 iv; ///< Normal transformation matrix
 	mat4 ip; ///< Inverse
 	mat4 nvp; ///< Normal transformation matrix
 	vec4 resolution;
