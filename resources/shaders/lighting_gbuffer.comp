@@ -15,7 +15,7 @@ layout(std140, set = 0, binding = 2) readonly buffer MaterialsInfos {
 layout(set = 2, binding = 0, rgba8) uniform readonly image2D sceneColor;
 layout(set = 2, binding = 1, rgba16f) uniform readonly image2D sceneNormal;
 layout(set = 2, binding = 2, r32f) uniform readonly image2D sceneDepth;
-layout(set = 2, binding = 3, rgba8) uniform writeonly image2D sceneLit;
+layout(set = 2, binding = 3, rgba16f) uniform writeonly image2D sceneLit;
 
 layout(set = 2, binding = 4) uniform texture2D fogXYMap;
 layout(set = 2, binding = 5) uniform texture2D fogZMap;

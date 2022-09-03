@@ -426,7 +426,7 @@ int main(int argc, char ** argv) {
 	// Lit result
 	Texture sceneLit("sceneLit");
 	// No HDR for now
-	Texture::setupRendertarget(sceneLit, Layout::RGBA8, renderRes[0], renderRes[1]);
+	Texture::setupRendertarget(sceneLit, Layout::RGBA16F, renderRes[0], renderRes[1]);
 
 	Texture textureView("textureViewer");
 	Texture::setupRendertarget(textureView, Layout::RGBA8, 512, 512);
