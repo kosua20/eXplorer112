@@ -686,7 +686,7 @@ int main(int argc, char ** argv) {
 												const uint indexShift = (uint)debugZones.positions.size();
 												// Build box.
 												const auto corners = zone.bbox.getCorners();
-												const std::vector<glm::vec3> colors(corners.size(), zone.ambientColor);
+												const std::vector<glm::vec3> colors(corners.size(), 3.0f*zone.ambientColor);
 												debugZones.positions.insert(debugZones.positions.end(), corners.begin(), corners.end());
 												debugZones.colors.insert(debugZones.colors.end(), colors.begin(), colors.end());
 												// Setup degenerate triangles for each line of a octahedron.

@@ -364,7 +364,7 @@ void Scene::upload(const World& world, const GameFiles& files){
 			view[3][2] *= -1.0f;
 			glm::mat4 proj = glm::mat4(1.0f);
 			info.shadow = light.shadow ? shadowIndex++ : World::Light::NO_SHADOW;
-			const float near = 1.0f;
+			const float near = 5.0f;
 			const float far = 2.0f * sceneRadius;
 			if(light.type == World::Light::SPOT){
 				proj = Frustum::perspective(std::max(light.angle, 0.1f), 1.0f, far, near);
