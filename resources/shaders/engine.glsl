@@ -36,6 +36,8 @@ layout(set = 0, binding = 0) uniform EngineData {
 #define MATERIAL_OPAQUE 0
 #define MATERIAL_DECAL 1
 #define MATERIAL_TRANSPARENT 2
+#define MATERIAL_LIGHT 3
+
 // One bit for the shading
 #define MODE_SHADING_NONE 0
 #define MODE_SHADING_LIGHT 1

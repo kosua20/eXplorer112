@@ -87,7 +87,7 @@ void applyLighting(vec3 screenPos, vec3 worldPos, vec3 viewDir, vec3 n, float gl
 			if(light.shadow != NO_SHADOW){
 
 				float f = max(0.0, dotNL);
-				float bias = 0.4 * mix(2.0, 1.0, f);
+				float bias = 0.0001 * mix(2.0, 1.0, f);
 
 				vec3 lightSpacePos = vec3(projectedUV, projectedPos.z / projectedPos.w);
 				float shadowing = shadowPCF(lightSpacePos, light.shadow, bias);
@@ -107,10 +107,9 @@ void applyLighting(vec3 screenPos, vec3 worldPos, vec3 viewDir, vec3 n, float gl
 				attenuation *= 1.0 - clamp(dot(attenAxes, attenAxes), 0.0, 1.0);
 				l = normalize(l);
 
-
 				if((lightType == 2)){
 
-					if(any(greaterThan(abs(projectedPos.xy), vec2(1.0))) || projectedPos.z < 0.0){
+					if(any(greaterThan(abs(projectedPos.xy), vec2(1.0))) || projectedPos.w < 0.0){
 						attenuation *= 0.0;
 					}
 
