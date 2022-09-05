@@ -1258,11 +1258,7 @@ int main(int argc, char ** argv) {
 				clustersCompute->buffer(*scene.lightInfos, 1);
 				clustersCompute->texture(lightClusters, 0);
 				// We need one thread per cluster cell.
-				const glm::uvec3 groupSize = clustersCompute->size();
-				const uint cw = roundUp(lightClusters.width, groupSize.x);
-				const uint ch = roundUp(lightClusters.height, groupSize.y);
-				const uint cd = roundUp(lightClusters.depth, groupSize.z);
-				GPU::dispatch(cw, ch, cd);
+				GPU::dispatch( lightClusters.width, lightClusters.height, lightClusters.depth );
 			}
 
 			{
@@ -1330,10 +1326,7 @@ int main(int argc, char ** argv) {
 				lightingCompute->texture(lightClusters, 6);
 				lightingCompute->texture(shadowMaps, 7);
 
-				const glm::uvec3 groupSize = clustersCompute->size();
-				const uint cw = roundUp(sceneLit.width, groupSize.x);
-				const uint ch = roundUp(sceneLit.height, groupSize.y);
-				GPU::dispatch(cw, ch, 1u);
+				GPU::dispatch( sceneLit.width, sceneLit.height, 1u);
 			}
 
 			{
