@@ -4,7 +4,7 @@ newoption {
 	 description = "Do not generate the project for the viewer."
 }
 
-workspace("eXporter112")
+workspace("eXplorer112")
 
 	-- Configuration.
 	configurations({ "Release", "Dev"})

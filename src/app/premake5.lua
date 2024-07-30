@@ -10,7 +10,7 @@ newoption {
 }
 
 -- Vulkan viewer
-project("viEwer")
+project("eXplorer")
 	kind("ConsoleApp")
 
 	language("C++")

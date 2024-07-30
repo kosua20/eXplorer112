@@ -56,7 +56,6 @@ void main(){
 
 	// We have to access rows easily, so transpose.
 	mat4 tvp = transpose(engine.vpCulling);
-	mat4 ivp = inverse(engine.vpCulling);
 	// Based on Fast Extraction of Viewing Frustum Planes from the World- View-Projection Matrix, G. Gribb, K. Hartmann
 	// (https://www.gamedevs.org/uploads/fast-extraction-viewing-frustum-planes-from-world-view-projection-matrix.pdf)
 	vec4 planes[6];

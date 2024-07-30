@@ -100,7 +100,7 @@ struct GPUContext {
 	uint32_t presentId = 0; ///< Present queue index.
 
 	uint64_t frameIndex = 0; ///< Current frame index.
-	uint32_t swapIndex = 0; ///< Current buffered frame (in 0, frameCount-1).
+	uint32_t swapIndex = 1; ///< Current buffered frame (in 0, frameCount-1).
 
 	double timestep = 0.0; ///< Query timing timestep.
 	size_t uniformAlignment = 0; ///< Minimal buffer alignment.
