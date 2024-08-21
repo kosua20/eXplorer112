@@ -11,6 +11,9 @@
 #include "input/ControllableCamera.hpp"
 #include "Common.hpp"
 
+#ifdef DEBUG
+#define DEBUG_UI
+#endif
 
 // One bit for the shading
 #define MODE_SHADING_NONE 0
@@ -484,7 +487,7 @@ int main(int argc, char ** argv) {
 	Texture fogZTexture("fogZMap");
 	loadEngineTextures(gameFiles, fogXYTexture, fogZTexture);
 
-#ifdef DEBUG
+#ifdef DEBUG_UI
 	bool showDemoWindow = false;
 #endif
 	bool firstFrame = true;
@@ -1117,7 +1120,7 @@ int main(int argc, char ** argv) {
 		}
 		ImGui::End();
 
-#ifdef DEBUG
+#ifdef DEBUG_UI
 		if(ImGui::Begin("Debug view", nullptr)){
 			// Adjust the texture display to the window size.
 			ImVec2 winSize = ImGui::GetContentRegionAvail();
@@ -1199,48 +1202,53 @@ int main(int argc, char ** argv) {
 						break;
 					}
 				}
-
-				const Scene::LightInfos& infos = (*scene.lightInfos)[currentShadowcastingLight];
+				if( currentShadowcastingLight < lightsCount )
+				{
+					const Scene::LightInfos& infos = ( *scene.lightInfos )[ currentShadowcastingLight ];
 
 				// Shadow map projection
-				shadowInfos[0].vp = infos.vp;
-				shadowInfos[0].vpCulling = infos.vp;
-				shadowInfos.upload();
+					shadowInfos[ 0 ].vp = infos.vp;
+					shadowInfos[ 0 ].vpCulling = infos.vp;
+					shadowInfos.upload();
 
-				// Draw commands for the shadow maps.
-				drawArgsCompute->use();
-				drawArgsCompute->buffer(shadowInfos, 0);
-				drawArgsCompute->buffer(*scene.meshInfos, 1);
-				drawArgsCompute->buffer(*scene.instanceInfos, 2);
-				drawArgsCompute->buffer(*drawCommands, 3);
-				drawArgsCompute->buffer(*drawInstances, 4);
-				GPU::dispatch((uint)scene.meshInfos->size(), 1, 1);
+					// Draw commands for the shadow maps.
+					drawArgsCompute->use();
+					drawArgsCompute->buffer( shadowInfos, 0 );
+					drawArgsCompute->buffer( *scene.meshInfos, 1 );
+					drawArgsCompute->buffer( *scene.instanceInfos, 2 );
+					drawArgsCompute->buffer( *drawCommands, 3 );
+					drawArgsCompute->buffer( *drawInstances, 4 );
+					GPU::dispatch( ( uint )scene.meshInfos->size(), 1, 1 );
 
-				GPU::bindFramebuffer(currentShadowMapLayer, 0, 0.0f, LoadOperation::DONTCARE, LoadOperation::DONTCARE, &shadowMaps, nullptr, nullptr, nullptr, nullptr);
-				GPU::setViewport(shadowMaps);
+					GPU::bindFramebuffer( currentShadowMapLayer, 0, 0.0f, LoadOperation::DONTCARE, LoadOperation::DONTCARE, &shadowMaps, nullptr, nullptr, nullptr, nullptr );
+					GPU::setViewport( shadowMaps );
 
-				GPU::setPolygonState(PolygonMode::FILL);
-				GPU::setCullState(true);
-				GPU::setDepthState(true, TestFunction::GEQUAL, true);
-				GPU::setBlendState(false);
-				GPU::setColorState(false, false, false, false);
+					GPU::setPolygonState( PolygonMode::FILL );
+					GPU::setCullState( true );
+					GPU::setDepthState( true, TestFunction::GEQUAL, true );
+					GPU::setBlendState( false );
+					GPU::setColorState( false, false, false, false );
 
-				shadowInstancedObject->use();
-				shadowInstancedObject->buffer(shadowInfos, 0);
-				shadowInstancedObject->buffer(*scene.meshInfos, 1);
-				shadowInstancedObject->buffer(*scene.instanceInfos, 2);
-				shadowInstancedObject->buffer(*scene.materialInfos, 3);
-				shadowInstancedObject->buffer(*drawInstances, 4);
+					shadowInstancedObject->use();
+					shadowInstancedObject->buffer( shadowInfos, 0 );
+					shadowInstancedObject->buffer( *scene.meshInfos, 1 );
+					shadowInstancedObject->buffer( *scene.instanceInfos, 2 );
+					shadowInstancedObject->buffer( *scene.materialInfos, 3 );
+					shadowInstancedObject->buffer( *drawInstances, 4 );
 
-				for(uint mid = 0; mid < scene.meshInfos->size(); ++mid){
-					const uint materialIndex = (*scene.meshInfos)[mid].materialIndex;
-					if((*scene.materialInfos)[materialIndex].type != Object::Material::OPAQUE){
-						continue;
+					for( uint mid = 0; mid < scene.meshInfos->size(); ++mid )
+					{
+						const uint materialIndex = ( *scene.meshInfos )[ mid ].materialIndex;
+						if( ( *scene.materialInfos )[ materialIndex ].type != Object::Material::OPAQUE )
+						{
+							continue;
+						}
+						GPU::drawIndirectMesh( scene.globalMesh, *drawCommands, mid );
 					}
-					GPU::drawIndirectMesh(scene.globalMesh, *drawCommands, mid);
+					++currentShadowMapLayer;
+					++currentShadowcastingLight;
 				}
-				++currentShadowMapLayer;
-				++currentShadowcastingLight;
+				
 			}
 
 			// Populate drawCommands and drawInstancesby using a compute shader that performs culling.

@@ -56,9 +56,9 @@ std::vector<const char*> VkUtils::getRequiredInstanceExtensions(const bool enabl
 	const char** glfwExtensions = glfwGetRequiredInstanceExtensions(&glfwExtensionCount);
 	std::vector<const char*> extensions(glfwExtensions, glfwExtensions + glfwExtensionCount);
 	// MoltenVK is a non conforming driver, we need to enable enumeration of portability drivers.
-#ifdef __APPLE__
+//#ifdef __APPLE__
 	extensions.push_back(VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME);
-#endif
+//#endif
 	
 	// If the validation layers are enabled, add associated extensions.
 	if(enableValidationLayers) {
