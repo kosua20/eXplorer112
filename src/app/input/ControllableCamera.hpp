@@ -74,5 +74,4 @@ private:
 
 	Mode _mode = Mode::TurnTable; ///< The current interaction mode
 
-	float _guiFOV; ///< Field of view in degrees for the GUI.
 };

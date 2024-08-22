@@ -2,6 +2,8 @@
 #include "input/Input.hpp"
 #include <imgui/imgui.h>
 
+#include <sstream>
+
 ControllableCamera::ControllableCamera(Mode mode) : _mode(mode) {
 	reset();
 }
@@ -14,7 +16,6 @@ void ControllableCamera::reset() {
 	_view   = glm::lookAt(_eye, _center, _up);
 	_radius = 1.0;
 	_angles = glm::vec2(glm::half_pi<float>(), 0.0f);
-	_guiFOV = _fov * 180.0f / glm::pi<float>();
 }
 
 void ControllableCamera::pose(const glm::vec3 & position, const glm::vec3 & center, const glm::vec3 & up) {
@@ -261,16 +262,50 @@ void ControllableCamera::updateUsingTurnTable(double frameTime) {
 void ControllableCamera::interface(){
 	ImGui::PushItemWidth(110);
 	ImGui::Combo("Camera mode", reinterpret_cast<int *>(&_mode), "FPS\0Turntable\0Joystick\0\0", 3);
+
 	ImGui::InputFloat("Camera speed", &_speed, 0.1f, 1.0f);
+	ImGui::SameLine();
 	// Display degrees fov.
-	_guiFOV = _fov * 180.0f / glm::pi<float>();
-	if(ImGui::InputFloat("Camera FOV", &_guiFOV, 1.0f, 10.0f)) {
-		fov(_guiFOV * glm::pi<float>() / 180.0f);
+	float guiFOV = _fov * 180.0f / glm::pi<float>();
+	if(ImGui::InputFloat("Camera FOV", &guiFOV, 1.0f, 10.0f)) {
+		fov( guiFOV * glm::pi<float>() / 180.0f);
 	}
 
 	if(ImGui::DragFloat2("Planes", static_cast<float *>(&_clippingPlanes[0]))) {
 		updateProjection();
 	}
 	ImGui::PopItemWidth();
+
+	if( ImGui::Button( "Copy camera", ImVec2( 104, 0 ) ) )
+	{
+		std::stringstream desc;
+		desc << _eye[ 0 ] << " " << _eye[ 1 ] << " " << _eye[ 2 ] << "\n";
+		desc << _center[ 0 ] << " " << _center[ 1 ] << " " << _center[ 2 ] << "\n";
+		desc << _up[ 0 ] << " " << _up[ 1 ] << " " << _up[ 2 ] << "\n";
+		desc << _fov << "\n";
+		desc << _clippingPlanes[ 0 ] << " " <<  _clippingPlanes[1];
+		const std::string camDesc = desc.str();
+		ImGui::SetClipboardText( camDesc.c_str() );
+	}
+	ImGui::SameLine();
+	if( ImGui::Button( "Paste camera", ImVec2( 104, 0 ) ) )
+	{
+		const std::string camDesc( ImGui::GetClipboardText() );
+		std::stringstream desc( camDesc );
+		glm::vec3 eyeN, centerN, upN;
+		float fovN;
+		glm::vec2 clippingPlanesN;
+		float ratioN = ratio();
+
+		desc >> eyeN[ 0 ] >> eyeN[ 1 ] >> eyeN[ 2 ];
+		desc >> centerN[ 0 ] >> centerN[ 1 ] >> centerN[ 2 ];
+		desc >> upN[ 0 ] >> upN[ 1 ] >> upN[ 2 ];
+		desc >> fovN;
+		desc >> clippingPlanesN[ 0 ] >> clippingPlanesN[ 1 ];
+
+		pose( eyeN, centerN, upN );
+		projection( ratioN, fovN, clippingPlanesN[ 0 ], clippingPlanesN[ 1 ] );
+	
+	}
 
 }
