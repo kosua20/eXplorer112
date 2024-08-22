@@ -487,12 +487,103 @@ int main(int argc, char ** argv) {
 	Texture fogZTexture("fogZMap");
 	loadEngineTextures(gameFiles, fogXYTexture, fogZTexture);
 
+	deselect( frameInfos[ 0 ], selected, SelectionFilter::ALL );
+	
 #ifdef DEBUG_UI
 	bool showDemoWindow = false;
 #endif
-	bool firstFrame = true;
 	bool updateInstanceBoundingBox = false;
 	bool scrollToItem = false;
+
+	auto uploadScene = [&] ()
+	{
+		// Allocate commands buffer.
+		const size_t meshCount = scene.meshInfos->size();
+		const size_t instanceCount = scene.instanceInfos->size();
+		drawCommands = std::make_unique<Buffer>( meshCount * sizeof( GPU::DrawCommand ), BufferType::INDIRECT );
+		drawInstances = std::make_unique<Buffer>( instanceCount * sizeof( uint ), BufferType::STORAGE );
+
+		uint shadowCount = 0u;
+		currentShadowcastingLight = 0u;
+		currentShadowMapLayer = 0u;
+		for( const World::Light& light : scene.world.lights() )
+		{
+			if( light.shadow )
+			{
+				++shadowCount;
+			}
+		}
+		shadowCount = std::max( shadowCount, 1u );
+		shadowMaps.resize( shadowMaps.width, shadowMaps.height, shadowCount );
+
+		// Center camera
+		if( scene.world.cameras().empty() )
+		{
+			adjustCameraToBoundingBox( camera, scene.computeBoundingBox() );
+		}
+		else
+		{
+			// If a scene camera is available, place ourselves right next to it.
+			const World::Camera& refCam = scene.world.cameras()[ 0 ];
+			const glm::vec3 pos = glm::vec3( refCam.frame[ 3 ] ) - glm::vec3( 0.0f, 50.0f, 0.0f );
+			const glm::vec3 up = glm::vec3( 0.0f, 1.0f, 0.0f );
+			glm::vec3 front = refCam.frame * glm::vec4( 0.0f, 0.0f, 1.0f, 0.0f );
+			glm::vec3 right = glm::normalize( glm::cross( glm::normalize( front ), up ) );
+			front = glm::normalize( glm::cross( up, right ) );
+			camera.pose( pos, pos + front, up );
+		}
+		deselect( frameInfos[ 0 ], selected, ( SelectionFilter )( OBJECT | TEXTURE ) );
+
+		debugLights.clean();
+		debugZones.clean();
+		effects = AmbientEffects();
+		// Build light debug visualisation.
+		if( !scene.world.lights().empty() )
+		{
+			for( const World::Light& light : scene.world.lights() )
+			{
+				addLightGizmo( debugLights, light );
+			}
+			debugLights.upload();
+		}
+		// Build zones debug visualisation.
+		if( !scene.world.zones().empty() )
+		{
+			for( const World::Zone& zone : scene.world.zones() )
+			{
+				const uint indexShift = ( uint )debugZones.positions.size();
+				// Build box.
+				const auto corners = zone.bbox.getCorners();
+				const std::vector<glm::vec3> colors( corners.size(), 3.0f * zone.ambientColor );
+				debugZones.positions.insert( debugZones.positions.end(), corners.begin(), corners.end() );
+				debugZones.colors.insert( debugZones.colors.end(), colors.begin(), colors.end() );
+				// Setup degenerate triangles for each line of a octahedron.
+				for( const uint ind : boxIndices )
+				{
+					debugZones.indices.push_back( indexShift + ind );
+				}
+
+			}
+			debugZones.upload();
+		}
+	};
+
+#define FORCE_LOAD_TUTO_ECO
+#ifdef FORCE_LOAD_TUTO_ECO
+	{
+		const fs::path worldpath = gameFiles.worldsPath / "tutoeco.world";
+		viewMode = ViewerMode::WORLD;
+		scene.load( worldpath, gameFiles );
+		uploadScene();
+		selected.item = 0;
+		for( const auto& world : gameFiles.worldsList ){
+			if( world.filename() == worldpath.filename() )
+				break;
+			++selected.item;
+		}
+	}
+	
+#endif
 
 	while(window.nextFrame()) {
 
@@ -581,7 +672,7 @@ int main(int argc, char ** argv) {
 		// Begin GUI setup.
 		if(ImGui::Begin("Files")){
 
-			if(ImGui::BeginTabBar("#FilesTabBar")){
+			if(ImGui::BeginTabBar("#FilesTabBar" )){
 
 				struct TabSettings {
 					const char* title;
@@ -593,20 +684,20 @@ int main(int argc, char ** argv) {
 				};
 
 				const std::vector<TabSettings> tabSettings = {
-					{ "Models", "models", &gameFiles.modelsList, ViewerMode::MODEL, ControllableCamera::Mode::TurnTable, &Scene::loadFile},
-					{ "Areas", "areas", &gameFiles.areasList, ViewerMode::AREA, ControllableCamera::Mode::TurnTable, &Scene::loadFile},
 					{ "Worlds", "worlds", &gameFiles.worldsList, ViewerMode::WORLD, ControllableCamera::Mode::FPS, &Scene::load},
+					{ "Areas", "areas", &gameFiles.areasList, ViewerMode::AREA, ControllableCamera::Mode::TurnTable, &Scene::loadFile},
+					{ "Models", "models", &gameFiles.modelsList, ViewerMode::MODEL, ControllableCamera::Mode::TurnTable, &Scene::loadFile},
 				};
 
 				for(const TabSettings& tab : tabSettings){
 
 					if(ImGui::BeginTabItem(tab.title)){
-						if(viewMode != tab.mode || firstFrame){
+						
+						if(viewMode != tab.mode){
 							deselect(frameInfos[0], selected, SelectionFilter::ALL);
 							viewMode = tab.mode;
 							camera.mode(tab.camera);
 						}
-
 						const unsigned int itemsCount = (uint)(*tab.files).size();
 						ImGui::Text("Found %u %s", itemsCount, tab.names);
 
@@ -639,67 +730,8 @@ int main(int argc, char ** argv) {
 								if(ImGui::Selectable(itemName.c_str(), selected.item == row, selectableTableFlags)){
 									if(selected.item != row){
 										selected.item = row;
-
 										(scene.*tab.load)(itemPath, gameFiles);
-										// Allocate commands buffer.
-										const size_t meshCount = scene.meshInfos->size();
-										const size_t instanceCount = scene.instanceInfos->size();
-										drawCommands = std::make_unique<Buffer>(meshCount * sizeof(GPU::DrawCommand), BufferType::INDIRECT);
-										drawInstances = std::make_unique<Buffer>(instanceCount * sizeof(uint), BufferType::STORAGE);
-
-										uint shadowCount = 0u;
-										currentShadowcastingLight = 0u;
-										currentShadowMapLayer = 0u;
-										for(const World::Light& light : scene.world.lights()){
-											if(light.shadow){
-												++shadowCount;
-											}
-										}
-										shadowCount = std::max(shadowCount, 1u);
-										shadowMaps.resize(shadowMaps.width, shadowMaps.height, shadowCount);
-
-										// Center camera
-										if(scene.world.cameras().empty()){
-											adjustCameraToBoundingBox(camera, scene.computeBoundingBox());
-										} else {
-											// If a scene camera is available, place ourselves right next to it.
-											const World::Camera& refCam =  scene.world.cameras()[0];
-											const glm::vec3 pos = glm::vec3(refCam.frame[3]) - glm::vec3(0.0f, 50.0f, 0.0f);
-											const glm::vec3 up = glm::vec3(0.0f, 1.0f, 0.0f);
-											glm::vec3 front = refCam.frame * glm::vec4(0.0f, 0.0f, 1.0f, 0.0f);
-											glm::vec3 right = glm::normalize(glm::cross(glm::normalize(front), up));
-											front = glm::normalize(glm::cross(up, right));
-											camera.pose(pos, pos + front, up);
-										}
-										deselect(frameInfos[0], selected, (SelectionFilter)(OBJECT | TEXTURE));
-
-										debugLights.clean();
-										debugZones.clean();
-										effects = AmbientEffects();
-										// Build light debug visualisation.
-										if(!scene.world.lights().empty()){
-											for(const World::Light& light : scene.world.lights()){
-												addLightGizmo(debugLights, light);
-											}
-											debugLights.upload();
-										}
-										// Build zones debug visualisation.
-										if(!scene.world.zones().empty()){
-											for(const World::Zone& zone : scene.world.zones()){
-												const uint indexShift = (uint)debugZones.positions.size();
-												// Build box.
-												const auto corners = zone.bbox.getCorners();
-												const std::vector<glm::vec3> colors(corners.size(), 3.0f*zone.ambientColor);
-												debugZones.positions.insert(debugZones.positions.end(), corners.begin(), corners.end());
-												debugZones.colors.insert(debugZones.colors.end(), colors.begin(), colors.end());
-												// Setup degenerate triangles for each line of a octahedron.
-												for(const uint ind : boxIndices){
-													debugZones.indices.push_back(indexShift + ind);
-												}
-
-											}
-											debugZones.upload();
-										}
+										uploadScene();
 									}
 								}
 								ImGui::TableNextColumn();
@@ -1493,7 +1525,6 @@ int main(int argc, char ** argv) {
 
 		window.bind(glm::vec4(0.2f, 0.2f, 0.2f, 1.0f), LoadOperation::DONTCARE, LoadOperation::DONTCARE);
 		
-		firstFrame = false;
 	}
 
 	scene.clean();
