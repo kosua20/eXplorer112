@@ -510,7 +510,7 @@ int main(int argc, char ** argv) {
 		{
 			if( light.shadow )
 			{
-				++shadowCount;
+				shadowCount += ( light.type == POINT ? 6u : 1u );
 			}
 		}
 		shadowCount = std::max( shadowCount, 1u );
@@ -581,6 +581,9 @@ int main(int argc, char ** argv) {
 				break;
 			++selected.item;
 		}
+		camera.pose( { 195.044f, 187.823f, -639.285f }, { 194.717f, 187.464f, -640.159f }, { 0.f, 1.f, 0.f } );
+		camera.projection( camera.ratio(), 0.785398f, 10.f, 10000.f );
+			
 	}
 	
 #endif
@@ -1228,6 +1231,11 @@ int main(int argc, char ** argv) {
 			const uint lightsCount = scene.world.lights().size();
 			
 			if(currentShadowcastingLight < lightsCount && currentShadowMapLayer < shadowMaps.depth){
+				const float sceneRadius = scene.computeBoundingBox().getSphere().radius;
+				const float near = 5.0f;
+				const float far = 2.0f * sceneRadius;
+				const glm::mat4 pointProj = glm::perspective( glm::half_pi<float>(), 1.f, far, near );
+
 				// Find the next shadow casting light.
 				for(; currentShadowcastingLight < lightsCount; ++currentShadowcastingLight){
 					if(scene.world.lights()[currentShadowcastingLight].shadow){
@@ -1238,46 +1246,57 @@ int main(int argc, char ** argv) {
 				{
 					const Scene::LightInfos& infos = ( *scene.lightInfos )[ currentShadowcastingLight ];
 
-				// Shadow map projection
-					shadowInfos[ 0 ].vp = infos.vp;
-					shadowInfos[ 0 ].vpCulling = infos.vp;
-					shadowInfos.upload();
+					const bool isPointLight = scene.world.lights()[ currentShadowcastingLight ].type == POINT;
+					unsigned int layerCount = isPointLight ? 6u : 1u;
 
-					// Draw commands for the shadow maps.
-					drawArgsCompute->use();
-					drawArgsCompute->buffer( shadowInfos, 0 );
-					drawArgsCompute->buffer( *scene.meshInfos, 1 );
-					drawArgsCompute->buffer( *scene.instanceInfos, 2 );
-					drawArgsCompute->buffer( *drawCommands, 3 );
-					drawArgsCompute->buffer( *drawInstances, 4 );
-					GPU::dispatch( ( uint )scene.meshInfos->size(), 1, 1 );
-
-					GPU::bindFramebuffer( currentShadowMapLayer, 0, 0.0f, LoadOperation::DONTCARE, LoadOperation::DONTCARE, &shadowMaps, nullptr, nullptr, nullptr, nullptr );
-					GPU::setViewport( shadowMaps );
-
-					GPU::setPolygonState( PolygonMode::FILL );
-					GPU::setCullState( true );
-					GPU::setDepthState( true, TestFunction::GEQUAL, true );
-					GPU::setBlendState( false );
-					GPU::setColorState( false, false, false, false );
-
-					shadowInstancedObject->use();
-					shadowInstancedObject->buffer( shadowInfos, 0 );
-					shadowInstancedObject->buffer( *scene.meshInfos, 1 );
-					shadowInstancedObject->buffer( *scene.instanceInfos, 2 );
-					shadowInstancedObject->buffer( *scene.materialInfos, 3 );
-					shadowInstancedObject->buffer( *drawInstances, 4 );
-
-					for( uint mid = 0; mid < scene.meshInfos->size(); ++mid )
+					for( uint layerId = 0; layerId < layerCount; ++layerId )
 					{
-						const uint materialIndex = ( *scene.meshInfos )[ mid ].materialIndex;
-						if( ( *scene.materialInfos )[ materialIndex ].type != Object::Material::OPAQUE )
+						// Shadow map projection
+						glm::mat4 vp = infos.vp;
+						if( isPointLight )
 						{
-							continue;
+							pointProj
 						}
-						GPU::drawIndirectMesh( scene.globalMesh, *drawCommands, mid );
+						shadowInfos[ 0 ].vp = infos.vp;
+						shadowInfos[ 0 ].vpCulling = infos.vp;
+						shadowInfos.upload();
+
+						// Draw commands for the shadow maps.
+						drawArgsCompute->use();
+						drawArgsCompute->buffer( shadowInfos, 0 );
+						drawArgsCompute->buffer( *scene.meshInfos, 1 );
+						drawArgsCompute->buffer( *scene.instanceInfos, 2 );
+						drawArgsCompute->buffer( *drawCommands, 3 );
+						drawArgsCompute->buffer( *drawInstances, 4 );
+						GPU::dispatch( ( uint )scene.meshInfos->size(), 1, 1 );
+
+						GPU::bindFramebuffer( currentShadowMapLayer, 0, 0.0f, LoadOperation::DONTCARE, LoadOperation::DONTCARE, &shadowMaps, nullptr, nullptr, nullptr, nullptr );
+						GPU::setViewport( shadowMaps );
+
+						GPU::setPolygonState( PolygonMode::FILL );
+						GPU::setCullState( true );
+						GPU::setDepthState( true, TestFunction::GEQUAL, true );
+						GPU::setBlendState( false );
+						GPU::setColorState( false, false, false, false );
+
+						shadowInstancedObject->use();
+						shadowInstancedObject->buffer( shadowInfos, 0 );
+						shadowInstancedObject->buffer( *scene.meshInfos, 1 );
+						shadowInstancedObject->buffer( *scene.instanceInfos, 2 );
+						shadowInstancedObject->buffer( *scene.materialInfos, 3 );
+						shadowInstancedObject->buffer( *drawInstances, 4 );
+
+						for( uint mid = 0; mid < scene.meshInfos->size(); ++mid )
+						{
+							const uint materialIndex = ( *scene.meshInfos )[ mid ].materialIndex;
+							if( ( *scene.materialInfos )[ materialIndex ].type != Object::Material::OPAQUE )
+							{
+								continue;
+							}
+							GPU::drawIndirectMesh( scene.globalMesh, *drawCommands, mid );
+						}
+						++currentShadowMapLayer;
 					}
-					++currentShadowMapLayer;
 					++currentShadowcastingLight;
 				}
 				
