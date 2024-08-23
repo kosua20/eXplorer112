@@ -243,18 +243,17 @@ void World::processEntity(const pugi::xml_node& entity, const glm::mat4& globalF
 		}
 		light.angle = (float)(Area::parseInt(coneTypeStr)) * glm::pi<float>() / 180.0f * 0.5f;
 		// Fallback based on radii if angle is null for a spotlight.
-		if((light.type == Light::SPOT) && (light.angle < 0.001f)){
+		if( ( light.type == Light::SPOT ) && ( light.angle < 0.001f ) )
+		{
+			Log::info( "Detected spot light with small angle (%.f), falling back to point light.", light.angle );
 			glm::vec2 angles = glm::atan2(glm::vec2(light.radius.z), glm::vec2(light.radius));
 			angles = glm::abs(angles);
 			light.angle = std::max( angles.x, angles.y );
-			Log::info( "Detected spot light with small angle, falling back to radius." );
+			light.type = Light::POINT;
 		}
 		const char* shadowStr = getLightAttribute(entity, lightChild, "shadow");
 		light.shadow = Area::parseBool(shadowStr);
-		if( light.shadow && light.type == Light::POINT )
-		{
-			Log::info("Detected shadow casting point light, ignored for now.");
-		}
+		
 		light.material = Light::NO_MATERIAL;
 		std::string materialStr = getLightAttribute(entity, lightChild, "material");
 		if(!materialStr.empty()){
@@ -307,6 +306,15 @@ void World::processEntity(const pugi::xml_node& entity, const glm::mat4& globalF
 				}
 				light.material = mid;
 			}
+		}
+		// Validation for now:
+		if( light.shadow && light.type == Light::POINT )
+		{
+			Log::info( "Detected shadow casting point light, ignored for now." );
+		}
+		if( light.material != Light::NO_MATERIAL && light.type == Light::POINT )
+		{
+			Log::info( "Detected projector point light, ignored for now." );
 		}
 	}
 
