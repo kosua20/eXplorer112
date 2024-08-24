@@ -93,6 +93,7 @@ struct FrameData {
 	int selectedInstance= -1;
 	int selectedTextureArray= -1;
 	int selectedTextureLayer= -1;
+	int skipCulling = 0;
 };
 
 struct SelectionState {

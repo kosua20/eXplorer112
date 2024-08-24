@@ -76,7 +76,7 @@ void main(){
 			instanceCorners[cid] = frame * corners[cid];
 		}
 
-		if(intersects(instanceCorners, planes)){
+		if(engine.skipCulling != 0 || intersects(instanceCorners, planes)){
 			drawInstanceInfos[infos.firstInstanceIndex + effectiveCount] = flatInstanceIndex;
 			++effectiveCount;
 		}

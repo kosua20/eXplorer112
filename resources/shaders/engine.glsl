@@ -31,6 +31,7 @@ layout(set = 0, binding = 0) uniform EngineData {
 	int selectedInstance;
 	int selectedTextureArray;
 	int selectedTextureLayer;
+	int skipCulling;
 } engine;
 
 #define MATERIAL_OPAQUE 0
@@ -105,4 +106,32 @@ uvec3 clusterCellFromScreenspace(vec3 fragCoord){
 	uint zSlice = uint(floor(zRange));
 	uvec2 xyCell = uvec2(fragCoord.xy - 0.5) / engine.clustersSize.w;
 	return uvec3(xyCell.x, engine.clustersSize.y - 1 - xyCell.y, zSlice);
+}
+
+
+mat4 lookAt(vec3 eye, vec3 center, vec3 up){
+	vec3 f = normalize(center - eye);
+	vec3 s = normalize(cross(f, up));
+	vec3 u = cross(s, f);
+
+	mat4 Result = mat4(1.0);
+	Result[0][0] = s.x;
+	Result[1][0] = s.y;
+	Result[2][0] = s.z;
+	Result[0][1] = u.x;
+	Result[1][1] = u.y;
+	Result[2][1] = u.z;
+	Result[0][2] =-f.x;
+	Result[1][2] =-f.y;
+	Result[2][2] =-f.z;
+	Result[3][0] =-dot(s, eye);
+	Result[3][1] =-dot(u, eye);
+	Result[3][2] = dot(f, eye);
+	return Result;
+}
+
+mat4 translate(mat4 m, vec3 v){
+	mat4 Result = m;
+	Result[3] = m[0] * v[0] + m[1] * v[1] + m[2] * v[2] + m[3];
+	return Result;
 }
