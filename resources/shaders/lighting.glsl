@@ -80,17 +80,44 @@ void applyLighting(vec3 screenPos, vec3 worldPos, vec3 viewDir, vec3 n, float gl
 			float attenuation = 1.0;
 			float dotNL = dot(n, l);
 
-			vec4 projectedPos = light.vp * vec4(worldPos, 1.0);
+			mat4 projMatrix = light.vp;
+			uint lightShadowIndex = light.shadow;
+
+			if(lightType == 1 && lightShadowIndex != NO_SHADOW){
+				// Translate point in light centered space.
+				vec3 localPos = worldPos - lightPos;
+				vec3 localPosAbs = abs(localPos);
+				float maxAbsCoord = max(localPosAbs.x, max(localPosAbs.y, localPosAbs.z));
+				uint faceIndex = 0u;
+
+				vec3 faceUp = vec3(0.0,1.0,0.0);
+				vec3 faceCenter = vec3(0.0,0.0,0.0);
+
+				if(localPosAbs.x == maxAbsCoord){
+					faceIndex = localPos.x < 0.f ? 0 : 1;
+				} else if(localPosAbs.y == maxAbsCoord){
+					faceIndex = localPos.y < 0.f ? 2 : 3;
+					faceUp = vec3(0.0,0.0,1.0);
+				} else {
+					faceIndex = localPos.z < 0.f ? 4 : 5;
+				}
+				faceCenter[faceIndex / 2] = faceIndex % 2 == 0 ? -1.f : 1.f;
+				lightShadowIndex += faceIndex;
+				mat4 localView = lookAt(vec3(0.0,0.0,0.0), faceCenter, faceUp);
+				projMatrix = projMatrix * translate(localView, -lightPos);
+			}
+
+			vec4 projectedPos = projMatrix * vec4(worldPos, 1.0);
 			projectedPos.xy /= projectedPos.w;
 			vec2 projectedUV = projectedPos.xy * 0.5 + 0.5;
 
-			if(light.shadow != NO_SHADOW){
+			if(lightShadowIndex != NO_SHADOW){
 
 				float f = max(0.0, dotNL);
-				float bias = 0.0001 * mix(2.0, 1.0, f);
+				float bias = 0.001 * mix(2.0, 1.0, f);
 
 				vec3 lightSpacePos = vec3(projectedUV, projectedPos.z / projectedPos.w);
-				float shadowing = shadowPCF(lightSpacePos, light.shadow, bias);
+				float shadowing = shadowPCF(lightSpacePos, lightShadowIndex, bias);
 				attenuation *= shadowing;
 			}
 

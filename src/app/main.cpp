@@ -479,10 +479,12 @@ int main(int argc, char ** argv) {
 	bool showWireframe = false;
 	bool showLights = false;
 	bool showZones = false;
+	bool renderingShadow = false;
 
 	AmbientEffects effects;
 	uint currentShadowcastingLight = 0u;
 	uint currentShadowMapLayer = 0u;
+	uint currentShadowcastingLightFace = 0u;
 
 	Texture fogXYTexture("fogXYMap");
 	Texture fogZTexture("fogZMap");
@@ -509,11 +511,10 @@ int main(int argc, char ** argv) {
 		uint shadowCount = 0u;
 		currentShadowcastingLight = 0u;
 		currentShadowMapLayer = 0u;
-		for( const World::Light& light : scene.world.lights() )
-		{
-			if( light.shadow )
-			{
-				shadowCount += ( light.type == POINT ? 6u : 1u );
+		currentShadowcastingLightFace = 0u;
+		for( const World::Light& light : scene.world.lights() ){
+			if( light.shadow ){
+				shadowCount += ( light.type == World::Light::POINT ? 6u : 1u );
 			}
 		}
 		shadowCount = std::max( shadowCount, 1u );
@@ -917,6 +918,7 @@ int main(int argc, char ** argv) {
 								if(!lightFilter.PassFilter(light.name.c_str())){
 									continue;
 								}
+								const Scene::LightInfos& infos = ( *scene.lightInfos )[ row ];
 
 								ImGui::TableNextColumn();
 								ImGui::PushID(row);
@@ -933,7 +935,7 @@ int main(int argc, char ** argv) {
 									{ World::Light::SPOT, "Spot" },
 									{ World::Light::DIRECTIONAL, "Directional" },
 								};
-								ImGui::Text("%s", lightTypeNames.at(light.type));
+								ImGui::Text("%s (%u)", lightTypeNames.at(light.type), infos.shadow);
 								ImGui::TableNextColumn();
 								glm::vec3 tmpColor = light.color;
 								ImGui::ColorEdit3("##LightColor", &tmpColor[0], ImGuiColorEditFlags_NoLabel | ImGuiColorEditFlags_NoInputs);
@@ -1158,6 +1160,12 @@ int main(int argc, char ** argv) {
 		}
 		ImGui::End();
 
+		if(renderingShadow && ImGui::Begin("Work in progress")){
+			ImGui::Text("Generating shadows...");
+			std::string currProg = std::to_string(currentShadowMapLayer+1) + "/" + std::to_string(shadowMaps.depth);
+			ImGui::ProgressBar((float)(currentShadowMapLayer+1)/(float)shadowMaps.depth, ImVec2(-1.0f, 0.0f), currProg.c_str());
+		}
+		ImGui::End();
 #ifdef DEBUG_UI
 		if(ImGui::Begin("Debug view", nullptr)){
 
@@ -1242,36 +1250,50 @@ int main(int argc, char ** argv) {
 		if(selected.item >= 0){
 			// Bruteforce shadow map once per frame.
 			const uint lightsCount = scene.world.lights().size();
-			
-			if(currentShadowcastingLight < lightsCount && currentShadowMapLayer < shadowMaps.depth){
-				const float sceneRadius = scene.computeBoundingBox().getSphere().radius;
-				const float near = 5.0f;
-				const float far = 2.0f * sceneRadius;
-				const glm::mat4 pointProj = glm::perspective( glm::half_pi<float>(), 1.f, far, near );
 
-				// Find the next shadow casting light.
-				for(; currentShadowcastingLight < lightsCount; ++currentShadowcastingLight){
-					if(scene.world.lights()[currentShadowcastingLight].shadow){
-						break;
+			renderingShadow = false;
+			// As long as we have a light left to process and enough room in the texture array.
+			if(currentShadowcastingLight < lightsCount && currentShadowMapLayer < shadowMaps.depth){
+				
+				const glm::mat4 pointViews[6] = {
+					glm::lookAt(glm::vec3(0.0f), glm::vec3(-1.0f,0.0f,0.0f), glm::vec3(0.0f, 1.0f, 0.0f)),
+					glm::lookAt(glm::vec3(0.0f), glm::vec3( 1.0f,0.0f,0.0f), glm::vec3(0.0f, 1.0f, 0.0f)),
+					glm::lookAt(glm::vec3(0.0f), glm::vec3(0.0f,-1.0f,0.0f), glm::vec3(0.0f, 0.0f, 1.0f)),
+					glm::lookAt(glm::vec3(0.0f), glm::vec3(0.0f, 1.0f,0.0f), glm::vec3(0.0f, 0.0f, 1.0f)),
+					glm::lookAt(glm::vec3(0.0f), glm::vec3(0.0f,0.0f,-1.0f), glm::vec3(0.0f, 1.0f, 0.0f)),
+					glm::lookAt(glm::vec3(0.0f), glm::vec3(0.0f,0.0f, 1.0f), glm::vec3(0.0f, 1.0f, 0.0f)),
+				};
+
+				// Are we done with the current light?
+				uint currentLightFaceCount = scene.world.lights()[currentShadowcastingLight].type == World::Light::POINT ? 6u : 1u;
+				if(currentShadowcastingLightFace >= currentLightFaceCount){
+					// Look at following lights
+					++currentShadowcastingLight;
+					currentShadowcastingLightFace = 0u;
+					// Until we find a shadow casting one.
+					for(; currentShadowcastingLight < lightsCount; ++currentShadowcastingLight){
+						if(scene.world.lights()[currentShadowcastingLight].shadow){
+							break;
+						}
 					}
 				}
+
 				if( currentShadowcastingLight < lightsCount )
 				{
 					const Scene::LightInfos& infos = ( *scene.lightInfos )[ currentShadowcastingLight ];
 
-					const bool isPointLight = scene.world.lights()[ currentShadowcastingLight ].type == POINT;
-					unsigned int layerCount = isPointLight ? 6u : 1u;
+					const bool isPointLight = scene.world.lights()[ currentShadowcastingLight ].type == World::Light::POINT;
+					uint layerId = currentShadowcastingLightFace;
 
-					for( uint layerId = 0; layerId < layerCount; ++layerId )
 					{
 						// Shadow map projection
 						glm::mat4 vp = infos.vp;
-						if( isPointLight )
-						{
-							pointProj
+						if( isPointLight ){
+							vp = infos.vp * glm::translate(pointViews[layerId], -glm::vec3(infos.positionAndMaxRadius));
 						}
-						shadowInfos[ 0 ].vp = infos.vp;
-						shadowInfos[ 0 ].vpCulling = infos.vp;
+						shadowInfos[ 0 ].vp = vp;
+						shadowInfos[ 0 ].vpCulling = vp;
+						shadowInfos[ 0 ].skipCulling = 0;
 						shadowInfos.upload();
 
 						// Draw commands for the shadow maps.
@@ -1308,9 +1330,11 @@ int main(int argc, char ** argv) {
 							}
 							GPU::drawIndirectMesh( scene.globalMesh, *drawCommands, mid );
 						}
-						++currentShadowMapLayer;
+
 					}
-					++currentShadowcastingLight;
+					++currentShadowMapLayer;
+					++currentShadowcastingLightFace;
+					renderingShadow = true;
 				}
 				
 			}
