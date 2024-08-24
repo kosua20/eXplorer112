@@ -376,7 +376,7 @@ void Scene::upload(const World& world, const GameFiles& files){
 			}
 
 			const float near = 5.0f;
-			const float far = 2.0f * sceneRadius;
+			const float far = 2.f * (maxRadius == 0.f ? sceneRadius : maxRadius);
 			if(light.type == World::Light::SPOT){
 				proj = Frustum::perspective(std::max(light.angle, 0.1f), 1.0f, far, near);
 			} else if(light.type == World::Light::DIRECTIONAL){
