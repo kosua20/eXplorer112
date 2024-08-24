@@ -68,8 +68,8 @@ public:
 	std::vector<MipViews> views;  ///< Per-mip image views.
 
 	VmaAllocation data = VK_NULL_HANDLE; ///< Internal allocation.
-	ImTextureID imgui = (ImTextureID)VK_NULL_HANDLE; ///< ImGui compatible handle (internally a descriptor set).
-
+	std::vector<ImTextureID> imguiViews; ///< ImGui compatible handles (internally descriptor sets).
+	
 	std::vector<std::vector<VkImageLayout>> layouts; ///< Per-mip per-layer image layout.
 	VkImageLayout defaultLayout; ///< Default layout to restore to in some cases.
 

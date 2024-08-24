@@ -492,6 +492,8 @@ int main(int argc, char ** argv) {
 	
 #ifdef DEBUG_UI
 	bool showDemoWindow = false;
+	int debugTextureLayerIndex = 0;
+	int debugTextureMipIndex = 0;
 #endif
 	bool updateInstanceBoundingBox = false;
 	bool scrollToItem = false;
@@ -1052,7 +1054,7 @@ int main(int argc, char ** argv) {
 			const glm::vec2 miniUV = texCenter - texScale * 0.5f;
 			const glm::vec2 maxiUV = texCenter + texScale * 0.5f;
 
-			ImGui::ImageButton(textureView, ImVec2(winSize.x, winSize.y), miniUV, maxiUV, 0, ImVec4(1.0f, 0.0f, 1.0f, 1.0f));
+			ImGui::ImageButton(textureView, 0, 0, ImVec2(winSize.x, winSize.y), miniUV, maxiUV, 0, ImVec4(1.0f, 0.0f, 1.0f, 1.0f));
 
 		}
 		ImGui::End();
@@ -1134,7 +1136,7 @@ int main(int argc, char ** argv) {
 			mainViewport.z = winSize.x;
 			mainViewport.w = winSize.y;
 
-			ImGui::ImageButton(sceneLit, ImVec2(winSize.x, winSize.y), ImVec2(0.0,0.0), ImVec2(1.0,1.0), 0);
+			ImGui::ImageButton(sceneLit, 0,0, ImVec2(winSize.x, winSize.y), ImVec2(0.0,0.0), ImVec2(1.0,1.0), 0);
 			if(ImGui::IsItemHovered()) {
 				ImGui::SetNextFrameWantCaptureMouse(false);
 				ImGui::SetNextFrameWantCaptureKeyboard(false);
@@ -1158,12 +1160,22 @@ int main(int argc, char ** argv) {
 
 #ifdef DEBUG_UI
 		if(ImGui::Begin("Debug view", nullptr)){
+
+			Texture& tex = shadowMaps;
+			ImGui::PushItemWidth(220);
+			if(ImGui::SliderInt("Layer", &debugTextureLayerIndex, 0, tex.depth-1)){
+				debugTextureLayerIndex = glm::clamp(debugTextureLayerIndex, 0, (int)tex.depth-1);
+			}
+			ImGui::SameLine();
+			if(ImGui::SliderInt("Mip", &debugTextureMipIndex, 0, tex.levels-1)){
+				debugTextureMipIndex = glm::clamp(debugTextureMipIndex, 0, (int)tex.levels-1);
+			}
+			ImGui::PopItemWidth();
 			// Adjust the texture display to the window size.
 			ImVec2 winSize = ImGui::GetContentRegionAvail();
 			winSize.x = std::max(winSize.x, 2.f);
 			winSize.y = std::max(winSize.y, 2.f);
-
-			ImGui::ImageButton(selectionColor, ImVec2(winSize.x, winSize.y), ImVec2(0.0,0.0), ImVec2(1.0,1.0), 0);
+			ImGui::ImageButton(tex, debugTextureMipIndex, debugTextureLayerIndex, ImVec2(winSize.x, winSize.y), ImVec2(0.0,0.0), ImVec2(1.0,1.0), 0);
 		}
 		ImGui::End();
 		

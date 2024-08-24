@@ -218,19 +218,33 @@ const std::string & Texture::name() const {
 	return _name;
 }
 
-void ImGui::Image(const Texture & texture, const ImVec2& size, const ImVec2& uv0, const ImVec2& uv1, const ImVec4& tint_col, const ImVec4& border_col){
-	if(texture.gpu->imgui == VK_NULL_HANDLE){
-		GPUContext* context = GPU::getInternal();
-		texture.gpu->imgui = ImGui_ImplVulkan_AddTexture(context->samplerLibrary.getDefaultSampler(), texture.gpu->view, texture.gpu->defaultLayout);
+void ImGui::Image(const Texture & texture, uint mip, uint layer, const ImVec2& size, const ImVec2& uv0, const ImVec2& uv1, const ImVec4& tint_col, const ImVec4& border_col){
+	if(mip >= texture.levels || layer >= texture.depth){
+		return;
 	}
-	ImGui::Image((ImTextureID)texture.gpu->imgui, size, uv0, uv1, tint_col, border_col);
+	uint linearIndex = mip * texture.depth + layer;
+	if(linearIndex >= texture.gpu->imguiViews.size()){
+		texture.gpu->imguiViews.resize(linearIndex + 1, VK_NULL_HANDLE);
+	}
+	if(texture.gpu->imguiViews[linearIndex] == VK_NULL_HANDLE){
+		GPUContext* context = GPU::getInternal();
+		texture.gpu->imguiViews[linearIndex] = ImGui_ImplVulkan_AddTexture(context->samplerLibrary.getDefaultSampler(), texture.gpu->views[mip].views[layer], texture.gpu->defaultLayout);
+	}
+	ImGui::Image((ImTextureID)texture.gpu->imguiViews[linearIndex], size, uv0, uv1, tint_col, border_col);
 }
 
-bool ImGui::ImageButton(const Texture & texture, const ImVec2& size, const ImVec2& uv0,  const ImVec2& uv1, int frame_padding, const ImVec4& bg_col, const ImVec4& tint_col){
-	if(texture.gpu->imgui == VK_NULL_HANDLE){
+bool ImGui::ImageButton(const Texture & texture, uint mip, uint layer, const ImVec2& size, const ImVec2& uv0,  const ImVec2& uv1, int frame_padding, const ImVec4& bg_col, const ImVec4& tint_col){
+	if(mip >= texture.levels || layer >= texture.depth){
+		return false;
+	}
+	uint linearIndex = mip * texture.depth + layer;
+	if(linearIndex >= texture.gpu->imguiViews.size()){
+		texture.gpu->imguiViews.resize(linearIndex + 1, VK_NULL_HANDLE);
+	}
+	if(texture.gpu->imguiViews[linearIndex] == VK_NULL_HANDLE){
 		GPUContext* context = GPU::getInternal();
 		// Always take a 2D view.
-		texture.gpu->imgui = ImGui_ImplVulkan_AddTexture(context->samplerLibrary.getDefaultSampler(), texture.gpu->views[0].views[0], texture.gpu->defaultLayout);
+		texture.gpu->imguiViews[linearIndex] = ImGui_ImplVulkan_AddTexture(context->samplerLibrary.getDefaultSampler(), texture.gpu->views[mip].views[layer], texture.gpu->defaultLayout);
 	}
-	return ImGui::ImageButton((ImTextureID)texture.gpu->imgui, size, uv0, uv1, frame_padding, bg_col, tint_col);
+	return ImGui::ImageButton((ImTextureID)texture.gpu->imguiViews[linearIndex], size, uv0, uv1, frame_padding, bg_col, tint_col);
 }
