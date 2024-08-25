@@ -314,7 +314,7 @@ void deselect(FrameData& _frame, SelectionState& _state, SelectionFilter _filter
 
 }
 
-void loadEngineTextures(const GameFiles& gameFiles, Texture& fogXYTexture, Texture& fogZTexture){
+void loadEngineTextures(const GameFiles& gameFiles, Texture& fogXYTexture, Texture& fogZTexture, Texture& noiseTexture){
 	if(gameFiles.texturesPath.empty()){
 		return;
 	}
@@ -338,6 +338,16 @@ void loadEngineTextures(const GameFiles& gameFiles, Texture& fogXYTexture, Textu
 	fogZTexture.depth = 1;
 	fogZTexture.levels = 1;
 	fogZTexture.upload(Layout::RGBA8, false);
+
+	noiseTexture.clean();
+	Image& imgNoise = noiseTexture.images.emplace_back();
+	imgNoise.load(gameFiles.texturesPath / "commons" / "noise.tga");
+	noiseTexture.width = imgNoise.width;
+	noiseTexture.height = imgNoise.height;
+	noiseTexture.shape = TextureShape::D2;
+	noiseTexture.depth = 1;
+	noiseTexture.levels = 1;
+	noiseTexture.upload(Layout::RGBA8, false);
 }
 
 
@@ -387,7 +397,10 @@ int main(int argc, char ** argv) {
 	std::vector<ProgramInfos> programPool;
 
 	programPool.push_back(loadProgram("texture_passthrough", "texture_debug"));
-	Program* textureQuad = programPool.back().program;
+	Program* textureDebugQuad = programPool.back().program;
+
+	programPool.push_back(loadProgram("texture_passthrough", "postprocess_noise"));
+	Program* noiseGrainQuad = programPool.back().program;
 
 	programPool.push_back(loadProgram("object_color", "object_color"));
 	Program* coloredDebugDraw = programPool.back().program;
@@ -431,6 +444,10 @@ int main(int argc, char ** argv) {
 	Texture sceneLit("sceneLit");
 	// No HDR for now
 	Texture::setupRendertarget(sceneLit, Layout::RGBA16F, renderRes[0], renderRes[1]);
+
+	// Post processing result
+	Texture sceneFinal("sceneFinal");
+	Texture::setupRendertarget(sceneFinal, Layout::RGBA8, renderRes[0], renderRes[1]);
 
 	Texture textureView("textureViewer");
 	Texture::setupRendertarget(textureView, Layout::RGBA8, 512, 512);
@@ -488,7 +505,8 @@ int main(int argc, char ** argv) {
 
 	Texture fogXYTexture("fogXYMap");
 	Texture fogZTexture("fogZMap");
-	loadEngineTextures(gameFiles, fogXYTexture, fogZTexture);
+	Texture noiseTexture("noiseMap");
+	loadEngineTextures(gameFiles, fogXYTexture, fogZTexture, noiseTexture);
 
 	deselect( frameInfos[ 0 ], selected, SelectionFilter::ALL );
 	
@@ -646,7 +664,7 @@ int main(int argc, char ** argv) {
 					fs::path newInstallPath;
 					if(Window::showDirectoryPicker(fs::path(""), newInstallPath)){
 						gameFiles = GameFiles( newInstallPath);
-						loadEngineTextures(gameFiles, fogXYTexture, fogZTexture);
+						loadEngineTextures(gameFiles, fogXYTexture, fogZTexture, noiseTexture);
 						scene = Scene();
 						deselect(frameInfos[0], selected, SelectionFilter::ALL);
 					}
@@ -1079,6 +1097,7 @@ int main(int argc, char ** argv) {
 				sceneNormal.resize(renderRes);
 				sceneDepth.resize(renderRes);
 				sceneLit.resize(renderRes);
+				sceneFinal.resize(renderRes);
 				lightClusters.resize(roundUp(renderRes[0], clusterDims.x), roundUp(renderRes[1], clusterDims.x), clusterDims.y);
 				camera.ratio(renderRes[0]/renderRes[1]);
 			}
@@ -1138,14 +1157,14 @@ int main(int argc, char ** argv) {
 			mainViewport.z = winSize.x;
 			mainViewport.w = winSize.y;
 
-			ImGui::ImageButton(sceneLit, 0,0, ImVec2(winSize.x, winSize.y), ImVec2(0.0,0.0), ImVec2(1.0,1.0), 0);
+			ImGui::ImageButton(sceneFinal, 0,0, ImVec2(winSize.x, winSize.y), ImVec2(0.0,0.0), ImVec2(1.0,1.0), 0);
 			if(ImGui::IsItemHovered()) {
 				ImGui::SetNextFrameWantCaptureMouse(false);
 				ImGui::SetNextFrameWantCaptureKeyboard(false);
 			}
 
 			// If the aspect ratio changed, trigger a resize.
-			const float ratioCurr = float(sceneLit.width) / float(sceneLit.height);
+			const float ratioCurr = float(sceneFinal.width) / float(sceneFinal.height);
 			const float ratioWin = winSize.x / winSize.y;
 			// \todo Derive a more robust threshold.
 			if(std::abs(ratioWin - ratioCurr) > 0.01f){
@@ -1154,6 +1173,7 @@ int main(int argc, char ** argv) {
 				sceneNormal.resize(renderRes);
 				sceneDepth.resize(renderRes);
 				sceneLit.resize(renderRes);
+				sceneFinal.resize(renderRes);
 				lightClusters.resize(roundUp(renderRes[0], clusterDims.x), roundUp(renderRes[1], clusterDims.x), clusterDims.y);
 				camera.ratio(renderRes[0]/renderRes[1]);
 			}
@@ -1458,40 +1478,64 @@ int main(int argc, char ** argv) {
 					}
 				}
 
-				// Debug view.
+				// Postprocess stack
+				{
+					// Bloom
+					{
 
-				GPU::setPolygonState( PolygonMode::LINE );
-				GPU::setCullState( false );
-				GPU::setDepthState( true, TestFunction::GEQUAL, false );
-				GPU::setBlendState( false );
-				GPU::setColorState(true, true, true, true);
-
-				if(showWireframe){
-					debugInstancedObject->use();
-					debugInstancedObject->buffer(frameInfos, 0);
-					debugInstancedObject->buffer(*scene.meshInfos, 1);
-					debugInstancedObject->buffer(*scene.instanceInfos, 2);
-					debugInstancedObject->buffer(*scene.materialInfos, 3);
-					debugInstancedObject->buffer(*drawInstances, 4);
-
-					for(uint mid = 0; mid < scene.meshInfos->size(); ++mid){
-						GPU::drawIndirectMesh(scene.globalMesh, *drawCommands, mid);
+					}
+					// Grain
+					{
+						GPU::bind(sceneFinal, LoadOperation::DONTCARE);
+						GPU::setViewport(sceneFinal);
+						GPU::setDepthState(false);
+						GPU::setCullState(true);
+						GPU::setColorState(true, true, true, true);
+						GPU::setPolygonState(PolygonMode::FILL);
+						noiseGrainQuad->use();
+						noiseGrainQuad->texture(sceneLit, 0);
+						noiseGrainQuad->texture(sceneLit, 1); // Will be bloom
+						noiseGrainQuad->texture(noiseTexture, 2);
+						noiseGrainQuad->buffer(frameInfos, 0);
+						GPU::drawQuad();
 					}
 				}
 
-				GPU::bind(sceneLit, sceneDepth, LoadOperation::LOAD, LoadOperation::LOAD, LoadOperation::DONTCARE);
-				GPU::setViewport(sceneLit);
-				coloredDebugDraw->use();
-				coloredDebugDraw->buffer( frameInfos, 0 );
+				// Debug view.
+				{
+					GPU::setPolygonState( PolygonMode::LINE );
+					GPU::setCullState( false );
+					GPU::setDepthState( true, TestFunction::GEQUAL, false );
+					GPU::setBlendState( false );
+					GPU::setColorState(true, true, true, true);
 
-				if((selected.mesh >= 0 || selected.instance >= 0) && !boundingBox.indices.empty()){
-					GPU::drawMesh( boundingBox );
-				}
-				if(showLights && !debugLights.indices.empty()){
-					GPU::drawMesh( debugLights );
-				}
-				if(showZones && !debugZones.indices.empty()){
-					GPU::drawMesh( debugZones );
+					if(showWireframe){
+						debugInstancedObject->use();
+						debugInstancedObject->buffer(frameInfos, 0);
+						debugInstancedObject->buffer(*scene.meshInfos, 1);
+						debugInstancedObject->buffer(*scene.instanceInfos, 2);
+						debugInstancedObject->buffer(*scene.materialInfos, 3);
+						debugInstancedObject->buffer(*drawInstances, 4);
+
+						for(uint mid = 0; mid < scene.meshInfos->size(); ++mid){
+							GPU::drawIndirectMesh(scene.globalMesh, *drawCommands, mid);
+						}
+					}
+
+					GPU::bind(sceneLit, sceneDepth, LoadOperation::LOAD, LoadOperation::LOAD, LoadOperation::DONTCARE);
+					GPU::setViewport(sceneLit);
+					coloredDebugDraw->use();
+					coloredDebugDraw->buffer( frameInfos, 0 );
+
+					if((selected.mesh >= 0 || selected.instance >= 0) && !boundingBox.indices.empty()){
+						GPU::drawMesh( boundingBox );
+					}
+					if(showLights && !debugLights.indices.empty()){
+						GPU::drawMesh( debugLights );
+					}
+					if(showZones && !debugZones.indices.empty()){
+						GPU::drawMesh( debugZones );
+					}
 				}
 			}
 
@@ -1548,7 +1592,7 @@ int main(int argc, char ** argv) {
 
 
 		} else {
-			GPU::clearTexture(sceneLit, glm::vec4(0.2f, 0.2f, 0.2f, 1.0f));
+			GPU::clearTexture(sceneFinal, glm::vec4(0.2f, 0.2f, 0.2f, 1.0f));
 		}
 
 		if(selected.texture >= 0){
@@ -1558,8 +1602,8 @@ int main(int argc, char ** argv) {
 			GPU::setCullState(true);
 			GPU::setPolygonState(PolygonMode::FILL);
 			GPU::setBlendState(true, BlendEquation::ADD, BlendFunction::SRC_ALPHA, BlendFunction::ONE_MINUS_SRC_ALPHA);
-			textureQuad->use();
-			textureQuad->buffer(frameInfos, 0);
+			textureDebugQuad->use();
+			textureDebugQuad->buffer(frameInfos, 0);
 			GPU::drawQuad();
 		}
 
