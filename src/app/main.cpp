@@ -75,6 +75,7 @@ struct FrameData {
 	glm::vec4 color{1.0f};
 	glm::vec4 camPos{1.0f};
 	glm::vec4 camPlanes{0.0f};
+	glm::vec4 randoms{ 0.f };
 
 	glm::vec4 ambientColor{0.0f};
 	glm::vec4 fogColor{0.0f};
@@ -1257,6 +1258,7 @@ int main(int argc, char ** argv) {
 		frameInfos[0].camPlanes = glm::vec4(nearFar.x, nearFar.y / nearFar.x,
 											(nearFar.y - nearFar.x)/(nearFar.x*nearFar.y),
 											1.0f/nearFar.y );
+		frameInfos[ 0 ].randoms = glm::linearRand( glm::vec4(0.f), glm::vec4(1.f) );
 
 		frameInfos[0].albedoMode = albedoMode;
 		frameInfos[0].shadingMode = shadingMode;

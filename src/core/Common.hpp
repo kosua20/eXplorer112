@@ -14,6 +14,7 @@
 #include <glm/gtx/matrix_decompose.hpp>
 #include <glm/gtx/io.hpp>
 #include <glm/gtc/constants.hpp>
+#include <glm/gtc/random.hpp>
 
 #include <string>
 #include <vector>

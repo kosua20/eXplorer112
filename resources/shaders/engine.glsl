@@ -12,6 +12,7 @@ layout(set = 0, binding = 0) uniform EngineData {
 	vec4 camPos;
 	vec4 camPlanes; // n, f/n, (f-n)/(f*n), 1/f
 
+	vec4 randoms;
 	vec4 ambientColor;
 	vec4 fogColor;
 	vec4 fogParams;
