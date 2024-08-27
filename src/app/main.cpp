@@ -23,6 +23,9 @@
 #define MODE_ALBEDO_NORMAL 1
 #define MODE_ALBEDO_TEXTURE 2
 
+#define MODE_POSTPROCESS_BLOOM 1
+#define MODE_POSTPROCESS_GRAIN 2
+
 #define CLUSTER_XY_SIZE 64
 #define CLUSTER_Z_COUNT 32
 
@@ -75,7 +78,6 @@ struct FrameData {
 	glm::vec4 color{1.0f};
 	glm::vec4 camPos{1.0f};
 	glm::vec4 camPlanes{0.0f};
-	glm::vec4 randoms{ 0.f };
 
 	glm::vec4 ambientColor{0.0f};
 	glm::vec4 fogColor{0.0f};
@@ -85,6 +87,11 @@ struct FrameData {
 	// Shading settings.
 	uint shadingMode = 0;
 	uint albedoMode = 0;
+	uint postprocessMode = 0;
+	float randomX;
+	float randomY;
+	float randomZ;
+
 	// Clustering
 	uint lightsCount;
 	glm::uvec4 clustersSize{1u}; // tile size in w
@@ -504,6 +511,8 @@ int main(int argc, char ** argv) {
 	bool showTransparents = true;
 	bool showOpaques = true;
 	bool showFog = true;
+	bool showBloom = true;
+	bool showNoise = false;
 	bool freezeCulling = false;
 	bool showWireframe = false;
 	bool showLights = false;
@@ -1131,7 +1140,6 @@ int main(int argc, char ** argv) {
 			if(ImGui::ArrowButton("VisibilityArrow", ImGuiDir_Down)){
 				ImGui::OpenPopup("visibilityPopup");
 			}
-
 			if(ImGui::BeginPopup("visibilityPopup")){
 				ImGui::Checkbox("Opaques",  &showOpaques);
 				ImGui::Checkbox("Decals", &showDecals);
@@ -1141,7 +1149,19 @@ int main(int argc, char ** argv) {
 			}
 			ImGui::SameLine();
 			ImGui::Text("Visibility");
+
 			ImGui::SameLine();
+			if(ImGui::ArrowButton("PostprocessArrow", ImGuiDir_Down)){
+				ImGui::OpenPopup("postprocessPopup");
+			}
+			if(ImGui::BeginPopup("postprocessPopup")){
+				ImGui::Checkbox("Bloom",  &showBloom);
+				ImGui::Checkbox("Grain", &showNoise);
+				ImGui::EndPopup();
+			}
+			ImGui::SameLine();
+			ImGui::Text("Postprocess");
+
 			ImGui::Checkbox("Wireframe", &showWireframe);
 			ImGui::SameLine();
 			ImGui::Checkbox("Lights", &showLights);
@@ -1273,10 +1293,15 @@ int main(int argc, char ** argv) {
 		frameInfos[0].camPlanes = glm::vec4(nearFar.x, nearFar.y / nearFar.x,
 											(nearFar.y - nearFar.x)/(nearFar.x*nearFar.y),
 											1.0f/nearFar.y );
-		frameInfos[ 0 ].randoms = glm::linearRand( glm::vec4(0.f), glm::vec4(1.f) );
 
 		frameInfos[0].albedoMode = albedoMode;
 		frameInfos[0].shadingMode = shadingMode;
+		frameInfos[0].postprocessMode = (showBloom ? MODE_POSTPROCESS_BLOOM : 0u) | (showNoise ? MODE_POSTPROCESS_GRAIN : 0u);
+
+		frameInfos[ 0 ].randomX = glm::linearRand( 0.f, 1.0f );
+		frameInfos[ 0 ].randomY = glm::linearRand( 0.f, 1.0f );
+		frameInfos[ 0 ].randomZ = glm::linearRand( 0.f, 1.0f );
+
 		frameInfos[0].lightsCount = uint(scene.world.lights().size());
 		frameInfos[0].clustersSize = glm::uvec4(lightClusters.width, lightClusters.height, lightClusters.depth, clusterDims.x);
 		const float logRatio = float(clusterDims.y) / std::log(nearFar.y / nearFar.x);
@@ -1504,12 +1529,12 @@ int main(int argc, char ** argv) {
 				// Postprocess stack
 				{
 					// Bloom
-					{
 					GPU::setDepthState(false);
 					GPU::setCullState(true);
 					GPU::setColorState(true, true, true, true);
 					GPU::setPolygonState(PolygonMode::FILL);
 
+					if(showBloom){
 						GPU::blit(sceneLit, bloomPyramid0, 0, 0, Filter::LINEAR);
 
 						uint stepCount = bloomPyramid0.levels - 1u;

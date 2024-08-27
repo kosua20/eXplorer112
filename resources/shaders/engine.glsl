@@ -12,7 +12,6 @@ layout(set = 0, binding = 0) uniform EngineData {
 	vec4 camPos;
 	vec4 camPlanes; // n, f/n, (f-n)/(f*n), 1/f
 
-	vec4 randoms;
 	vec4 ambientColor;
 	vec4 fogColor;
 	vec4 fogParams;
@@ -21,6 +20,10 @@ layout(set = 0, binding = 0) uniform EngineData {
 	// Shading settings.
 	uint shadingMode;
 	uint albedoMode;
+	uint postprocessMode;
+	float randomX;
+	float randomY;
+	float randomZ;
 
 	// Clustering
 	uint  lightsCount;
@@ -47,6 +50,9 @@ layout(set = 0, binding = 0) uniform EngineData {
 #define MODE_ALBEDO_UNIFORM 0
 #define MODE_ALBEDO_NORMAL 1
 #define MODE_ALBEDO_TEXTURE 2
+// Bit field for postprocess
+#define MODE_POSTPROCESS_BLOOM 1
+#define MODE_POSTPROCESS_GRAIN 2
 
 const uint NO_MATERIAL = 0xFFFF;
 const uint NO_SHADOW = 0xFFFF;
