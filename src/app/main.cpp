@@ -403,6 +403,9 @@ int main(int argc, char ** argv) {
 	programPool.push_back(loadProgram("texture_passthrough", "postprocess_noise"));
 	Program* noiseGrainQuad = programPool.back().program;
 
+	programPool.push_back(loadProgram("texture_passthrough", "postprocess_blur"));
+	Program* bloomBlur = programPool.back().program;
+
 	programPool.push_back(loadProgram("object_color", "object_color"));
 	Program* coloredDebugDraw = programPool.back().program;
 
@@ -433,6 +436,9 @@ int main(int argc, char ** argv) {
 
 	UniformBuffer<FrameData> frameInfos(1, 64);
 	UniformBuffer<FrameData> shadowInfos(1, 2);
+	UniformBuffer<glm::vec2> blurInfosV(1, 2);
+	UniformBuffer<glm::vec2> blurInfosH(1, 2);
+
 	const glm::uvec2 renderRes(config.resolutionRatio * config.screenResolution);
 
 	// Gbuffer
@@ -443,9 +449,14 @@ int main(int argc, char ** argv) {
 
 	// Lit result
 	Texture sceneLit("sceneLit");
-	// No HDR for now
 	Texture::setupRendertarget(sceneLit, Layout::RGBA16F, renderRes[0], renderRes[1]);
 
+	// Bloom
+	Texture bloomPyramid0("bloomPyramid0");
+	Texture::setupRendertarget(bloomPyramid0, Layout::RGBA16F, (uint)(renderRes[0])/2u, (uint)(renderRes[1])/2u, 5u);
+	Texture bloomPyramid1("bloomPyramid1");
+	Texture::setupRendertarget(bloomPyramid1, Layout::RGBA16F, (uint)(renderRes[0])/2u, (uint)(renderRes[1])/2u, 5u);
+	
 	// Post processing result
 	Texture sceneFinal("sceneFinal");
 	Texture::setupRendertarget(sceneFinal, Layout::RGBA8, renderRes[0], renderRes[1]);
@@ -1099,6 +1110,8 @@ int main(int argc, char ** argv) {
 				sceneDepth.resize(renderRes);
 				sceneLit.resize(renderRes);
 				sceneFinal.resize(renderRes);
+				bloomPyramid0.resize(glm::uvec2(renderRes)/2u );
+				bloomPyramid1.resize(glm::uvec2(renderRes)/2u );
 				lightClusters.resize(roundUp(renderRes[0], clusterDims.x), roundUp(renderRes[1], clusterDims.x), clusterDims.y);
 				camera.ratio(renderRes[0]/renderRes[1]);
 			}
@@ -1175,6 +1188,8 @@ int main(int argc, char ** argv) {
 				sceneDepth.resize(renderRes);
 				sceneLit.resize(renderRes);
 				sceneFinal.resize(renderRes);
+				bloomPyramid0.resize(glm::uvec2(renderRes)/2u );
+				bloomPyramid1.resize(glm::uvec2(renderRes)/2u );
 				lightClusters.resize(roundUp(renderRes[0], clusterDims.x), roundUp(renderRes[1], clusterDims.x), clusterDims.y);
 				camera.ratio(renderRes[0]/renderRes[1]);
 			}
@@ -1268,6 +1283,12 @@ int main(int argc, char ** argv) {
 		frameInfos[0].clustersParams = glm::vec4(logRatio, std::log(nearFar.x) * logRatio, 0.0f, 0.0f);
 
 		frameInfos.upload();
+
+		blurInfosH[0] = glm::vec2(1.0f/(float)bloomPyramid0.width, 0.0f);
+		blurInfosV[0] = glm::vec2(0.0f, 1.0f/(float)bloomPyramid0.height);
+
+		blurInfosH.upload();
+		blurInfosV.upload();
 
 		if(selected.item >= 0){
 			// Bruteforce shadow map once per frame.
@@ -1484,8 +1505,60 @@ int main(int argc, char ** argv) {
 				{
 					// Bloom
 					{
+					GPU::setDepthState(false);
+					GPU::setCullState(true);
+					GPU::setColorState(true, true, true, true);
+					GPU::setPolygonState(PolygonMode::FILL);
 
+						GPU::blit(sceneLit, bloomPyramid0, 0, 0, Filter::LINEAR);
+
+						uint stepCount = bloomPyramid0.levels - 1u;
+						uint baseWidth = bloomPyramid0.width;
+						uint baseHeight = bloomPyramid0.height;
+
+						for(uint srcStep = 0; srcStep < stepCount; ++srcStep){
+							uint dstStep = srcStep + 1u;
+							uint dstWidth  = baseWidth / (1u << dstStep);
+							uint dstHeight = baseHeight / (1u << dstStep);
+
+							GPU::setViewport(0, 0, dstWidth, dstHeight);
+
+							// Blur in one direction
+							GPU::bindFramebuffer(0, dstStep, LoadOperation::DONTCARE, LoadOperation::DONTCARE, LoadOperation::DONTCARE, nullptr, &bloomPyramid1, nullptr, nullptr, nullptr);
+							bloomBlur->use();
+							bloomBlur->texture(bloomPyramid0, 0, srcStep);
+							bloomBlur->buffer(blurInfosH, 0);
+							GPU::drawQuad();
+							// And the other one.
+							GPU::bindFramebuffer(0, dstStep, LoadOperation::DONTCARE, LoadOperation::DONTCARE, LoadOperation::DONTCARE, nullptr, &bloomPyramid0, nullptr, nullptr, nullptr);
+							bloomBlur->use();
+							bloomBlur->texture(bloomPyramid1, 0, dstStep);
+							bloomBlur->buffer(blurInfosV, 0);
+							GPU::drawQuad();
+						}
+
+						for(uint srcStep = stepCount; srcStep >= 1; --srcStep){
+							uint dstStep = srcStep - 1u;
+							uint dstWidth  = baseWidth / (1u << dstStep);
+							uint dstHeight = baseHeight / (1u << dstStep);
+
+							GPU::setViewport(0, 0, dstWidth, dstHeight);
+
+							// Blur in one direction
+							GPU::bindFramebuffer(0, dstStep, LoadOperation::DONTCARE, LoadOperation::DONTCARE, LoadOperation::DONTCARE, nullptr, &bloomPyramid1, nullptr, nullptr, nullptr);
+							bloomBlur->use();
+							bloomBlur->texture(bloomPyramid0, 0, srcStep);
+							bloomBlur->buffer(blurInfosH, 0);
+							GPU::drawQuad();
+							// And the other one.
+							GPU::bindFramebuffer(0, dstStep, LoadOperation::DONTCARE, LoadOperation::DONTCARE, LoadOperation::DONTCARE, nullptr, &bloomPyramid0, nullptr, nullptr, nullptr);
+							bloomBlur->use();
+							bloomBlur->texture(bloomPyramid1, 0, dstStep);
+							bloomBlur->buffer(blurInfosV, 0);
+							GPU::drawQuad();
+						}
 					}
+
 					// Grain
 					{
 						GPU::bind(sceneFinal, LoadOperation::DONTCARE);
@@ -1496,7 +1569,7 @@ int main(int argc, char ** argv) {
 						GPU::setPolygonState(PolygonMode::FILL);
 						noiseGrainQuad->use();
 						noiseGrainQuad->texture(sceneLit, 0);
-						noiseGrainQuad->texture(sceneLit, 1); // Will be bloom
+						noiseGrainQuad->texture(bloomPyramid0, 1);
 						noiseGrainQuad->texture(noiseTexture, 2);
 						noiseGrainQuad->buffer(frameInfos, 0);
 						GPU::drawQuad();
