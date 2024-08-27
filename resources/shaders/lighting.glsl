@@ -76,9 +76,14 @@ void applyLighting(vec3 screenPos, vec3 worldPos, vec3 viewDir, vec3 n, float gl
 			vec3 lightColor = light.colorAndType.xyz;
 			uint lightType = uint(light.colorAndType.w);
 
-			vec3 l = vec3(0.0);
-			float attenuation = 1.0;
-			float dotNL = dot(n, l);
+			vec3 posToLight;
+			if(lightType == 1 || lightType == 2){ // Point & Spot
+				posToLight = (lightPos - worldPos);
+			} else { // 3
+				posToLight = normalize(-light.axisAndRadiusZ.xyz);
+			}
+			vec3 l = normalize(posToLight);
+			float dotNL = dot(l, n);
 
 			mat4 projMatrix = light.vp;
 			uint lightShadowIndex = light.shadow;
@@ -110,12 +115,12 @@ void applyLighting(vec3 screenPos, vec3 worldPos, vec3 viewDir, vec3 n, float gl
 			vec4 projectedPos = projMatrix * vec4(worldPos, 1.0);
 			projectedPos.xy /= projectedPos.w;
 			vec2 projectedUV = projectedPos.xy * 0.5 + 0.5;
-
+			
+			float attenuation = 1.0;
 			if(lightShadowIndex != NO_SHADOW){
-
-				float f = max(0.0, dotNL);
-				float bias = 0.001 * mix(2.0, 1.0, f);
-
+				
+				float f = dotNL * 0.5f + 0.5f;
+				float bias = 0.0005 * mix(10.0, 1.0, f);
 				vec3 lightSpacePos = vec3(projectedUV, projectedPos.z / projectedPos.w);
 				float shadowing = shadowPCF(lightSpacePos, lightShadowIndex, bias);
 				attenuation *= shadowing;
@@ -123,39 +128,29 @@ void applyLighting(vec3 screenPos, vec3 worldPos, vec3 viewDir, vec3 n, float gl
 
 
 			if(lightType == 1 || lightType == 2){ // Point & Spot
-				l = (lightPos - worldPos);
+				
 				// Attenuation along the local axes (pre-divided by the radii)
 				vec3 attenAxes;
-				attenAxes.x = dot(light.axisAndRadiusX.xyz, l);
-				attenAxes.y = dot(light.axisAndRadiusY.xyz, l);
-				attenAxes.z = dot(light.axisAndRadiusZ.xyz, l);
+				attenAxes.x = dot(light.axisAndRadiusX.xyz, posToLight);
+				attenAxes.y = dot(light.axisAndRadiusY.xyz, posToLight);
+				attenAxes.z = dot(light.axisAndRadiusZ.xyz, posToLight);
 
 				// Compute attenuation (based on game shader)
 				attenuation *= 1.0 - clamp(dot(attenAxes, attenAxes), 0.0, 1.0);
-				l = normalize(l);
-
+				
 				if((lightType == 2)){
-
-					if(any(greaterThan(abs(projectedPos.xy), vec2(1.0))) || projectedPos.w < 0.0){
+					if(any(greaterThan(abs(projectedPos.xy), vec2(1.0))) || projectedPos.w < 0.0 ){
 						attenuation *= 0.0;
 					}
 
 					if(light.materialIndex != NO_MATERIAL){
 						MaterialInfos lightMaterial =  materialInfos[light.materialIndex];
-
 						vec3 lightUV = vec3(projectedUV, lightMaterial.color.layer);
 						vec4 lightPattern = texture(sampler2DArray(textures[lightMaterial.color.index], sRepeatLinearLinear), lightUV);
 						lightColor *= lightPattern.rgb;
-
 					}
-
 				}
-
-
-			} else if(lightType == 3){ // Directional
-				attenuation *= 1.0;
-				l = normalize(-light.axisAndRadiusZ.xyz);
-			}
+			} 
 
 			// Diffuse (based on game shader)
 			float localDiffuse = dotNL * 0.5 + 0.5;
