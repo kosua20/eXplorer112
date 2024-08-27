@@ -1450,13 +1450,13 @@ int main(int argc, char ** argv) {
 			{
 				GPU::bind(sceneLit, sceneDepth, LoadOperation::LOAD, LoadOperation::LOAD, LoadOperation::DONTCARE);
 				GPU::setViewport(sceneLit);
-
+				GPU::setDepthState( true, TestFunction::GEQUAL, false );
+				GPU::setCullState( false );
+				GPU::setBlendState( true, BlendEquation::ADD, BlendFunction::SRC_ALPHA, BlendFunction::ONE_MINUS_SRC_ALPHA );
+				GPU::setColorState( true, true, true, false );
 				if(showTransparents){
 					// Alternative possibility: real alpha blend and object sorting.
-					GPU::setDepthState(true, TestFunction::GEQUAL, false);
-					GPU::setCullState(false);
-					GPU::setBlendState(true, BlendEquation::ADD, BlendFunction::SRC_ALPHA, BlendFunction::ONE_MINUS_SRC_ALPHA);
-					GPU::setColorState(true, true, true, false);
+					
 
 					forwardInstancedObject->use();
 					forwardInstancedObject->buffer(frameInfos, 0);
