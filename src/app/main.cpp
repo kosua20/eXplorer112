@@ -1597,8 +1597,8 @@ int main(int argc, char ** argv) {
 						}
 					}
 
-					GPU::bind(sceneLit, sceneDepth, LoadOperation::LOAD, LoadOperation::LOAD, LoadOperation::DONTCARE);
-					GPU::setViewport(sceneLit);
+					GPU::bind(sceneFinal, sceneDepth, LoadOperation::LOAD, LoadOperation::LOAD, LoadOperation::DONTCARE);
+					GPU::setViewport(sceneFinal);
 					coloredDebugDraw->use();
 					coloredDebugDraw->buffer( frameInfos, 0 );
 
