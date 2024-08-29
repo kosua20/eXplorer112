@@ -16,8 +16,8 @@ layout(location = 0) out vec4 fragColor; ///< Color.
 void main(){
 
 	vec3 c0 = textureLod(sampler2D(screenTexture, sClampLinear), In.uv, 0.0).rgb;
-	vec3 cm = textureLod(sampler2D(screenTexture, sClampLinear), In.uv - 1.5f * data.delta, 0.0).rgb;
-	vec3 cp = textureLod(sampler2D(screenTexture, sClampLinear), In.uv + 1.5f * data.delta, 0.0).rgb;
+	vec3 cm = textureLod(sampler2D(screenTexture, sClampLinear), In.uv - data.delta, 0.0).rgb;
+	vec3 cp = textureLod(sampler2D(screenTexture, sClampLinear), In.uv + data.delta, 0.0).rgb;
 
 	vec3 color = 0.5 * c0 + 0.25 * cm + 0.25 * cp;
 	fragColor.rgb = color;

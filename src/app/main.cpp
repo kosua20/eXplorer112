@@ -461,7 +461,7 @@ int main(int argc, char ** argv) {
 	// Bloom
 	uint bloomWidth = (uint)(renderRes[0])/2u;
 	uint bloomHeight = (uint)(renderRes[1])/2u;
-	uint bloomBlurSteps = 5u;
+	uint bloomBlurSteps = 4u;
 	Texture bloom0("bloom0");
 	Texture bloom1("bloom1");
 	Texture::setupRendertarget(bloom0, Layout::RGBA16F, bloomWidth, bloomHeight);
@@ -1312,8 +1312,10 @@ int main(int argc, char ** argv) {
 
 		frameInfos.upload();
 
-		blurInfosH[0] = glm::vec2(1.0f/(float)bloom0.width, 0.0f);
-		blurInfosV[0] = glm::vec2(0.0f, 1.0f/(float)bloom0.height);
+		// Scale calibrated on existing frame.
+		const float scaling = 1.8f * sceneLit.width / 720.0f;
+		blurInfosH[0] = scaling * glm::vec2(1.0f/(float)bloom0.width, 0.0f);
+		blurInfosV[0] = scaling * glm::vec2(0.0f, 1.0f/(float)bloom0.height);
 
 		blurInfosH.upload();
 		blurInfosV.upload();
