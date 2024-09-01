@@ -142,3 +142,12 @@ mat4 translate(mat4 m, vec3 v){
 	Result[3] = m[0] * v[0] + m[1] * v[1] + m[2] * v[2] + m[3];
 	return Result;
 }
+
+
+vec3 gammaToLinear(vec3 gamma){
+	return mix(gamma/12.92, pow((gamma + 0.055)/1.055, vec3(2.4)), lessThanEqual(gamma, vec3(0.04045)));
+}
+
+vec3 linearToGamma(vec3 linear){
+	return mix(12.92 * linear, 1.055 * pow(linear, vec3(1.0/2.4)) - 0.055, lessThanEqual(linear, vec3(0.0031308)));
+}
