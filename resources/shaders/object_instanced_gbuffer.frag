@@ -52,6 +52,7 @@ void main(){
 		discard;
 	}
 
+	// TODO: Move decals in a separate post-lighting pass, srcColor * dstColor blend mode.
 	// Make decals more visible
 	if(material.type == MATERIAL_DECAL){
 		albedo.rgb *= 0.5;

@@ -170,6 +170,18 @@ void applyLighting(vec3 screenPos, vec3 worldPos, vec3 viewDir, vec3 n, float gl
 }
 
 float applyFog(float worldHeight, vec3 viewDir){
+	// TODO: fog density is not exactly right.
+	// Blend mode: src alpha * src color + (1 - src alpha) * dst color
+	// For the back floor, parameters
+	// * fogParams: 0 0 1.5 2000
+	// * hfogParams: 10 20 0.5 0
+	// * fogColor: 0.11765 0.09804 0.01961 1.0
+	// src color = fog color
+	// uv0
+	// uv1
+	// uv2
+	// src alpha = ( 0.5 >= colorMap(uv0).a ? 0 : sat(fogXY(uv1).z * (-fogZ(uv2).z) + v0.w+1))
+
 
 	// Height fog.
 	vec4 hFogParams = engine.fogParams;
