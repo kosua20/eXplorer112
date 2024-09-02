@@ -52,15 +52,6 @@ void main(){
 		discard;
 	}
 
-	// TODO: Move decals in a separate post-lighting pass, srcColor * dstColor blend mode.
-	// Make decals more visible
-	if(material.type == MATERIAL_DECAL){
-		albedo.rgb *= 0.5;
-		// Use the fact that the blending will be min to avoid writing to normal/glossiness buffer.
-		normal = vec3(1000.0);
-		gloss = 10000.0;
-	}
-
 	if(engine.albedoMode == MODE_ALBEDO_UNIFORM){
 		albedo = vec4(engine.color.rgb, 1.0);
 	} else if(engine.albedoMode == MODE_ALBEDO_NORMAL){

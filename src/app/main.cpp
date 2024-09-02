@@ -419,6 +419,9 @@ int main(int argc, char ** argv) {
 	programPool.push_back(loadProgram("object_instanced_gbuffer", "object_instanced_gbuffer"));
 	Program* gbufferInstancedObject = programPool.back().program;
 
+	programPool.push_back(loadProgram("object_instanced_decal", "object_instanced_decal"));
+	Program* decalInstancedObject = programPool.back().program;
+
 	programPool.push_back(loadProgram("object_instanced_forward", "object_instanced_forward"));
 	Program* forwardInstancedObject = programPool.back().program;
 
@@ -1461,21 +1464,6 @@ int main(int argc, char ** argv) {
 					}
 				}
 
-				// Render decals on top with specific blending mode.
-				if(showDecals){
-					// Decal textures seem to have no alpha channel at all. White is used for background. Use min blending.
-					// Alternative possibility: src * dst, but this makes some decals appear as black squares.
-					GPU::setDepthState(true, TestFunction::GEQUAL, false);
-					GPU::setCullState(true);
-					GPU::setBlendState(true, BlendEquation::MIN, BlendFunction::ONE, BlendFunction::ONE);
-					for(uint mid = 0; mid < scene.meshInfos->size(); ++mid){
-						const uint materialIndex = (*scene.meshInfos)[mid].materialIndex;
-						if((*scene.materialInfos)[materialIndex].type != Object::Material::DECAL){
-							continue;
-						}
-						GPU::drawIndirectMesh(scene.globalMesh, *drawCommands, mid);
-					}
-				}
 			}
 
 			// Lighting
@@ -1498,17 +1486,41 @@ int main(int argc, char ** argv) {
 				GPU::dispatch( sceneLit.width, sceneLit.height, 1u);
 			}
 
+			GPU::bind(sceneLit, sceneDepth, LoadOperation::LOAD, LoadOperation::LOAD, LoadOperation::DONTCARE);
+			GPU::setViewport(sceneLit);
+			
+			// Render decals on top with specific blending mode, using src * dst
+			if(showDecals){
+
+				GPU::setPolygonState(PolygonMode::FILL);
+				GPU::setCullState(true);
+				GPU::setDepthState(true, TestFunction::GEQUAL, true);
+				GPU::setBlendState(true, BlendEquation::ADD, BlendFunction::DST_COLOR, BlendFunction::ZERO);
+
+				decalInstancedObject->use();
+				decalInstancedObject->buffer(frameInfos, 0);
+				decalInstancedObject->buffer(*scene.meshInfos, 1);
+				decalInstancedObject->buffer(*scene.instanceInfos, 2);
+				decalInstancedObject->buffer(*scene.materialInfos, 3);
+				decalInstancedObject->buffer(*drawInstances, 4);
+
+				if(showDecals){
+					for(uint mid = 0; mid < scene.meshInfos->size(); ++mid){
+						const uint materialIndex = (*scene.meshInfos)[mid].materialIndex;
+						if((*scene.materialInfos)[materialIndex].type != Object::Material::DECAL){
+							continue;
+						}
+						GPU::drawIndirectMesh(scene.globalMesh, *drawCommands, mid);
+					}
+				}
+			}
 			{
-				GPU::bind(sceneLit, sceneDepth, LoadOperation::LOAD, LoadOperation::LOAD, LoadOperation::DONTCARE);
-				GPU::setViewport(sceneLit);
 				GPU::setDepthState( true, TestFunction::GEQUAL, false );
 				GPU::setCullState( false );
 				GPU::setBlendState( true, BlendEquation::ADD, BlendFunction::SRC_ALPHA, BlendFunction::ONE_MINUS_SRC_ALPHA );
 				GPU::setColorState( true, true, true, false );
 				if(showTransparents){
 					// Alternative possibility: real alpha blend and object sorting.
-					
-
 					forwardInstancedObject->use();
 					forwardInstancedObject->buffer(frameInfos, 0);
 					forwardInstancedObject->buffer(*scene.meshInfos, 1);
