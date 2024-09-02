@@ -120,7 +120,7 @@ void applyLighting(vec3 screenPos, vec3 worldPos, vec3 viewDir, vec3 n, float gl
 			if(lightShadowIndex != NO_SHADOW){
 				
 				float f = dotNL * 0.5f + 0.5f;
-				float bias = 0.0005 * mix(10.0, 1.0, f);
+				float bias = 0.0005 * mix(10.0, 0.5, f);
 				vec3 lightSpacePos = vec3(projectedUV, projectedPos.z / projectedPos.w);
 				float shadowing = shadowPCF(lightSpacePos, lightShadowIndex, bias);
 				attenuation *= shadowing;

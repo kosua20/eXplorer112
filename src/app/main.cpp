@@ -1382,7 +1382,7 @@ int main(int argc, char ** argv) {
 						GPU::setViewport( shadowMaps );
 
 						GPU::setPolygonState( PolygonMode::FILL );
-						GPU::setCullState( true );
+						GPU::setCullState( false );
 						GPU::setDepthState( true, TestFunction::GEQUAL, true );
 						GPU::setBlendState( false );
 						GPU::setColorState( false, false, false, false );
