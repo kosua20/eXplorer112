@@ -450,7 +450,7 @@ int main(int argc, char ** argv) {
 
 	// Gbuffer
 	Texture sceneColor("sceneColor"), sceneNormal("sceneNormal"), sceneDepth("sceneDepth");
-	Texture::setupRendertarget(sceneColor, Layout::RGBA8, renderRes[0], renderRes[1]);
+	Texture::setupRendertarget(sceneColor, Layout::RGBA16F, renderRes[0], renderRes[1]);
 	Texture::setupRendertarget(sceneNormal, Layout::RGBA16F, renderRes[0], renderRes[1]);
 	Texture::setupRendertarget(sceneDepth, Layout::DEPTH_COMPONENT32F, renderRes[0], renderRes[1]);
 

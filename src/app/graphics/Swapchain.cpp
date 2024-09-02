@@ -46,7 +46,7 @@ void Swapchain::setup(uint32_t width, uint32_t height){
 
 	// Ideally RGBA8 with a sRGB display. //VK_FORMAT_R8G8B8A8_UNORM, VK_FORMAT_B8G8R8A8_SRGB
 	const VkColorSpaceKHR tgtColorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
-	const std::vector<VkFormat> tgtFormats = {VK_FORMAT_B8G8R8A8_SRGB, VK_FORMAT_R8G8B8A8_SRGB, VK_FORMAT_B8G8R8_SRGB, VK_FORMAT_R8G8B8_SRGB};
+	const std::vector<VkFormat> tgtFormats = { VK_FORMAT_B8G8R8A8_UNORM };// VK_FORMAT_B8G8R8A8_SRGB, VK_FORMAT_R8G8B8A8_SRGB, VK_FORMAT_B8G8R8_SRGB, VK_FORMAT_R8G8B8_SRGB };
 	VkSurfaceFormatKHR surfaceParams = {tgtFormats[0], tgtColorSpace};
 
 	// If only Undefined is present, we can use whatever we want.
