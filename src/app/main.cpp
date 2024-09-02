@@ -443,6 +443,8 @@ int main(int argc, char ** argv) {
 	programPool.push_back(loadProgram("lighting_gbuffer"));
 	Program* lightingCompute = programPool.back().program;
 
+	programPool.push_back(loadProgram("fog_gbuffer"));
+	Program* fogCompute = programPool.back().program;
 
 	UniformBuffer<FrameData> frameInfos(1, 64);
 	UniformBuffer<FrameData> shadowInfos(1, 2);
@@ -461,6 +463,9 @@ int main(int argc, char ** argv) {
 	Texture sceneLit("sceneLit");
 	Texture::setupRendertarget(sceneLit, Layout::RGBA16F, renderRes[0], renderRes[1]);
 
+	Texture sceneFog("sceneFog");
+	Texture::setupRendertarget(sceneFog, Layout::RGBA16F, renderRes[0], renderRes[1]);
+
 	// Bloom
 	uint bloomWidth = (uint)(renderRes[0])/2u;
 	uint bloomHeight = (uint)(renderRes[1])/2u;
@@ -469,10 +474,6 @@ int main(int argc, char ** argv) {
 	Texture bloom1("bloom1");
 	Texture::setupRendertarget(bloom0, Layout::RGBA16F, bloomWidth, bloomHeight);
 	Texture::setupRendertarget(bloom1, Layout::RGBA16F, bloomWidth, bloomHeight);
-	
-	// Post processing result
-	Texture sceneFinal("sceneFinal");
-	Texture::setupRendertarget(sceneFinal, Layout::RGBA8, renderRes[0], renderRes[1]);
 
 	Texture textureView("textureViewer");
 	Texture::setupRendertarget(textureView, Layout::RGBA8, 512, 512);
@@ -1124,7 +1125,7 @@ int main(int argc, char ** argv) {
 				sceneNormal.resize(renderRes);
 				sceneDepth.resize(renderRes);
 				sceneLit.resize(renderRes);
-				sceneFinal.resize(renderRes);
+				sceneFog.resize(renderRes);
 				bloom0.resize(glm::uvec2(renderRes)/2u );
 				bloom1.resize(glm::uvec2(renderRes)/2u );
 				lightClusters.resize(roundUp(renderRes[0], clusterDims.x), roundUp(renderRes[1], clusterDims.x), clusterDims.y);
@@ -1197,14 +1198,14 @@ int main(int argc, char ** argv) {
 			mainViewport.z = winSize.x;
 			mainViewport.w = winSize.y;
 
-			ImGui::ImageButton(sceneFinal, 0,0, ImVec2(winSize.x, winSize.y), ImVec2(0.0,0.0), ImVec2(1.0,1.0), 0);
+			ImGui::ImageButton(sceneLit, 0,0, ImVec2(winSize.x, winSize.y), ImVec2(0.0,0.0), ImVec2(1.0,1.0), 0);
 			if(ImGui::IsItemHovered()) {
 				ImGui::SetNextFrameWantCaptureMouse(false);
 				ImGui::SetNextFrameWantCaptureKeyboard(false);
 			}
 
 			// If the aspect ratio changed, trigger a resize.
-			const float ratioCurr = float(sceneFinal.width) / float(sceneFinal.height);
+			const float ratioCurr = float(sceneLit.width) / float(sceneLit.height);
 			const float ratioWin = winSize.x / winSize.y;
 			// \todo Derive a more robust threshold.
 			if(std::abs(ratioWin - ratioCurr) > 0.01f){
@@ -1213,7 +1214,7 @@ int main(int argc, char ** argv) {
 				sceneNormal.resize(renderRes);
 				sceneDepth.resize(renderRes);
 				sceneLit.resize(renderRes);
-				sceneFinal.resize(renderRes);
+				sceneFog.resize(renderRes);
 				bloom0.resize(glm::uvec2(renderRes)/2u);
 				bloom1.resize(glm::uvec2(renderRes)/2u);
 				lightClusters.resize(roundUp(renderRes[0], clusterDims.x), roundUp(renderRes[1], clusterDims.x), clusterDims.y);
@@ -1466,7 +1467,7 @@ int main(int argc, char ** argv) {
 
 			}
 
-			// Lighting
+			// Lighting and fog
 			{
 				lightingCompute->use();
 				lightingCompute->buffer(frameInfos, 0);
@@ -1477,20 +1478,28 @@ int main(int argc, char ** argv) {
 				lightingCompute->texture(sceneNormal, 1);
 				lightingCompute->texture(sceneDepth, 2);
 				lightingCompute->texture(sceneLit, 3);
-
-				lightingCompute->texture(fogXYTexture, 4);
-				lightingCompute->texture(fogZTexture, 5);
-				lightingCompute->texture(lightClusters, 6);
-				lightingCompute->texture(shadowMaps, 7);
+				lightingCompute->texture(lightClusters, 4);
+				lightingCompute->texture(shadowMaps, 5);
 
 				GPU::dispatch( sceneLit.width, sceneLit.height, 1u);
+
+				fogCompute->use();
+				fogCompute->buffer(frameInfos, 0);
+				fogCompute->texture(sceneDepth, 0);
+				fogCompute->texture(fogXYTexture, 1);
+				fogCompute->texture(fogZTexture, 2);
+				fogCompute->texture(sceneLit, 3);
+				fogCompute->texture(sceneFog, 4);
+
+				GPU::dispatch( sceneFog.width, sceneFog.height, 1u);
 			}
 
-			GPU::bind(sceneLit, sceneDepth, LoadOperation::LOAD, LoadOperation::LOAD, LoadOperation::DONTCARE);
-			GPU::setViewport(sceneLit);
 			
 			// Render decals on top with specific blending mode, using src * dst
 			if(showDecals){
+
+				GPU::bind(sceneFog, sceneDepth, LoadOperation::LOAD, LoadOperation::LOAD, LoadOperation::DONTCARE);
+				GPU::setViewport(sceneFog);
 
 				GPU::setPolygonState(PolygonMode::FILL);
 				GPU::setCullState(true);
@@ -1504,55 +1513,58 @@ int main(int argc, char ** argv) {
 				decalInstancedObject->buffer(*scene.materialInfos, 3);
 				decalInstancedObject->buffer(*drawInstances, 4);
 
-				if(showDecals){
-					for(uint mid = 0; mid < scene.meshInfos->size(); ++mid){
-						const uint materialIndex = (*scene.meshInfos)[mid].materialIndex;
-						if((*scene.materialInfos)[materialIndex].type != Object::Material::DECAL){
-							continue;
-						}
-						GPU::drawIndirectMesh(scene.globalMesh, *drawCommands, mid);
+				for(uint mid = 0; mid < scene.meshInfos->size(); ++mid){
+					const uint materialIndex = (*scene.meshInfos)[mid].materialIndex;
+					if((*scene.materialInfos)[materialIndex].type != Object::Material::DECAL){
+						continue;
 					}
+					GPU::drawIndirectMesh(scene.globalMesh, *drawCommands, mid);
 				}
 			}
-			{
+			if(showTransparents){
+				GPU::bind(sceneFog, sceneDepth, LoadOperation::LOAD, LoadOperation::LOAD, LoadOperation::DONTCARE);
+				GPU::setViewport(sceneFog);
+
 				GPU::setDepthState( true, TestFunction::GEQUAL, false );
 				GPU::setCullState( false );
 				GPU::setBlendState( true, BlendEquation::ADD, BlendFunction::SRC_ALPHA, BlendFunction::ONE_MINUS_SRC_ALPHA );
 				GPU::setColorState( true, true, true, false );
-				if(showTransparents){
-					// Alternative possibility: real alpha blend and object sorting.
-					forwardInstancedObject->use();
-					forwardInstancedObject->buffer(frameInfos, 0);
-					forwardInstancedObject->buffer(*scene.meshInfos, 1);
-					forwardInstancedObject->buffer(*scene.instanceInfos, 2);
-					forwardInstancedObject->buffer(*scene.materialInfos, 3);
-					forwardInstancedObject->buffer(*drawInstances, 4);
-					forwardInstancedObject->buffer(*scene.lightInfos, 5);
-					forwardInstancedObject->texture(fogXYTexture, 0);
-					forwardInstancedObject->texture(fogZTexture, 1);
-					forwardInstancedObject->texture(lightClusters, 2);
-					forwardInstancedObject->texture(shadowMaps, 3);
+
+				// Alternative possibility: real alpha blend and object sorting.
+				forwardInstancedObject->use();
+				forwardInstancedObject->buffer(frameInfos, 0);
+				forwardInstancedObject->buffer(*scene.meshInfos, 1);
+				forwardInstancedObject->buffer(*scene.instanceInfos, 2);
+				forwardInstancedObject->buffer(*scene.materialInfos, 3);
+				forwardInstancedObject->buffer(*drawInstances, 4);
+				forwardInstancedObject->buffer(*scene.lightInfos, 5);
+				forwardInstancedObject->texture(fogXYTexture, 0);
+				forwardInstancedObject->texture(fogZTexture, 1);
+				forwardInstancedObject->texture(lightClusters, 2);
+				forwardInstancedObject->texture(shadowMaps, 3);
 
 
-					for(uint mid = 0; mid < scene.meshInfos->size(); ++mid){
-						const uint materialIndex = (*scene.meshInfos)[mid].materialIndex;
-						if((*scene.materialInfos)[materialIndex].type != Object::Material::TRANSPARENT){
-							continue;
-						}
-						GPU::drawIndirectMesh(scene.globalMesh, *drawCommands, mid);
+				for(uint mid = 0; mid < scene.meshInfos->size(); ++mid){
+					const uint materialIndex = (*scene.meshInfos)[mid].materialIndex;
+					if((*scene.materialInfos)[materialIndex].type != Object::Material::TRANSPARENT){
+						continue;
 					}
+					GPU::drawIndirectMesh(scene.globalMesh, *drawCommands, mid);
 				}
-
+			}
+			{
 				// Postprocess stack
 				{
+					GPU::setDepthState(false);
+					GPU::setCullState(true);
+					GPU::setColorState(true, true, true, true);
+					GPU::setBlendState( false );
+					GPU::setPolygonState(PolygonMode::FILL);
+
 					// Bloom
 					if(showBloom){
-						GPU::setDepthState(false);
-						GPU::setCullState(true);
-						GPU::setColorState(true, true, true, true);
-						GPU::setPolygonState(PolygonMode::FILL);
 
-						GPU::blit(sceneLit, bloom0, 0, 0, Filter::LINEAR);
+						GPU::blit(sceneFog, bloom0, 0, 0, Filter::LINEAR);
 						GPU::setViewport(0, 0, bloom0.width, bloom0.height);
 
 						for(uint blurStep = 0; blurStep < bloomBlurSteps; ++blurStep){
@@ -1572,14 +1584,14 @@ int main(int argc, char ** argv) {
 
 					// Grain
 					{
-						GPU::bind(sceneFinal, LoadOperation::DONTCARE);
-						GPU::setViewport(sceneFinal);
+						GPU::bind(sceneLit, LoadOperation::DONTCARE);
+						GPU::setViewport(sceneLit);
 						GPU::setDepthState(false);
 						GPU::setCullState(true);
 						GPU::setColorState(true, true, true, true);
 						GPU::setPolygonState(PolygonMode::FILL);
 						noiseGrainQuad->use();
-						noiseGrainQuad->texture(sceneLit, 0);
+						noiseGrainQuad->texture(sceneFog, 0);
 						noiseGrainQuad->texture(bloom0, 1);
 						noiseGrainQuad->texture(noiseTexture, 2);
 						noiseGrainQuad->buffer(frameInfos, 0);
@@ -1608,8 +1620,8 @@ int main(int argc, char ** argv) {
 						}
 					}
 
-					GPU::bind(sceneFinal, sceneDepth, LoadOperation::LOAD, LoadOperation::LOAD, LoadOperation::DONTCARE);
-					GPU::setViewport(sceneFinal);
+					GPU::bind(sceneLit, sceneDepth, LoadOperation::LOAD, LoadOperation::LOAD, LoadOperation::DONTCARE);
+					GPU::setViewport(sceneLit);
 					coloredDebugDraw->use();
 					coloredDebugDraw->buffer( frameInfos, 0 );
 
@@ -1678,7 +1690,7 @@ int main(int argc, char ** argv) {
 
 
 		} else {
-			GPU::clearTexture(sceneFinal, glm::vec4(0.2f, 0.2f, 0.2f, 1.0f));
+			GPU::clearTexture(sceneLit, glm::vec4(0.2f, 0.2f, 0.2f, 1.0f));
 		}
 
 		if(selected.texture >= 0){

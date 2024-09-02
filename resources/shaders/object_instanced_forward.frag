@@ -35,6 +35,7 @@ layout(set = 3, binding = 0) uniform texture2DArray textures[]; ///< Color textu
 layout(location = 0) out vec4 fragColor; ///< Color.
 
 #include "lighting.glsl"
+#include "fog.glsl"
 
 /** Texture each face. */
 void main(){

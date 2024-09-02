@@ -17,10 +17,8 @@ layout(set = 2, binding = 1, rgba16f) uniform readonly image2D sceneNormal;
 layout(set = 2, binding = 2) uniform texture2D  sceneDepth;
 layout(set = 2, binding = 3, rgba16f) uniform writeonly image2D sceneLit;
 
-layout(set = 2, binding = 4) uniform texture2D fogXYMap;
-layout(set = 2, binding = 5) uniform texture2D fogZMap;
-layout(set = 2, binding = 6, rgba32ui) uniform readonly uimage3D lightClusters;
-layout(set = 2, binding = 7) uniform texture2DArray shadowMaps;
+layout(set = 2, binding = 4, rgba32ui) uniform readonly uimage3D lightClusters;
+layout(set = 2, binding = 5) uniform texture2DArray shadowMaps;
 
 layout(set = 3, binding = 0) uniform texture2DArray textures[]; ///< Color textures.
 
@@ -34,8 +32,6 @@ vec3 viewPositionFromDepth(float depth, vec2 pix){
 	vec3 viewPos = vec3(-ndcPos * viewDepth / vec2(engine.p[0][0], engine.p[1][1]) , viewDepth);
 	return vec3(engine.iv * vec4(viewPos, 1.0));
 }
-
-
 
 void main(){
 	// Safety exit.
@@ -74,11 +70,6 @@ void main(){
 	}
 
 	vec3 finalColor = (diffuse + ambient) * albedo.rgb + specular;
-
-	// Fog
-	float fogFactor = applyFog(worldPos.y, viewDir);
-	finalColor = mix(finalColor, engine.fogColor.rgb, fogFactor);
-
 	imageStore(sceneLit, pixelCoord, vec4(finalColor, 1.0));
 }
 
