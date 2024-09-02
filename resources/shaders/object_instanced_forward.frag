@@ -53,7 +53,7 @@ void main(){
 	TextureInfos albedoMap = material.color;
 	vec4 albedo = texture(sampler2DArray(textures[albedoMap.index], sRepeatLinearLinear), vec3(In.uv.xy, albedoMap.layer));
 	// Gamma conversion
-	albedo.rgb = gammaToLinear(albedo.rgb);
+	//albedo.rgb = gammaToLinear(albedo.rgb);
 
 	// Override albedo.
 	vec4 color = engine.color;
