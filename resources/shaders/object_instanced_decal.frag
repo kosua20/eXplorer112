@@ -34,5 +34,10 @@ void main(){
 	if(engine.albedoMode == MODE_ALBEDO_UNIFORM || engine.albedoMode == MODE_ALBEDO_NORMAL){
 		albedo.rgb = vec3(1.0);
 	}
+
+	// Hack to avoid ugly overlaps.
+	if(all(greaterThan(albedo.rgb, vec3(0.90)))){
+		discard;
+	}
 	fragColor = vec4(albedo.rgb, 1.0);
 }

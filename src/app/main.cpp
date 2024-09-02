@@ -1467,7 +1467,7 @@ int main(int argc, char ** argv) {
 
 			}
 
-			// Lighting and fog
+			// Lighting
 			{
 				lightingCompute->use();
 				lightingCompute->buffer(frameInfos, 0);
@@ -1482,24 +1482,12 @@ int main(int argc, char ** argv) {
 				lightingCompute->texture(shadowMaps, 5);
 
 				GPU::dispatch( sceneLit.width, sceneLit.height, 1u);
-
-				fogCompute->use();
-				fogCompute->buffer(frameInfos, 0);
-				fogCompute->texture(sceneDepth, 0);
-				fogCompute->texture(fogXYTexture, 1);
-				fogCompute->texture(fogZTexture, 2);
-				fogCompute->texture(sceneLit, 3);
-				fogCompute->texture(sceneFog, 4);
-
-				GPU::dispatch( sceneFog.width, sceneFog.height, 1u);
 			}
 
-			
-			// Render decals on top with specific blending mode, using src * dst
+			// Render unlit decals on top with specific blending mode, using src * dst
 			if(showDecals){
-
-				GPU::bind(sceneFog, sceneDepth, LoadOperation::LOAD, LoadOperation::LOAD, LoadOperation::DONTCARE);
-				GPU::setViewport(sceneFog);
+				GPU::bind(sceneLit, sceneDepth, LoadOperation::LOAD, LoadOperation::LOAD, LoadOperation::DONTCARE);
+				GPU::setViewport(sceneLit);
 
 				GPU::setPolygonState(PolygonMode::FILL);
 				GPU::setCullState(true);
@@ -1521,6 +1509,22 @@ int main(int argc, char ** argv) {
 					GPU::drawIndirectMesh(scene.globalMesh, *drawCommands, mid);
 				}
 			}
+			
+			// Fog
+			{
+				fogCompute->use();
+				fogCompute->buffer(frameInfos, 0);
+				fogCompute->texture(sceneDepth, 0);
+				fogCompute->texture(fogXYTexture, 1);
+				fogCompute->texture(fogZTexture, 2);
+				fogCompute->texture(sceneLit, 3);
+				fogCompute->texture(sceneFog, 4);
+
+				GPU::dispatch( sceneFog.width, sceneFog.height, 1u);
+			}
+
+			
+
 			if(showTransparents){
 				GPU::bind(sceneFog, sceneDepth, LoadOperation::LOAD, LoadOperation::LOAD, LoadOperation::DONTCARE);
 				GPU::setViewport(sceneFog);
