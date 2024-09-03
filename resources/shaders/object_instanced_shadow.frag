@@ -31,7 +31,7 @@ void main(){
 	float alpha = texture(sampler2DArray(textures[albedoMap.index], sRepeatLinearLinear), vec3(In.uv.xy, albedoMap.layer)).a;
 
 	// Alpha test.
-	if(alpha < 0.05){
+	if(alpha < 0.5){
 		discard;
 	}
 

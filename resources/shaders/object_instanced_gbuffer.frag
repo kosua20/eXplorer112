@@ -48,7 +48,7 @@ void main(){
 	//albedo.rgb = gammaToLinear(albedo.rgb);
 	
 	// Alpha test.
-	if(albedo.a < 0.05){
+	if(albedo.a < 0.5){
 		discard;
 	}
 
