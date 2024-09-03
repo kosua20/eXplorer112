@@ -1491,7 +1491,7 @@ int main(int argc, char ** argv) {
 
 				GPU::setPolygonState(PolygonMode::FILL);
 				GPU::setCullState(true);
-				GPU::setDepthState(true, TestFunction::GEQUAL, true);
+				GPU::setDepthState(true, TestFunction::GEQUAL, false);
 				GPU::setBlendState(true, BlendEquation::ADD, BlendFunction::DST_COLOR, BlendFunction::ZERO);
 
 				decalInstancedObject->use();
