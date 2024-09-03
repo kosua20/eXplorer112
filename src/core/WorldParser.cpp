@@ -245,7 +245,7 @@ void World::processEntity(const pugi::xml_node& entity, const glm::mat4& globalF
 		// Fallback based on radii if angle is null for a spotlight.
 		if( ( light.type == Light::SPOT ) && ( light.angle < 0.001f ) )
 		{
-			Log::info( "Detected spot light with small angle (%.f), falling back to point light.", light.angle );
+			Log::verbose( "Detected spot light with small angle (%.f), falling back to point light.", light.angle );
 			glm::vec2 angles = glm::atan2(glm::vec2(light.radius.z), glm::vec2(light.radius));
 			angles = glm::abs(angles);
 			light.angle = std::max( angles.x, angles.y );
