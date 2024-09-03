@@ -81,7 +81,7 @@ void main(){
 	vec3 finalColor = (diffuse + ambient) * color.rgb + specular;
 
 	// Fog
-	float fogFactor = applyFog(In.worldPos.y, In.viewDir.xyz);
+	float fogFactor = applyFog(In.worldPos.y, -In.viewDir.xyz);
 	finalColor = mix(finalColor, engine.fogColor.rgb, fogFactor);
 
 	fragColor = vec4(finalColor, color.a);

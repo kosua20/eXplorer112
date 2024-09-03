@@ -151,3 +151,12 @@ vec3 gammaToLinear(vec3 gamma){
 vec3 linearToGamma(vec3 linear){
 	return mix(12.92 * linear, 1.055 * pow(linear, vec3(1.0/2.4)) - 0.055, lessThanEqual(linear, vec3(0.0031308)));
 }
+
+vec3 worldPositionFromDepth(float depth, vec2 pix){
+	// Linearize depth -> in view space.
+	float viewDepth =  -engine.p[3][2] / (depth + engine.p[2][2]);
+	// Compute the x and y components in view space.
+	vec2 ndcPos = 2.0 * (pix / engine.resolution.xy) - 1.0;
+	vec3 viewPos = vec3(-ndcPos * viewDepth / vec2(engine.p[0][0], engine.p[1][1]) , viewDepth);
+	return vec3(engine.iv * vec4(viewPos, 1.0));
+}
