@@ -1,7 +1,7 @@
 #extension GL_EXT_nonuniform_qualifier : enable
 
-#include "samplers.glsl"
-#include "engine.glsl"
+#include "../engine/samplers.glsl"
+#include "../engine/engine.glsl"
 
 layout(location = 0) in INTERFACE {
 	mat4 tbn; ///< Normal to view matrix.

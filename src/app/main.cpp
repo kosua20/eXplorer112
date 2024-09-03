@@ -404,7 +404,7 @@ int main(int argc, char ** argv) {
 
 	std::vector<ProgramInfos> programPool;
 
-	programPool.push_back(loadProgram("texture_passthrough", "texture_debug"));
+	programPool.push_back(loadProgram("texture_passthrough", "debug/texture_debug"));
 	Program* textureDebugQuad = programPool.back().program;
 
 	programPool.push_back(loadProgram("texture_passthrough", "postprocess_noise"));
@@ -413,25 +413,25 @@ int main(int argc, char ** argv) {
 	programPool.push_back(loadProgram("texture_passthrough", "postprocess_blur"));
 	Program* bloomBlur = programPool.back().program;
 
-	programPool.push_back(loadProgram("object_color", "object_color"));
+	programPool.push_back(loadProgram("debug/object_color", "debug/object_color"));
 	Program* coloredDebugDraw = programPool.back().program;
 
-	programPool.push_back(loadProgram("object_instanced_gbuffer", "object_instanced_gbuffer"));
+	programPool.push_back(loadProgram("objects/object_instanced_gbuffer", "objects/object_instanced_gbuffer"));
 	Program* gbufferInstancedObject = programPool.back().program;
 
-	programPool.push_back(loadProgram("object_instanced_decal", "object_instanced_decal"));
+	programPool.push_back(loadProgram("objects/object_instanced_decal", "objects/object_instanced_decal"));
 	Program* decalInstancedObject = programPool.back().program;
 
-	programPool.push_back(loadProgram("object_instanced_forward", "object_instanced_forward"));
+	programPool.push_back(loadProgram("objects/object_instanced_forward", "objects/object_instanced_forward"));
 	Program* forwardInstancedObject = programPool.back().program;
 
-	programPool.push_back(loadProgram("object_instanced_shadow", "object_instanced_shadow"));
+	programPool.push_back(loadProgram("objects/object_instanced_shadow", "objects/object_instanced_shadow"));
 	Program* shadowInstancedObject = programPool.back().program;
 
-	programPool.push_back(loadProgram("object_instanced_debug", "object_instanced_debug"));
+	programPool.push_back(loadProgram("objects/object_instanced_debug", "objects/object_instanced_debug"));
 	Program* debugInstancedObject = programPool.back().program;
 
-	programPool.push_back(loadProgram("object_instanced_selection", "object_instanced_selection"));
+	programPool.push_back(loadProgram("objects/object_instanced_selection", "objects/object_instanced_selection"));
 	Program* selectionObject = programPool.back().program;
 
 	programPool.push_back(loadProgram("draw_arguments_all"));
@@ -1442,20 +1442,20 @@ int main(int argc, char ** argv) {
 				GPU::bind(sceneColor, sceneNormal, sceneDepth, clearColor, 0.0f, LoadOperation::DONTCARE);
 				GPU::setViewport(sceneColor);
 
-				GPU::setPolygonState(PolygonMode::FILL);
-				GPU::setCullState(true);
-				GPU::setDepthState(true, TestFunction::GEQUAL, true);
-				GPU::setBlendState(false);
-				GPU::setColorState(true, true, true, true);
-
-				gbufferInstancedObject->use();
-				gbufferInstancedObject->buffer(frameInfos, 0);
-				gbufferInstancedObject->buffer(*scene.meshInfos, 1);
-				gbufferInstancedObject->buffer(*scene.instanceInfos, 2);
-				gbufferInstancedObject->buffer(*scene.materialInfos, 3);
-				gbufferInstancedObject->buffer(*drawInstances, 4);
-
 				if(showOpaques){
+					GPU::setPolygonState(PolygonMode::FILL);
+					GPU::setCullState(true);
+					GPU::setDepthState(true, TestFunction::GEQUAL, true);
+					GPU::setBlendState(false);
+					GPU::setColorState(true, true, true, true);
+
+					gbufferInstancedObject->use();
+					gbufferInstancedObject->buffer(frameInfos, 0);
+					gbufferInstancedObject->buffer(*scene.meshInfos, 1);
+					gbufferInstancedObject->buffer(*scene.instanceInfos, 2);
+					gbufferInstancedObject->buffer(*scene.materialInfos, 3);
+					gbufferInstancedObject->buffer(*drawInstances, 4);
+
 					for(uint mid = 0; mid < scene.meshInfos->size(); ++mid){
 						const uint materialIndex = (*scene.meshInfos)[mid].materialIndex;
 						if((*scene.materialInfos)[materialIndex].type != Object::Material::OPAQUE){
@@ -1464,7 +1464,6 @@ int main(int argc, char ** argv) {
 						GPU::drawIndirectMesh(scene.globalMesh, *drawCommands, mid);
 					}
 				}
-
 			}
 
 			// Lighting
@@ -1522,8 +1521,6 @@ int main(int argc, char ** argv) {
 
 				GPU::dispatch( sceneFog.width, sceneFog.height, 1u);
 			}
-
-			
 
 			if(showTransparents){
 				GPU::bind(sceneFog, sceneDepth, LoadOperation::LOAD, LoadOperation::LOAD, LoadOperation::DONTCARE);

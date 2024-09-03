@@ -1,7 +1,7 @@
 #extension GL_EXT_nonuniform_qualifier : enable
 
-#include "samplers.glsl"
-#include "engine.glsl"
+#include "../engine/samplers.glsl"
+#include "../engine/engine.glsl"
 
 layout(location = 0) in INTERFACE {
 	mat4 tbn; ///< Normal to view matrix.
@@ -34,8 +34,8 @@ layout(set = 3, binding = 0) uniform texture2DArray textures[]; ///< Color textu
 
 layout(location = 0) out vec4 fragColor; ///< Color.
 
-#include "lighting.glsl"
-#include "fog.glsl"
+#include "../engine/lighting.glsl"
+#include "../engine/fog.glsl"
 
 /** Texture each face. */
 void main(){
@@ -75,7 +75,7 @@ void main(){
 		diffuse  = vec3(0.0);
 		specular = vec3(0.0);
 
-		applyLighting(gl_FragCoord.xyz, In.worldPos.xyz, In.viewDir.xyz, n, normalAndR.a, diffuse, specular);
+		applyLighting(gl_FragCoord.xyz, In.worldPos.xyz, In.viewDir.xyz, n, normalAndR.a, false, diffuse, specular);
 	}
 
 	vec3 finalColor = (diffuse + ambient) * color.rgb + specular;

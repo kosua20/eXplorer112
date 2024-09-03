@@ -4,7 +4,7 @@ float applyFog(float worldHeight, vec3 camToPos){
 	// Height fog.
 	vec4 hFogParams = engine.fogParams;
 	float heightFog = hFogParams.z * (hFogParams.x - worldHeight) / hFogParams.y;
-	heightFog =  clamp(heightFog, 0.0, 1.0);
+	heightFog = clamp(heightFog, 0.0, 1.0); // COLOR outputs are clamped in shader models 1_4 and 2_0.
 
 	// Depth fog.
 	vec3 viewDirFog = engine.fogDensity * ( camToPos ) / (2000.0);

@@ -1,7 +1,7 @@
 
 #extension GL_EXT_nonuniform_qualifier : enable
-#include "samplers.glsl"
-#include "engine.glsl"
+#include "engine/samplers.glsl"
+#include "engine/engine.glsl"
 
 layout(local_size_x=8, local_size_y=8, local_size_z=1) in;
 
@@ -22,7 +22,7 @@ layout(set = 2, binding = 5) uniform texture2DArray shadowMaps;
 
 layout(set = 3, binding = 0) uniform texture2DArray textures[]; ///< Color textures.
 
-#include "lighting.glsl"
+#include "engine/lighting.glsl"
 
 void main(){
 	// Safety exit.
@@ -56,7 +56,7 @@ void main(){
 		diffuse  = vec3(0.0);
 		specular = vec3(0.0);
 
-		applyLighting(screenPos, worldPos, viewDir, n, normalAndR.a, diffuse, specular);
+		applyLighting(screenPos, worldPos, viewDir, n, normalAndR.a, true, diffuse, specular);
 
 	}
 

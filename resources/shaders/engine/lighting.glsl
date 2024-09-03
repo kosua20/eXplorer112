@@ -47,7 +47,7 @@ float shadowPCF(vec3 lightSpacePosition, uint layer, float bias){
 }
 
 
-void applyLighting(vec3 screenPos, vec3 worldPos, vec3 viewDir, vec3 n, float gloss, out vec3 diffuse, out vec3 specular){
+void applyLighting(vec3 screenPos, vec3 worldPos, vec3 viewDir, vec3 n, float gloss, bool allowShadows, out vec3 diffuse, out vec3 specular){
 
 	diffuse = vec3(0.0);
 	specular = vec3(0.0);
@@ -86,7 +86,7 @@ void applyLighting(vec3 screenPos, vec3 worldPos, vec3 viewDir, vec3 n, float gl
 			float dotNL = dot(l, n);
 
 			mat4 projMatrix = light.vp;
-			uint lightShadowIndex = light.shadow;
+			uint lightShadowIndex = allowShadows ? light.shadow : NO_SHADOW;
 
 			if(lightType == 1 && lightShadowIndex != NO_SHADOW){
 				// Translate point in light centered space.

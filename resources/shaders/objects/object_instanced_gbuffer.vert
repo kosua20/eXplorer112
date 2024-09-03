@@ -1,5 +1,5 @@
 
-#include "engine.glsl"
+#include "../engine/engine.glsl"
 
 // Attributes
 layout(location = 0) in vec3 v;///< Position.
@@ -14,8 +14,6 @@ layout(push_constant) uniform constants {
 
 layout(location = 0) out INTERFACE {
 	mat4 tbn; ///< Normal to view matrix.
-	vec4 worldPos;
-	vec4 viewDir;
 	vec4 uv; ///< Texture coordinates.
 } Out;
 
@@ -41,10 +39,7 @@ void main(){
 
 	vec4 worldPos = instance.frame * vec4(v, 1.0);
 	gl_Position = engine.vp * worldPos;
-	Out.worldPos = worldPos;
 	Out.uv.xy = uv;
-
-	Out.viewDir.xyz = (engine.camPos.xyz - worldPos.xyz);
 
 	// Compute the TBN matrix (from tangent space to view space). Could be stored ahead of time or written by command generation shader if view matrix needs to be taken into account.
 	mat3 nMat = inverse(transpose(mat3(instance.frame)));

@@ -1,4 +1,4 @@
-#include "samplers.glsl"
+#include "engine/samplers.glsl"
 
 layout(location = 0) in INTERFACE {
 	vec2 uv; ///< UV coordinates.

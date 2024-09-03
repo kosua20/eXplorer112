@@ -1,6 +1,5 @@
-#include "samplers.glsl"
-
-#include "engine.glsl"
+#include "engine/samplers.glsl"
+#include "engine/engine.glsl"
 
 
 layout(location = 0) in INTERFACE {

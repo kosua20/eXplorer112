@@ -1,7 +1,7 @@
 #extension GL_EXT_nonuniform_qualifier : enable
 
-#include "samplers.glsl"
-#include "engine.glsl"
+#include "../engine/samplers.glsl"
+#include "../engine/engine.glsl"
 
 layout(location = 0) in INTERFACE {
 	vec4 uv;
@@ -27,13 +27,12 @@ layout(location = 0) out vec4 fragColor; ///< Color.
 void main(){
 	MaterialInfos material =  materialInfos[meshInfos[DrawIndex].materialIndex];
 
-	// Albedo
 	TextureInfos albedoMap = material.color;
-	vec4 albedo = texture(sampler2DArray(textures[albedoMap.index], sRepeatLinearLinear), vec3(In.uv.xy, albedoMap.layer));
+	float alpha = texture(sampler2DArray(textures[albedoMap.index], sRepeatLinearLinear), vec3(In.uv.xy, albedoMap.layer)).a;
 
-	if(engine.albedoMode == MODE_ALBEDO_UNIFORM || engine.albedoMode == MODE_ALBEDO_NORMAL){
-		albedo.rgb = vec3(1.0);
+	// Alpha test.
+	if(alpha < 0.5){
+		discard;
 	}
 
-	fragColor = vec4(albedo.rgb, 1.0);
 }
