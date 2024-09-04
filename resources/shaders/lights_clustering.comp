@@ -1,7 +1,7 @@
 
 #include "engine/engine.glsl"
 
-layout(local_size_x=1, local_size_y=1, local_size_z=1) in;
+layout(local_size_x=4, local_size_y=4, local_size_z=4) in;
 
 layout(std140, set = 0, binding = 1) readonly buffer LightInfosBuffer {
 	LightInfos lightInfos[];
