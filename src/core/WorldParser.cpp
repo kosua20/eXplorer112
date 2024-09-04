@@ -93,7 +93,7 @@ World::World(const Object& object){
 	light.radius = glm::vec3(glm::length(bbox.getSize()));
 	light.angle = 0.0f;
 	light.shadow = true;
-	light.material = Light::NO_MATERIAL;
+	light.material = Object::Material::NO_MATERIAL;
 }
 
 std::string getEntityAttribute(const pugi::xml_node& entity, const char* key){
@@ -137,6 +137,131 @@ glm::mat4 getEntityFrame(const pugi::xml_node& entity){
 	* glm::scale(glm::mat4(1.0f), scale);
 
 	return frame;
+}
+
+
+std::string getMaterialTexture(const std::string& inMaterialStr, const fs::path& resourcePath){
+
+	if(inMaterialStr.empty()){
+		return "";
+	}
+
+	std::string materialStr(inMaterialStr);
+	TextUtilities::replace(materialStr, "\\", "/");
+	materialStr = TextUtilities::trim(materialStr, "/");
+
+	const fs::path materialPath = materialStr;
+	const std::string extension = TextUtilities::lowercase(materialPath.filename().extension().string());
+	// Two possibilities: either a texture file, or a material definition.
+	// In both cases we want to retrieve a non-empty texture name.
+	std::string textureName;
+
+	if(extension == ".mtl"){
+		// Load the mtl XML file.
+		const fs::path mtlPath = resourcePath / materialPath;
+		pugi::xml_document mtlDef;
+		if(mtlDef.load_file(mtlPath.c_str())){
+			pugi::xml_node frame = mtlDef.child("matDef").child("framelist").first_child();
+			// Extract texture name, assume it is unique.
+			std::string textureStr = frame.attribute("sourcename").value();
+			if(!textureStr.empty()){
+				TextUtilities::replace(textureStr, "\\", "/");
+				const fs::path texturePath = TextUtilities::trim(textureStr, "/");
+				textureName = texturePath.filename().replace_extension().string();
+			}
+		} else {
+			Log::error("Unable to load mtl file at path %s", mtlPath.string().c_str());
+		}
+
+	} else if(extension == ".tga" || extension == ".dds" || extension == ".png"){
+		textureName = materialPath.filename().replace_extension().string();
+	}
+	return textureName;
+}
+
+uint World::registerTextureMaterial(Object::Material::Type type, const std::string& textureName){
+	if(textureName.empty()){
+		return Object::Material::NO_MATERIAL;
+	}
+
+	Object::Material material;
+	material.color = textureName;
+	material.normal = "";
+	material.type = type;
+
+	// Insert material in list, except if already present.
+	const uint matCount = (uint)_materials.size();
+	uint mid = 0;
+	for(; mid < matCount; ++mid){
+		if(_materials[mid] == material){
+			break;
+		}
+	}
+	if(mid == matCount){
+		_materials.push_back(material);
+	}
+	return mid;
+}
+
+
+BoundingBox getFxDefParams(const std::string& inFxDefPath, const fs::path& resourcePath){
+
+	if(inFxDefPath.empty()){
+		return {};
+	}
+
+	std::string fxDefStr(inFxDefPath);
+	TextUtilities::replace(fxDefStr, "\\", "/");
+	fxDefStr = TextUtilities::trim(fxDefStr, "/");
+
+	// Load the mtl XML file.
+	const fs::path fxDefPath = resourcePath / fxDefStr;
+	pugi::xml_document fxDef;
+	pugi::xml_parse_result res = fxDef.load_file(fxDefPath.c_str(), pugi::parse_full);
+
+	if(!res){
+		Log::error("Unable to load fxDef file at path %s: %s", fxDefPath.string().c_str(), res.description());
+		return {};
+	}
+
+	const auto& emitters = fxDef.child("fxDef").child("emitters");
+	BoundingBox bbox;
+	for(const auto& emitter : emitters.children("emitter")){
+		//"position" and "rotation" always zero
+
+		std::string materialStr = emitter.find_child_by_attribute("name", "material").child_value();
+		materialStr = TextUtilities::trim(materialStr, "\"");
+		const std::string textureName = getMaterialTexture(materialStr, resourcePath);
+		//const uint materialId = registerTextureMaterial(Object::Material::BILLBOARD, textureName);
+		Log::info("* %s", textureName.c_str());
+
+		const char* minDimStr =  emitter.find_child_by_attribute("name", "dimension_min").child_value();
+		const char* maxDimStr =  emitter.find_child_by_attribute("name", "dimension_max").child_value();
+		const glm::vec3 minDim = Area::parseVec3(minDimStr, glm::vec3(0.f));
+		const glm::vec3 maxDim = Area::parseVec3(maxDimStr, glm::vec3(0.f));
+		bbox.merge(minDim);
+		bbox.merge(maxDim);
+		 /*
+		<param name="type" data="int">2</param>
+		<param name="particletype" data="int">0</param>
+		<param name="material" data="string">"textures\effects\ponpon_02.DDS"</param>
+		<param name="tanksize" data="int">400</param>
+		<param name="timing" data="real[2]">(0.800, 2.500)</param>
+		<param name="size" data="real[2]">(0.500, 1.000)</param>
+		<param name="angle" data="real[2]">(-70.000, 70.000)</param>
+		<param name="velocity" data="real[2]">(-1.000, -1.000)</param>
+		<param name="rollspeed" data="real[2]">(1500.000, 150.000)</param>
+		<param name="dimension_min" data="real[3]">(-100.000 -250.000 -150.000)</param>
+		<param name="dimension_max" data="real[3]">(100.000 0.000 150.000)</param>
+		<param name="color_min" data="real[4]">(0.250 0.250 0.000 1.000)</param>
+		<param name="color_max" data="real[4]">(0.300 0.250 0.000 1.000)</param>
+		<param name="radius" data="real">0.000</param>
+		<param name="regenrate" data="real">400.000</param>
+		<param name="blending" data="int">1</param>
+		 */
+	}
+	Log::info(" bbox: %f,%f,%f %f,%f,%f", bbox.minis[0], bbox.minis[1], bbox.minis[2], bbox.maxis[0],bbox.maxis[1],bbox.maxis[2]);
+	return bbox;
 }
 
 void World::processEntity(const pugi::xml_node& entity, const glm::mat4& globalFrame, bool templated, const fs::path& resourcePath, ObjectReferenceList& objectRefs, EntityFrameList& entitiesList){
@@ -211,7 +336,7 @@ void World::processEntity(const pugi::xml_node& entity, const glm::mat4& globalF
 
 	// We can't early exit earlier because of linking.
 	if((type != "actor") && (type != "door") && (type != "creature")
-	   && (type != "light") && (type != "camera") && (type != "solid") && (type != "particle") ){
+	   && (type != "light") && (type != "camera") && (type != "solid") && (type != "particle")&& (type != "fx") ){
 		return;
 	}
 
@@ -220,10 +345,43 @@ void World::processEntity(const pugi::xml_node& entity, const glm::mat4& globalF
 	//	return;
 	//}
 
-	if(type == "particle"){
-		Log::info("Particle system");
-		_particles.emplace_back();
-		// No model associated for now.
+	if(type == "particle" || type == "fx"){
+		// Two types of FX
+
+		const char* fxTypeStr = entity.find_child_by_attribute("name", "fxType").child_value();
+		const int fxType = Area::parseInt(fxTypeStr, 0);
+
+		if(fxType == 9){
+			// Billboard
+			// Type: 0,1,3
+			const char* billboardTypeStr = entity.find_child_by_attribute("name", "billboardType").child_value();
+			const int billboardType = Area::parseInt(billboardTypeStr, 0);
+
+			const char* blendingStr = entity.find_child_by_attribute("name", "blending").child_value();
+			const int blending = Area::parseInt(blendingStr, 0);
+
+			const char* widthStr = entity.find_child_by_attribute("name", "width").child_value();
+			const float width = Area::parseFloat(widthStr, 1.f);
+			const char* heightStr = entity.find_child_by_attribute("name", "height").child_value();
+			const float height = Area::parseFloat(heightStr, 1.f);
+
+			const char* colorStr = entity.find_child_by_attribute("name", "color").child_value();
+			const glm::vec3 color = Area::parseVec3(colorStr, glm::vec3(1.0f));
+
+			const std::string materialStr = getEntityAttribute(entity, "material");
+			const std::string textureName = getMaterialTexture(materialStr, resourcePath);
+			const uint materialId = registerTextureMaterial(Object::Material::BILLBOARD, textureName);
+
+			Log::info("Billboard %s: %d,%d, %fx%f, %s, %f,%f,%f", objName.c_str(), billboardType, blending, width, height, textureName.c_str(), color[0], color[1], color[2]);
+		} else if(fxType == 7){
+			// System
+			// Immediately retrieve fxDef path.
+			std::string fxDefPathStr = getEntityAttribute(entity, "sourceName");
+			Log::info("Particle %s: %s", objName.c_str(), fxDefPathStr.c_str());
+			BoundingBox bbox = getFxDefParams(fxDefPathStr, resourcePath);
+
+		}
+		// No model associated, exit.
 		return;
 	}
 
@@ -244,7 +402,6 @@ void World::processEntity(const pugi::xml_node& entity, const glm::mat4& globalF
 		light.type = (Light::Type)lightType;
 
 		light.color = Area::parseVec3(getLightAttribute(entity, lightChild, "color"), glm::vec3(1.0f));
-
 		light.radius = Area::parseVec3(getLightAttribute(entity, lightChild, "radius"), glm::vec3(10000.0f));
 
 		const char* coneTypeStr = getLightAttribute(entity, lightChild, "coneAngle");
@@ -263,60 +420,10 @@ void World::processEntity(const pugi::xml_node& entity, const glm::mat4& globalF
 		}
 		const char* shadowStr = getLightAttribute(entity, lightChild, "shadow");
 		light.shadow = Area::parseBool(shadowStr);
-		
-		light.material = Light::NO_MATERIAL;
-		std::string materialStr = getLightAttribute(entity, lightChild, "material");
-		if(!materialStr.empty()){
-			TextUtilities::replace(materialStr, "\\", "/");
-			materialStr = TextUtilities::trim(materialStr, "/");
 
-			const fs::path materialPath = materialStr;
-			const std::string extension = TextUtilities::lowercase(materialPath.filename().extension().string());
-			// Two possibilities: either a texture file, or a material definition.
-			// In both cases we want to retrieve a non-empty texture name.
-			std::string textureName;
-
-			if(extension == ".mtl"){
-				// Load the mtl XML file.
-				const fs::path mtlPath = resourcePath / materialPath;
-				pugi::xml_document mtlDef;
-				if(mtlDef.load_file(mtlPath.c_str())){
-					pugi::xml_node frame = mtlDef.child("matDef").child("framelist").first_child();
-					// Extract texture name, assume it is unique.
-					std::string textureStr = frame.attribute("sourcename").value();
-					if(!textureStr.empty()){
-						TextUtilities::replace(textureStr, "\\", "/");
-						const fs::path texturePath = TextUtilities::trim(textureStr, "/");
-						textureName = texturePath.filename().replace_extension().string();
-					}
-				} else {
-					Log::error("Unable to load mtl file at path %s", mtlPath.string().c_str());
-				}
-
-			} else if(extension == ".tga" || extension == ".dds" || extension == ".png"){
-				textureName = materialPath.filename().replace_extension().string();
-			}
-
-			if(!textureName.empty()){
-				Object::Material material;
-				material.color = textureName;
-				material.normal = "";
-				material.type = Object::Material::LIGHT;
-
-				// Insert material in list, except if already present.
-				const uint matCount = (uint)_materials.size();
-				uint mid = 0;
-				for(; mid < matCount; ++mid){
-					if(_materials[mid] == material){
-						break;
-					}
-				}
-				if(mid == matCount){
-					_materials.push_back(material);
-				}
-				light.material = mid;
-			}
-		}
+		const std::string materialStr = getLightAttribute(entity, lightChild, "material");
+		const std::string textureName = getMaterialTexture(materialStr, resourcePath);
+		light.material = registerTextureMaterial(Object::Material::LIGHT, textureName);
 	}
 
 	std::string objPathStr = getEntityAttribute(entity, "sourceName");

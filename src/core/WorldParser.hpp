@@ -33,7 +33,6 @@ public:
 
 	struct Light {
 
-		static const uint NO_MATERIAL = 0xFFFF;
 		static const uint NO_SHADOW = 0xFFFF;
 
 		enum Type {
@@ -61,8 +60,8 @@ public:
 	};
 
 	struct ParticleSystem {
-		static const uint NO_MATERIAL = 0xFFFF;
 		glm::mat4 frame;
+		std::string name;
 		uint material;
 	};
 
@@ -88,7 +87,9 @@ private:
 
 	using ObjectReferenceList = std::map<fs::path, uint>;
 	using EntityFrameList = std::unordered_map<std::string, glm::mat4>;
-	
+
+	uint registerTextureMaterial(Object::Material::Type type, const std::string& textureName);
+
 	void processEntity(const pugi::xml_node& entity, const glm::mat4& globalFrame, bool templated, const fs::path& resourcePath, ObjectReferenceList& objectRefs, EntityFrameList& entitiesList);
 
 	std::vector<Object> _objects;
