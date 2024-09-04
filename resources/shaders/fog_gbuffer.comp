@@ -5,7 +5,7 @@
 
 layout(local_size_x=8, local_size_y=8, local_size_z=1) in;
 
-layout(set = 2, binding = 0) uniform texture2D  sceneDepth;
+layout(set = 2, binding = 0) uniform texture2D sceneDepth;
 layout(set = 2, binding = 1) uniform texture2D fogXYMap;
 layout(set = 2, binding = 2) uniform texture2D fogZMap;
 
@@ -22,18 +22,14 @@ void main(){
 	ivec2 pixelCoord = ivec2(gl_GlobalInvocationID.xy);
 
 	float depth = texelFetch(sampler2D(sceneDepth, sClampNear), pixelCoord, 0).r;
+	vec3 worldPos = worldPositionFromDepth(depth, pixelCoord);
 
 	vec4 finalColor = imageLoad(sceneLit, pixelCoord);
+	vec3 camToPos = worldPos - engine.camPos.xyz;
 
-	// Skip on background.
-	//if(depth < 1.0)
-	{
-		vec3 worldPos = worldPositionFromDepth(depth, pixelCoord);
-		vec3 camToPos = worldPos - engine.camPos.xyz;
+	float fogFactor = applyFog(worldPos.y, camToPos);
+	finalColor.rgb = mix(finalColor.rgb, engine.fogColor.rgb, fogFactor);
 
-		float fogFactor = applyFog(worldPos.y, camToPos);
-		finalColor.rgb = mix(finalColor.rgb, engine.fogColor.rgb, fogFactor);
-	}
 	imageStore(sceneFog, pixelCoord, finalColor);
 }
 
