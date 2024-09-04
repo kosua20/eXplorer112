@@ -216,8 +216,13 @@ BoundingBox getFxDefParams(const std::string& inFxDefPath, const fs::path& resou
 
 	// Load the mtl XML file.
 	const fs::path fxDefPath = resourcePath / fxDefStr;
+
+	// Uuuuurgh.
+	std::string fxDefContent = System::loadString(fxDefPath);
+	TextUtilities::replace(fxDefContent, "\"name=\"", "\" name=\"");
+
 	pugi::xml_document fxDef;
-	pugi::xml_parse_result res = fxDef.load_file(fxDefPath.c_str(), pugi::parse_full);
+	pugi::xml_parse_result res = fxDef.load_string(fxDefContent.c_str());
 
 	if(!res){
 		Log::error("Unable to load fxDef file at path %s: %s", fxDefPath.string().c_str(), res.description());
@@ -379,7 +384,11 @@ void World::processEntity(const pugi::xml_node& entity, const glm::mat4& globalF
 			std::string fxDefPathStr = getEntityAttribute(entity, "sourceName");
 			Log::info("Particle %s: %s", objName.c_str(), fxDefPathStr.c_str());
 			BoundingBox bbox = getFxDefParams(fxDefPathStr, resourcePath);
-
+			ParticleSystem& fx = _particles.emplace_back();
+			fx.name = objName;
+			fx.frame = frame;
+			fx.material = Object::Material::NO_MATERIAL;
+			fx.bbox = bbox;
 		}
 		// No model associated, exit.
 		return;

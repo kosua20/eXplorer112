@@ -60,6 +60,7 @@ public:
 	};
 
 	struct ParticleSystem {
+		BoundingBox bbox;
 		glm::mat4 frame;
 		std::string name;
 		uint material;
