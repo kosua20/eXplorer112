@@ -1223,12 +1223,15 @@ int main(int argc, char ** argv) {
 		}
 		ImGui::End();
 
-		if(renderingShadow && ImGui::Begin("Work in progress")){
-			ImGui::Text("Generating shadows...");
-			std::string currProg = std::to_string(currentShadowMapLayer+1) + "/" + std::to_string(shadowMaps.depth);
-			ImGui::ProgressBar((float)(currentShadowMapLayer+1)/(float)shadowMaps.depth, ImVec2(-1.0f, 0.0f), currProg.c_str());
+		if(renderingShadow ){
+			if( ImGui::Begin( "Work in progress" ) ) {
+				ImGui::Text( "Generating shadows..." );
+				std::string currProg = std::to_string( currentShadowMapLayer + 1 ) + "/" + std::to_string( shadowMaps.depth );
+				ImGui::ProgressBar( ( float )( currentShadowMapLayer + 1 ) / ( float )shadowMaps.depth, ImVec2( -1.0f, 0.0f ), currProg.c_str() );
+			}
+			ImGui::End();
 		}
-		ImGui::End();
+		
 #ifdef DEBUG_UI
 		if(ImGui::Begin("Debug view", nullptr)){
 
@@ -1444,7 +1447,7 @@ int main(int argc, char ** argv) {
 
 				if(showOpaques){
 					GPU::setPolygonState(PolygonMode::FILL);
-					GPU::setCullState(true);
+					GPU::setCullState(true, Faces::BACK );
 					GPU::setDepthState(true, TestFunction::GEQUAL, true);
 					GPU::setBlendState(false);
 					GPU::setColorState(true, true, true, true);
@@ -1489,7 +1492,7 @@ int main(int argc, char ** argv) {
 				GPU::setViewport(sceneLit);
 
 				GPU::setPolygonState(PolygonMode::FILL);
-				GPU::setCullState(true);
+				GPU::setCullState(true, Faces::BACK );
 				GPU::setDepthState(true, TestFunction::GEQUAL, false);
 				GPU::setBlendState(true, BlendEquation::ADD, BlendFunction::DST_COLOR, BlendFunction::ZERO);
 
@@ -1527,7 +1530,7 @@ int main(int argc, char ** argv) {
 				GPU::setViewport(sceneFog);
 
 				GPU::setDepthState( true, TestFunction::GEQUAL, false );
-				GPU::setCullState( false );
+				GPU::setCullState( true, Faces::BACK );
 				GPU::setBlendState( true, BlendEquation::ADD, BlendFunction::SRC_ALPHA, BlendFunction::ONE_MINUS_SRC_ALPHA );
 				GPU::setColorState( true, true, true, false );
 
@@ -1557,7 +1560,7 @@ int main(int argc, char ** argv) {
 				// Postprocess stack
 				{
 					GPU::setDepthState(false);
-					GPU::setCullState(true);
+					GPU::setCullState(true, Faces::BACK );
 					GPU::setColorState(true, true, true, true);
 					GPU::setBlendState( false );
 					GPU::setPolygonState(PolygonMode::FILL);
@@ -1588,7 +1591,7 @@ int main(int argc, char ** argv) {
 						GPU::bind(sceneLit, LoadOperation::DONTCARE);
 						GPU::setViewport(sceneLit);
 						GPU::setDepthState(false);
-						GPU::setCullState(true);
+						GPU::setCullState(true, Faces::BACK );
 						GPU::setColorState(true, true, true, true);
 						GPU::setPolygonState(PolygonMode::FILL);
 						noiseGrainQuad->use();
@@ -1603,7 +1606,7 @@ int main(int argc, char ** argv) {
 				// Debug view.
 				{
 					GPU::setPolygonState( PolygonMode::LINE );
-					GPU::setCullState( false );
+					GPU::setCullState( false, Faces::BACK );
 					GPU::setDepthState( true, TestFunction::GEQUAL, false );
 					GPU::setBlendState( false );
 					GPU::setColorState(true, true, true, true);
@@ -1698,7 +1701,7 @@ int main(int argc, char ** argv) {
 			GPU::setViewport(textureView);
 			GPU::bind(textureView, glm::vec4(1.0f, 0.0f, 0.5f, 1.0f));
 			GPU::setDepthState(false);
-			GPU::setCullState(true);
+			GPU::setCullState(true, Faces::BACK );
 			GPU::setPolygonState(PolygonMode::FILL);
 			GPU::setBlendState(true, BlendEquation::ADD, BlendFunction::SRC_ALPHA, BlendFunction::ONE_MINUS_SRC_ALPHA);
 			textureDebugQuad->use();

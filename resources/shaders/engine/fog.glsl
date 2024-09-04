@@ -10,6 +10,7 @@ float applyFog(float worldHeight, vec3 camToPos){
 	vec3 viewDirFog = engine.fogDensity * ( camToPos ) / (2000.0);
 	viewDirFog = viewDirFog * 0.5 + 0.5;
 	
+	// Sampler for both is Linear and Clamp, force mip 0.
 	float fogAttenXY = textureLod(sampler2D(fogXYMap, sClampLinear), viewDirFog.xy, 0.0).x;
 	float fogAttenZ  = textureLod(sampler2D(fogZMap, sClampLinear), viewDirFog.zz, 0.0).x;
 	float depthFog = 1.0 - (fogAttenXY * fogAttenZ);
