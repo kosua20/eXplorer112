@@ -282,6 +282,36 @@ void addLightGizmo(Mesh& mesh, const World::Light& light){
 	}
 }
 
+void addEmitterGizmo(Mesh& mesh, const World::ParticleSystem& fx){
+
+	const uint firstVertexIndex = mesh.positions.size();
+	// Always generate a small cross.
+	for(uint i = 0; i < 3; ++i){
+		const uint iIndex = mesh.positions.size();
+		glm::vec3 offset(0.0f);
+		offset[(i+1)%3] = 10.0f;
+		offset[(i+2)%3] = 10.0f;
+		mesh.positions.push_back(-offset);
+		mesh.positions.push_back( offset);
+		mesh.indices.push_back(iIndex );
+		mesh.indices.push_back(iIndex + 1);
+		mesh.indices.push_back(iIndex );
+	}
+
+	// Add box.
+	{
+		
+	}
+	// Fill colors.
+	const uint vertexFinalCount = mesh.positions.size() - firstVertexIndex;
+	mesh.colors.insert(mesh.colors.end(), vertexFinalCount, glm::vec3(1.0f,0.0f,1.0f));
+	// Apply frame.
+	for(uint i = 0; i < vertexFinalCount; ++i){
+		glm::vec3& p = mesh.positions[firstVertexIndex + i];
+		p = glm::vec3(fx.frame * glm::vec4(p, 1.0f));
+	}
+}
+
 void adjustCameraToBoundingBox(ControllableCamera& camera, const BoundingBox& bbox){
 	// Center the camera.
 	const glm::vec3 center = bbox.getCentroid();
@@ -505,6 +535,7 @@ int main(int argc, char ** argv) {
 	Mesh boundingBox("bbox");
 	Mesh debugLights("lights");
 	Mesh debugZones("zones");
+	Mesh debugParticles("emitters");
 	enum class ViewerMode {
 		MODEL, AREA, WORLD
 	};
@@ -523,6 +554,7 @@ int main(int argc, char ** argv) {
 	bool freezeCulling = false;
 	bool showWireframe = false;
 	bool showLights = false;
+	bool showEmitters = false;
 	bool showZones = false;
 	bool renderingShadow = false;
 
@@ -586,6 +618,8 @@ int main(int argc, char ** argv) {
 
 		debugLights.clean();
 		debugZones.clean();
+		debugParticles.clean();
+
 		effects = AmbientEffects();
 		// Build light debug visualisation.
 		if( !scene.world.lights().empty() )
@@ -595,6 +629,14 @@ int main(int argc, char ** argv) {
 				addLightGizmo( debugLights, light );
 			}
 			debugLights.upload();
+		}
+		if( !scene.world.particles().empty() )
+		{
+			for( const World::ParticleSystem& fx : scene.world.particles() )
+			{
+				addEmitterGizmo( debugParticles, fx );
+			}
+			debugParticles.upload();
 		}
 		// Build zones debug visualisation.
 		if( !scene.world.zones().empty() )
@@ -1174,6 +1216,8 @@ int main(int argc, char ** argv) {
 			ImGui::Checkbox("Lights", &showLights);
 			ImGui::SameLine();
 			ImGui::Checkbox("Zones", &showZones);
+			ImGui::SameLine();
+			ImGui::Checkbox("Emitters", &showEmitters);
 
 			ImGui::Checkbox("Freeze culling", &freezeCulling);
 			ImGui::SameLine();
@@ -1637,6 +1681,9 @@ int main(int argc, char ** argv) {
 					}
 					if(showZones && !debugZones.indices.empty()){
 						GPU::drawMesh( debugZones );
+					}
+					if(showEmitters && !debugParticles.indices.empty()){
+						GPU::drawMesh( debugParticles );
 					}
 				}
 			}
