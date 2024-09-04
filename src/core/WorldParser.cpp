@@ -307,11 +307,6 @@ void World::processEntity(const pugi::xml_node& entity, const glm::mat4& globalF
 				light.material = mid;
 			}
 		}
-		// Validation for now:
-		if( light.material != Light::NO_MATERIAL && light.type == Light::POINT )
-		{
-			Log::info( "Detected projector point light, ignored for now." );
-		}
 	}
 
 	std::string objPathStr = getEntityAttribute(entity, "sourceName");

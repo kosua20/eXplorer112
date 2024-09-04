@@ -88,7 +88,7 @@ void applyLighting(vec3 screenPos, vec3 worldPos, vec3 viewDir, vec3 n, float gl
 			mat4 projMatrix = light.vp;
 			uint lightShadowIndex = allowShadows ? light.shadow : NO_SHADOW;
 
-			if(lightType == 1 && lightShadowIndex != NO_SHADOW){
+			if(lightType == 1 && (lightShadowIndex != NO_SHADOW || light.materialIndex != NO_MATERIAL)){
 				// Translate point in light centered space.
 				vec3 localPos = worldPos - lightPos;
 				vec3 localPosAbs = abs(localPos);
@@ -113,7 +113,7 @@ void applyLighting(vec3 screenPos, vec3 worldPos, vec3 viewDir, vec3 n, float gl
 			}
 
 			vec4 projectedPos = projMatrix * vec4(worldPos, 1.0);
-			projectedPos.xy /= projectedPos.w;
+			projectedPos.xyz /= projectedPos.w;
 			vec2 projectedUV = projectedPos.xy * 0.5 + 0.5;
 			
 			float attenuation = 1.0;
@@ -121,7 +121,7 @@ void applyLighting(vec3 screenPos, vec3 worldPos, vec3 viewDir, vec3 n, float gl
 				
 				float f = dotNL * 0.5f + 0.5f;
 				float bias = 0.0005 * mix(10.0, 0.5, f);
-				vec3 lightSpacePos = vec3(projectedUV, projectedPos.z / projectedPos.w);
+				vec3 lightSpacePos = vec3(projectedUV, projectedPos.z);
 				float shadowing = shadowPCF(lightSpacePos, lightShadowIndex, bias);
 				attenuation *= shadowing;
 			}
@@ -142,13 +142,13 @@ void applyLighting(vec3 screenPos, vec3 worldPos, vec3 viewDir, vec3 n, float gl
 					if(any(greaterThan(abs(projectedPos.xy), vec2(1.0))) || projectedPos.w < 0.0 ){
 						attenuation *= 0.0;
 					}
+				}
 
-					if(light.materialIndex != NO_MATERIAL){
-						MaterialInfos lightMaterial =  materialInfos[light.materialIndex];
-						vec3 lightUV = vec3(projectedUV, lightMaterial.color.layer);
-						vec4 lightPattern = texture(sampler2DArray(textures[lightMaterial.color.index], sRepeatLinearLinear), lightUV);
-						lightColor *= lightPattern.rgb;
-					}
+				if(light.materialIndex != NO_MATERIAL){
+					MaterialInfos lightMaterial =  materialInfos[light.materialIndex];
+					vec3 lightUV = vec3(projectedUV, lightMaterial.color.layer);
+					vec4 lightPattern = texture(sampler2DArray(textures[lightMaterial.color.index], sRepeatLinearLinear), lightUV);
+					lightColor *= lightPattern.rgb;
 				}
 			} 
 
