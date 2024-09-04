@@ -172,6 +172,9 @@ void World::processEntity(const pugi::xml_node& entity, const glm::mat4& globalF
 	}
 
 	// Store entity.
+	if(entitiesList.count(objName) != 0){
+		Log::warning("Entity named %s already exists.", objName.c_str());
+	}
 	entitiesList[objName] = frame;
 	const glm::mat4 entityFrame = frame;
 	glm::mat4 mdlFrame(1.0f);
@@ -208,7 +211,7 @@ void World::processEntity(const pugi::xml_node& entity, const glm::mat4& globalF
 
 	// We can't early exit earlier because of linking.
 	if((type != "actor") && (type != "door") && (type != "creature")
-	   && (type != "light") && (type != "camera") && (type != "solid") ){
+	   && (type != "light") && (type != "camera") && (type != "solid") && (type != "particle") ){
 		return;
 	}
 
@@ -216,6 +219,13 @@ void World::processEntity(const pugi::xml_node& entity, const glm::mat4& globalF
 	//if(!isEntityVisible(entity)){
 	//	return;
 	//}
+
+	if(type == "particle"){
+		Log::info("Particle system");
+		_particles.emplace_back();
+		// No model associated for now.
+		return;
+	}
 
 	if(type == "light"){
 		// Some lights have a child named "light".

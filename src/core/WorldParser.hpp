@@ -60,6 +60,12 @@ public:
 		float fogDensity;
 	};
 
+	struct ParticleSystem {
+		static const uint NO_MATERIAL = 0xFFFF;
+		glm::mat4 frame;
+		uint material;
+	};
+
 	bool load(const fs::path& path, const fs::path& resourcesPath);
 
 	const std::vector<Object>& objects() const {  return _objects; };
@@ -71,6 +77,8 @@ public:
 	const std::vector<Camera>& cameras() const {  return _cameras; };
 
 	const std::vector<Light>& lights() const {  return _lights; };
+
+	const std::vector<ParticleSystem>& particles() const {  return _particles; };
 	
 	const std::vector<Zone>& zones() const {  return _zones; };
 
@@ -88,6 +96,7 @@ private:
 	std::vector<Object::Material> _materials;
 	std::vector<Camera> _cameras;
 	std::vector<Light> _lights;
+	std::vector<ParticleSystem> _particles;
 	std::vector<Zone> _zones;
 	std::string _name;
 
