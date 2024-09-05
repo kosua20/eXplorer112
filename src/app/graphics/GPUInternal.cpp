@@ -33,7 +33,6 @@ bool VkUtils::checkExtensionsSupport(const std::vector<const char*> & requestedE
 	VK_RET(vkEnumerateInstanceExtensionProperties(nullptr, &extensionCount, nullptr));
 	std::vector<VkExtensionProperties> availableExtensions(extensionCount);
 	VK_RET(vkEnumerateInstanceExtensionProperties(nullptr, &extensionCount, availableExtensions.data()));
-	bool allFound = true;
 	for(const char* extensionName : requestedExtensions){
 		bool extensionFound = false;
 		for(const auto& extensionProperties: availableExtensions){
@@ -44,24 +43,23 @@ bool VkUtils::checkExtensionsSupport(const std::vector<const char*> & requestedE
 		}
 		if(!extensionFound){
 			Log::error("GPU: Unsupported extension: %s", extensionName);
-			allFound = false;
+			return false;
 		}
 	}
-	return allFound;
+	return true;
 }
 
-std::vector<const char*> VkUtils::getRequiredInstanceExtensions(const bool enableValidationLayers){
+std::vector<const char*> VkUtils::getRequiredInstanceExtensions(bool enableDebugMarkers, bool enablePortability){
 	// Default Vulkan has no notion of surface/window. GLFW provide an implementation of the corresponding KHR extensions.
 	uint32_t glfwExtensionCount = 0;
 	const char** glfwExtensions = glfwGetRequiredInstanceExtensions(&glfwExtensionCount);
 	std::vector<const char*> extensions(glfwExtensions, glfwExtensions + glfwExtensionCount);
 	// MoltenVK is a non conforming driver, we need to enable enumeration of portability drivers.
-//#ifdef __APPLE__
-	extensions.push_back(VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME);
-//#endif
-	
+	if(enablePortability){
+		extensions.push_back(VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME);
+	}
 	// If the validation layers are enabled, add associated extensions.
-	if(enableValidationLayers) {
+	if(enableDebugMarkers) {
 		extensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
 	}
 	return extensions;
@@ -93,6 +91,7 @@ bool VkUtils::checkDeviceExtensionsSupport(VkPhysicalDevice device, const std::v
 			}
 		}
 		if(!extensionFound){
+			Log::error( "GPU: Could not find device extension %s", extensionName);
 			return false;
 		}
 	}
@@ -286,6 +285,8 @@ VkCommandBuffer VkUtils::beginSyncOperations(GPUContext & context){
 	VkCommandBuffer commandBuffer;
 	VK_RET(vkAllocateCommandBuffers(context.device, &allocInfo, &commandBuffer));
 
+	VkUtils::setDebugName(context, VK_OBJECT_TYPE_COMMAND_BUFFER, uint64_t(commandBuffer), "Temporary");
+
 	// Record in it immediatly.
 	VkCommandBufferBeginInfo beginInfo = {};
 	beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
@@ -311,7 +312,7 @@ void VkUtils::endSyncOperations(VkCommandBuffer & commandBuffer, GPUContext & co
 void VkUtils::imageLayoutBarrier(VkCommandBuffer& commandBuffer, GPUTexture& texture, VkImageLayout newLayout, uint mipStart, uint mipCount, uint layerStart, uint layerCount){
 
 	static const std::unordered_map<VkImageLayout, std::vector<VkImageLayout>> allowedTransitions = {
-		{VK_IMAGE_LAYOUT_UNDEFINED, { VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL } },
+		{VK_IMAGE_LAYOUT_UNDEFINED, { VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL } },
 
 		{VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, { VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR } },
 
@@ -435,6 +436,9 @@ void VkUtils::createCommandBuffers(GPUContext & context, uint count){
 		Log::error("GPU: Unable to create command buffers.");
 		return;
 	}
+	for(uint i = 0; i < count; ++i){
+		VkUtils::setDebugName(context, VK_OBJECT_TYPE_COMMAND_BUFFER, uint64_t(context.renderCommandBuffers[i]), "Render %u", i);
+	}
 
 	context.uploadCommandBuffers.resize(count);
 	VkCommandBufferAllocateInfo allocInfo2 = {};
@@ -445,6 +449,10 @@ void VkUtils::createCommandBuffers(GPUContext & context, uint count){
 	if(vkAllocateCommandBuffers(context.device, &allocInfo2, context.uploadCommandBuffers.data()) != VK_SUCCESS) {
 		Log::error("GPU: Unable to create command buffers.");
 		return;
+	}
+
+	for(uint i = 0; i < count; ++i){
+		VkUtils::setDebugName(context, VK_OBJECT_TYPE_COMMAND_BUFFER, uint64_t(context.uploadCommandBuffers[i]), "Upload %u", i);
 	}
 }
 
@@ -718,4 +726,27 @@ void VkUtils::blitTexture(VkCommandBuffer& commandBuffer, const Texture& src, co
 
 	VkUtils::imageLayoutBarrier(commandBuffer, *src.gpu, src.gpu->defaultLayout, mipStartSrc, mipEffectiveCount, layerStartSrc, layerEffectiveCount);
 	VkUtils::imageLayoutBarrier(commandBuffer, *dst.gpu, dst.gpu->defaultLayout, mipStartDst, mipEffectiveCount, layerStartDst, layerEffectiveCount);
+}
+
+
+void VkUtils::setDebugName(GPUContext& context, VkObjectType type, uint64_t handle, const char* format, ...){
+	if(!context.markersEnabled)
+		return;
+
+	std::string str;
+	str.resize(256);
+
+	va_list argptr;
+	va_start(argptr, format);
+	int count = vsnprintf(&str[0], str.size(), format, argptr);
+	va_end(argptr);
+	count = std::min(std::max(0, count), int(str.size()));
+	str.resize(count);
+
+	VkDebugUtilsObjectNameInfoEXT debugInfos = {};
+	debugInfos.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT;
+	debugInfos.objectType = type;
+	debugInfos.objectHandle = handle;
+	debugInfos.pObjectName = str.c_str();
+	VK_RET(vkSetDebugUtilsObjectNameEXT(context.device, &debugInfos));
 }

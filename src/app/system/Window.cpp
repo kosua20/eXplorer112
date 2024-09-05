@@ -100,8 +100,6 @@ _config(config), _allowEscape(escapeQuit) {
 	// Create a swapchain associated to the window.
 	GPU::setupWindow(this);
 
-	GPU::setupDefaults();
-
 	setupImGui();
 
 	// Update the resolution.

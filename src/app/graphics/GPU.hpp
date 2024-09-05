@@ -71,8 +71,6 @@ public:
 	 */
 	static bool setupWindow(Window * window);
 
-	static void setupDefaults();
-
 	/** Create and link a graphics program using the shader code contained in the given strings.
 	 \param program the program to compile
 	 \param vertexContent the vertex shader string

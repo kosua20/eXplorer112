@@ -100,7 +100,7 @@ struct GPUContext {
 	uint32_t presentId = 0; ///< Present queue index.
 
 	uint64_t frameIndex = 0; ///< Current frame index.
-	uint32_t swapIndex = 1; ///< Current buffered frame (in 0, frameCount-1).
+	uint32_t swapIndex = 0; ///< Current buffered frame (in 0, frameCount-1).
 
 	double timestep = 0.0; ///< Query timing timestep.
 	size_t uniformAlignment = 0; ///< Minimal buffer alignment.
@@ -108,7 +108,8 @@ struct GPUContext {
 	const uint frameCount = 2; ///< Number of buffered frames (should be lower or equal to the swapchain image count).
 	bool newRenderPass = true; ///< Has a render pass just started (pipeline needs to be re-bound).
 	bool hadRenderPass = false; ///< Has a render pass just ended.
-	
+	bool markersEnabled = false; ///< Are debug markers and labels enabled.
+
 	/// Move to the next frame.
 	void nextFrame(){
 		++frameIndex;
@@ -155,10 +156,11 @@ namespace VkUtils {
 	bool checkExtensionsSupport(const std::vector<const char*> & requestedExtensions);
 
 	/** Query the instance extensions required by the system (swapchain, debug layers,...)
-	 * \param enableValidationLayers should validation layer extensions be included 
+	 * \param enableDebugMarkers should debug marker extension be included
+	 * \param enablePortability should portability extension be included
 	 * \return a list of extension names
 	 */
-	std::vector<const char*> getRequiredInstanceExtensions(const bool enableValidationLayers);
+	std::vector<const char *> getRequiredInstanceExtensions(bool enableDebugMarkers, bool enablePortability);
 
 	/** Check if the Vulkan device supports some extensions and/or portability.
 	 * \param device the physical device handle
@@ -301,6 +303,16 @@ namespace VkUtils {
 	 * \note Offsets and sizes are expressed at mip 0 in all cases.
 	 */
 	void blitTexture(VkCommandBuffer& commandBuffer, const Texture& src, const Texture& dst, uint mipStartSrc, uint mipStartDst, uint mipCount, uint layerStartSrc, uint layerStartDst, uint layerCount, const glm::uvec2& srcBaseOffset, const glm::uvec2& srcBaseSize, const glm::uvec2& dstBaseOffset, const glm::uvec2& dstBaseSize, Filter filter);
+
+/**
+	 Associate a debug name to a Vulkan object for validation layers and captures.
+	 \param context the GPU context
+	 \param type the type of the object
+	 \param handle the handle to the object, casted as a raw integer
+	 \param format name string format
+	 \param ... name string arguments
+	 */
+	void setDebugName(GPUContext& context, VkObjectType type, uint64_t handle, const char* format, ...);
 
 }
 

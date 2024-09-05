@@ -41,17 +41,23 @@ GPUContext* GPU::getInternal(){
 
 bool GPU::setup(const std::string & appName) {
 
-	//static_assert(sizeof(VkDrawIndexedIndirectCommand) == sizeof(DrawCommand));
-
 	if(volkInitialize() != VK_SUCCESS){
 		Log::error("GPU: Could not load Vulkan");
 		return false;
 	}
 
+	bool wantsMarkers = VkUtils::checkExtensionsSupport({VK_EXT_DEBUG_UTILS_EXTENSION_NAME});
+
 	bool debugEnabled = false;
-#if defined(DEBUG) || defined(FORCE_DEBUG_VULKAN)
+#if defined(DEBUG) || defined(FORCELAYERS_VULKAN)
 	// Only enable if the layers are supported.
-	debugEnabled = VkUtils::checkLayersSupport(validationLayers) && VkUtils::checkExtensionsSupport({ VK_EXT_DEBUG_UTILS_EXTENSION_NAME });
+	debugEnabled	  = VkUtils::checkLayersSupport(validationLayers);
+	debugEnabled &= wantsMarkers;
+#endif
+
+	bool wantsPortability = false;
+#if defined(__APPLE__) || defined(FORCE_PORTABILITY)
+	wantsPortability = true;
 #endif
 
 	VkApplicationInfo appInfo = {};
@@ -67,15 +73,17 @@ bool GPU::setup(const std::string & appName) {
 	instanceInfo.pApplicationInfo = &appInfo;
 
 	// We have to tell Vulkan the extensions we need.
-	const std::vector<const char*> extensions = VkUtils::getRequiredInstanceExtensions(debugEnabled);
+	const std::vector<const char *> extensions = VkUtils::getRequiredInstanceExtensions(wantsMarkers, wantsPortability);
 	if(!VkUtils::checkExtensionsSupport(extensions)){
+		Log::error("GPU: Unsupported extensions.");
 		return false;
 	}
-	
 	instanceInfo.enabledExtensionCount = static_cast<uint32_t>(extensions.size());
 	instanceInfo.ppEnabledExtensionNames = extensions.data();
 	// Allow portability drivers enumeration to support MoltenVK.
-	instanceInfo.flags = VK_INSTANCE_CREATE_ENUMERATE_PORTABILITY_BIT_KHR;
+	if(wantsPortability) {
+		instanceInfo.flags = VK_INSTANCE_CREATE_ENUMERATE_PORTABILITY_BIT_KHR;
+	}
 
 	// Validation layers.
 	instanceInfo.enabledLayerCount = 0;
@@ -153,6 +161,7 @@ bool GPU::setup(const std::string & appName) {
 	_context.timestep = double(properties.limits.timestampPeriod);
 	_context.uniformAlignment = properties.limits.minUniformBufferOffsetAlignment;
 	// minImageTransferGranularity is guaranteed to be (1,1,1) on graphics/compute queues
+	_context.markersEnabled = wantsMarkers;
 
 	if(!ShaderCompiler::init()){
 		Log::error("GPU: Unable to initialize shader compiler.");
@@ -244,6 +253,9 @@ bool GPU::setupWindow(Window * window){
 	vkGetDeviceQueue(_context.device, _context.graphicsId, 0, &_context.graphicsQueue);
 	vkGetDeviceQueue(_context.device, _context.presentId, 0, &_context.presentQueue);
 
+	VkUtils::setDebugName(_context, VK_OBJECT_TYPE_QUEUE, uint64_t(_context.graphicsQueue), "Graphics");
+	VkUtils::setDebugName(_context, VK_OBJECT_TYPE_QUEUE, uint64_t(_context.presentQueue), "Present");
+
 	// Setup allocator.
 	VmaAllocatorCreateInfo allocatorInfo = {};
 	allocatorInfo.vulkanApiVersion = VK_API_VERSION_1_3;
@@ -295,6 +307,7 @@ bool GPU::setupWindow(Window * window){
 		return false;
 	}
 
+	VkUtils::setDebugName(_context, VK_OBJECT_TYPE_COMMAND_POOL, uint64_t(_context.commandPool), "Main pool");
 
 	// Create query pools.
 	_context.queryAllocators[GPUQuery::Type::TIME_ELAPSED].init(GPUQuery::Type::TIME_ELAPSED, 1024);
@@ -303,11 +316,6 @@ bool GPU::setupWindow(Window * window){
 
 	// Finally setup the swapchain.
 	window->_swapchain.reset(new Swapchain(_context, window->_config));
-
-	return true;
-}
-
-void GPU::setupDefaults(){
 
 	// Create a pipeline cache.
 	_context.pipelineCache.init();
@@ -364,7 +372,7 @@ void GPU::setupDefaults(){
 		// Use a default descriptor.
 		texture.upload(Layout::R8, false);
 	}
-
+	return true;
 }
 
 void GPU::createGraphicsProgram(Program& program, const std::string & vertexContent, const std::string & fragmentContent, const std::string & tessControlContent, const std::string & tessEvalContent, const std::string & debugInfos) {
@@ -669,6 +677,8 @@ void GPU::setupTexture(Texture & texture, const Layout & format, bool drawable) 
 	allocInfo.usage = VMA_MEMORY_USAGE_GPU_ONLY;
 	VK_RET(vmaCreateImage(_allocator, &imageInfo, &allocInfo, &(texture.gpu->image), &(texture.gpu->data), nullptr));
 
+	VkUtils::setDebugName(_context, VK_OBJECT_TYPE_IMAGE, uint64_t(texture.gpu->image), "%s", texture.gpu->name.c_str());
+
 	// Create view.
 	VkImageViewCreateInfo viewInfo = {};
 	viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
@@ -687,8 +697,8 @@ void GPU::setupTexture(Texture & texture, const Layout & format, bool drawable) 
 		return;
 	}
 
-	// Create per mip view.
-	texture.gpu->views.resize(texture.levels);
+	VkUtils::setDebugName(_context, VK_OBJECT_TYPE_IMAGE_VIEW, uint64_t(texture.gpu->view), "%s-global", texture.gpu->name.c_str());
+
 	// Slice format
 	VkImageViewType viewTypeSlice = VK_IMAGE_VIEW_TYPE_2D;
 	if((texture.shape & TextureShape::D3) != 0){
@@ -696,19 +706,21 @@ void GPU::setupTexture(Texture & texture, const Layout & format, bool drawable) 
 	} else if((texture.shape & TextureShape::D1) != 0){
 		viewTypeSlice = VK_IMAGE_VIEW_TYPE_1D;
 	}
-	
+
+	// Create per mip view. \todo Create only for writable/drawable?
+	texture.gpu->views.resize(texture.levels);
 	for(uint mid = 0; mid < texture.levels; ++mid){
 
+		// Create per layer per mip view.
 		texture.gpu->views[mid].views.resize(layers);
-
 		for(uint lid = 0; lid < layers; ++lid){
 			VkImageViewCreateInfo viewInfoMip = {};
 			viewInfoMip.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
 			viewInfoMip.image = texture.gpu->image;
 			viewInfoMip.viewType = viewTypeSlice;
 			viewInfoMip.format = texture.gpu->format;
-			// Remove the stencil bit when reading from the texture via the view.
-			viewInfoMip.subresourceRange.aspectMask = texture.gpu->aspect;//?(texture.gpu->aspect & ~VK_IMAGE_ASPECT_STENCIL_BIT);
+			// This will mainly be used as an attachment, so don't remove the stencil aspect.
+			viewInfoMip.subresourceRange.aspectMask = texture.gpu->aspect;
 			viewInfoMip.subresourceRange.baseMipLevel = mid;
 			viewInfoMip.subresourceRange.levelCount = 1;
 			viewInfoMip.subresourceRange.baseArrayLayer = lid;
@@ -718,8 +730,11 @@ void GPU::setupTexture(Texture & texture, const Layout & format, bool drawable) 
 				Log::error("GPU: Unable to create image view.");
 				return;
 			}
+
+			VkUtils::setDebugName(_context, VK_OBJECT_TYPE_IMAGE_VIEW, uint64_t(texture.gpu->views[mid].views[lid]), "%s-mip %u-level %u", texture.gpu->name.c_str(), mid, lid);
 		}
 
+		// Create global mip view.
 		VkImageViewCreateInfo viewInfoMip = {};
 		viewInfoMip.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
 		viewInfoMip.image = texture.gpu->image;
@@ -736,6 +751,7 @@ void GPU::setupTexture(Texture & texture, const Layout & format, bool drawable) 
 			Log::error("GPU: Unable to create image view.");
 			return;
 		}
+		VkUtils::setDebugName(_context, VK_OBJECT_TYPE_IMAGE_VIEW, uint64_t(texture.gpu->views[mid].mipView), "%s-mip %u",texture.gpu->name.c_str(), mid);
 
 	}
 
@@ -1113,6 +1129,7 @@ void GPU::setupBuffer(Buffer & buffer) {
 	}
 	// Create.
 	buffer.gpu.reset(new GPUBuffer(buffer.type));
+	const std::string& name = buffer.name();
 
 	static const std::unordered_map<BufferType, VkBufferUsageFlags> types = {
 		{ BufferType::VERTEX, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT},
@@ -1151,6 +1168,8 @@ void GPU::setupBuffer(Buffer & buffer) {
 	VmaAllocationInfo resultInfos = {};
 
 	VK_RET(vmaCreateBuffer(_allocator, &bufferInfo, &allocInfo, &(buffer.gpu->buffer), &(buffer.gpu->data), &resultInfos));
+
+	VkUtils::setDebugName(_context, VK_OBJECT_TYPE_BUFFER, uint64_t(buffer.gpu->buffer), "%s", name.c_str());
 
 	if(buffer.gpu->mappable){
 		buffer.gpu->mapped = (char*)resultInfos.pMappedData;
