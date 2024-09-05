@@ -419,8 +419,20 @@ void loadEngineTextures(const GameFiles& gameFiles, Texture& fogXYTexture, Textu
 	fogXYTexture.upload(Layout::RGBA8, false);
 
 	fogZTexture.clean();
-	Image& imgZ = fogZTexture.images.emplace_back();
-	imgZ.load(gameFiles.texturesPath / "commons" / "fog_z.png");
+	Image imgZTmp;
+	imgZTmp.load(gameFiles.texturesPath / "commons" / "fog_z.png");
+	// Artifically pad the fogZ texture as it is only one pixel high.
+	const uint kRepeatCount = 4u;
+	Image& imgZ = fogZTexture.images.emplace_back( imgZTmp.width, kRepeatCount *  imgZTmp.height, imgZTmp.components);
+	{
+		const uint srcPixelCount = imgZTmp.pixels.size();
+		for(uint rId = 0; rId < kRepeatCount; ++rId){
+			for(uint pId = 0u; pId < srcPixelCount; ++pId){
+				imgZ.pixels[rId * srcPixelCount + pId] = imgZTmp.pixels[pId];
+			}
+		}
+	}
+	imgZ.compressedFormat = imgZTmp.compressedFormat;
 	fogZTexture.width = imgZ.width;
 	fogZTexture.height = imgZ.height;
 	fogZTexture.shape = TextureShape::D2;
