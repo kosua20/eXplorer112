@@ -320,6 +320,48 @@ void addEmitterGizmo(Mesh& mesh, const World::ParticleSystem& fx){
 		p = glm::vec3(fx.frame * glm::vec4(p, 1.0f));
 	}
 }
+void addBillboardGizmo( Mesh& mesh, const World::Billboard& fx )
+{
+
+	const uint firstVertexIndex = mesh.positions.size();
+	// Generate a quad.
+	const glm::vec3 c00 = glm::vec3( -0.5f * fx.size, 0.f);
+	const glm::vec3 c11 = glm::vec3(  0.5f * fx.size, 0.f);
+	const glm::vec3 c01 = glm::vec3( c00.x, c11.y, 0.f );
+	const glm::vec3 c10 = glm::vec3( c11.x, c00.y, 0.f );
+
+	mesh.positions.push_back( c00 );
+	mesh.positions.push_back( c01 );
+	mesh.positions.push_back( c11 );
+	mesh.positions.push_back( c10 );
+	
+	mesh.indices.push_back( firstVertexIndex + 0 );
+	mesh.indices.push_back( firstVertexIndex + 1 );
+	mesh.indices.push_back( firstVertexIndex + 0 );
+
+	mesh.indices.push_back( firstVertexIndex + 1 );
+	mesh.indices.push_back( firstVertexIndex + 2 );
+	mesh.indices.push_back( firstVertexIndex + 1 );
+
+	mesh.indices.push_back( firstVertexIndex + 2 );
+	mesh.indices.push_back( firstVertexIndex + 3 );
+	mesh.indices.push_back( firstVertexIndex + 2 );
+
+	mesh.indices.push_back( firstVertexIndex + 3 );
+	mesh.indices.push_back( firstVertexIndex + 0 );
+	mesh.indices.push_back( firstVertexIndex + 3 );
+
+	// Fill colors.
+	const uint vertexFinalCount = mesh.positions.size() - firstVertexIndex;
+	mesh.colors.insert( mesh.colors.end(), vertexFinalCount, fx.color );
+	// Apply frame.
+	for( uint i = 0; i < vertexFinalCount; ++i )
+	{
+		glm::vec3& p = mesh.positions[ firstVertexIndex + i ];
+		p = glm::vec3( fx.frame * glm::vec4( p, 1.0f ) );
+	}
+}
+
 
 void adjustCameraToBoundingBox(ControllableCamera& camera, const BoundingBox& bbox){
 	// Center the camera.
@@ -544,7 +586,7 @@ int main(int argc, char ** argv) {
 	Mesh boundingBox("bbox");
 	Mesh debugLights("lights");
 	Mesh debugZones("zones");
-	Mesh debugParticles("emitters");
+	Mesh debugFxs("fxs");
 	enum class ViewerMode {
 		MODEL, AREA, WORLD
 	};
@@ -563,7 +605,7 @@ int main(int argc, char ** argv) {
 	bool freezeCulling = false;
 	bool showWireframe = false;
 	bool showLights = false;
-	bool showEmitters = false;
+	bool showFxs = false;
 	bool showZones = false;
 	bool renderingShadow = false;
 
@@ -627,31 +669,28 @@ int main(int argc, char ** argv) {
 
 		debugLights.clean();
 		debugZones.clean();
-		debugParticles.clean();
+		debugFxs.clean();
 
 		effects = AmbientEffects();
 		// Build light debug visualisation.
-		if( !scene.world.lights().empty() )
-		{
-			for( const World::Light& light : scene.world.lights() )
-			{
+		if( !scene.world.lights().empty() ){
+			for( const World::Light& light : scene.world.lights() ){
 				addLightGizmo( debugLights, light );
 			}
 			debugLights.upload();
 		}
-		if( !scene.world.particles().empty() )
-		{
-			for( const World::ParticleSystem& fx : scene.world.particles() )
-			{
-				addEmitterGizmo( debugParticles, fx );
+		if( !scene.world.particles().empty() ){
+			for( const World::ParticleSystem& fx : scene.world.particles() ){
+				addEmitterGizmo( debugFxs, fx );
 			}
-			debugParticles.upload();
+			for( const World::Billboard& fx : scene.world.billboards() ){
+				addBillboardGizmo( debugFxs, fx );
+			}
+			debugFxs.upload();
 		}
 		// Build zones debug visualisation.
-		if( !scene.world.zones().empty() )
-		{
-			for( const World::Zone& zone : scene.world.zones() )
-			{
+		if( !scene.world.zones().empty() )	{
+			for( const World::Zone& zone : scene.world.zones() ){
 				const uint indexShift = ( uint )debugZones.positions.size();
 				// Build box.
 				const auto corners = zone.bbox.getCorners();
@@ -1226,7 +1265,7 @@ int main(int argc, char ** argv) {
 			ImGui::SameLine();
 			ImGui::Checkbox("Zones", &showZones);
 			ImGui::SameLine();
-			ImGui::Checkbox("Emitters", &showEmitters);
+			ImGui::Checkbox("FXs", &showFxs );
 
 			ImGui::Checkbox("Freeze culling", &freezeCulling);
 			ImGui::SameLine();
@@ -1691,8 +1730,8 @@ int main(int argc, char ** argv) {
 					if(showZones && !debugZones.indices.empty()){
 						GPU::drawMesh( debugZones );
 					}
-					if(showEmitters && !debugParticles.indices.empty()){
-						GPU::drawMesh( debugParticles );
+					if(showFxs && !debugFxs.indices.empty()){
+						GPU::drawMesh( debugFxs );
 					}
 				}
 			}
