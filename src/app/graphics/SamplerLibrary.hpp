@@ -34,6 +34,7 @@ private:
 
 	/** \brief Sampler parameters */
 	struct SamplerSettings {
+		std::string name;
 		Filter filter; ///< Min/mag/mip filtering.
 		Wrap wrapping; ///< Adress wrapping.
 		bool useLods; ///< Use mip LODs.

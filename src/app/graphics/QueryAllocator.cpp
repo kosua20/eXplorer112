@@ -14,6 +14,12 @@ void QueryAllocator::init(GPUQuery::Type type, uint count){
 			{ GPUQuery::Type::SAMPLES_DRAWN, VK_QUERY_TYPE_OCCLUSION},
 			{ GPUQuery::Type::ANY_DRAWN, VK_QUERY_TYPE_OCCLUSION},
 	};
+	static const std::unordered_map<GPUQuery::Type, std::string> typeNames = {
+			{ GPUQuery::Type::TIME_ELAPSED, "Time elapsed"},
+			{ GPUQuery::Type::SAMPLES_DRAWN, "Samples drawn"},
+			{ GPUQuery::Type::ANY_DRAWN, "Any drawn"},
+	};
+
 	if(types.count(type) == 0){
 		Log::error("GPU: Unsupported query type on this device.");
 	}
@@ -29,6 +35,7 @@ void QueryAllocator::init(GPUQuery::Type type, uint count){
 		if(vkCreateQueryPool(context->device, &poolInfo, nullptr, &_pools[fid]) != VK_SUCCESS){
 			Log::error("GPU: Unable to create query pool.");
 		}
+		VkUtils::setDebugName(*context, VK_OBJECT_TYPE_QUERY_POOL, uint64_t(_pools[fid]), "Pool %u - type %u", fid, typeNames.at(type).c_str());
 	}
 }
 

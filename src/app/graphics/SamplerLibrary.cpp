@@ -9,18 +9,18 @@ void SamplerLibrary::init(){
 
 	// Create samplers.
 	const std::vector<SamplerSettings> settings = {
-		{ Filter::NEAREST_NEAREST, Wrap::CLAMP,  false, false }, // sClampNear
-		{ Filter::NEAREST_NEAREST, Wrap::REPEAT, false, false }, // sRepeatNear
-		{ Filter::LINEAR_NEAREST,  Wrap::CLAMP,  false, false }, // sClampLinear
-		{ Filter::LINEAR_NEAREST,  Wrap::REPEAT, false, false }, // sRepeatLinear
-		{ Filter::NEAREST_NEAREST, Wrap::CLAMP,  true,  true  }, // sClampNearNear
-		{ Filter::NEAREST_NEAREST, Wrap::REPEAT, true,  true  }, // sRepeatNearNear
-		{ Filter::LINEAR_NEAREST,  Wrap::CLAMP,  true,  true  }, // sClampLinearNear
-		{ Filter::LINEAR_NEAREST,  Wrap::REPEAT, true,  true  }, // sRepeatLinearNear
-		{ Filter::NEAREST_LINEAR,  Wrap::CLAMP,  true,  true  }, // sClampNearLinear
-		{ Filter::NEAREST_LINEAR,  Wrap::REPEAT, true,  true  }, // sRepeatNearLinear
-		{ Filter::LINEAR_LINEAR,   Wrap::CLAMP,  true,  true  }, // sClampLinearLinear
-		{ Filter::LINEAR_LINEAR,   Wrap::REPEAT, true,  true  }, // sRepeatLinearLinear
+		{ "sClampNear", 		 Filter::NEAREST_NEAREST, Wrap::CLAMP,  false, false }, // sClampNear
+		{ "sRepeatNear", 		 Filter::NEAREST_NEAREST, Wrap::REPEAT, false, false }, // sRepeatNear
+		{ "sClampLinear", 		 Filter::LINEAR_NEAREST,  Wrap::CLAMP,  false, false }, // sClampLinear
+		{ "sRepeatLinear", 		 Filter::LINEAR_NEAREST,  Wrap::REPEAT, false, false }, // sRepeatLinear
+		{ "sClampNearNear", 	 Filter::NEAREST_NEAREST, Wrap::CLAMP,  true,  true  }, // sClampNearNear
+		{ "sRepeatNearNear", 	 Filter::NEAREST_NEAREST, Wrap::REPEAT, true,  true  }, // sRepeatNearNear
+		{ "sClampLinearNear", 	 Filter::LINEAR_NEAREST,  Wrap::CLAMP,  true,  true  }, // sClampLinearNear
+		{ "sRepeatLinearNear", 	 Filter::LINEAR_NEAREST,  Wrap::REPEAT, true,  true  }, // sRepeatLinearNear
+		{ "sClampNearLinear", 	 Filter::NEAREST_LINEAR,  Wrap::CLAMP,  true,  true  }, // sClampNearLinear
+		{ "sRepeatNearLinear", 	 Filter::NEAREST_LINEAR,  Wrap::REPEAT, true,  true  }, // sRepeatNearLinear
+		{ "sClampLinearLinear",  Filter::LINEAR_LINEAR,   Wrap::CLAMP,  true,  true  }, // sClampLinearLinear
+		{ "sRepeatLinearLinear", Filter::LINEAR_LINEAR,   Wrap::REPEAT, true,  true  }, // sRepeatLinearLinear
 	};
 
 
@@ -52,8 +52,13 @@ void SamplerLibrary::init(){
 		Log::error("GPU: Unable to create sampler set layout.");
 	}
 
+	VkUtils::setDebugName(*context, VK_OBJECT_TYPE_DESCRIPTOR_SET_LAYOUT, uint64_t(_layout), "%s-%s", "Samplers", "shared");
+
 	// Create descriptor set.
 	_set = context->descriptorAllocator.allocateSet(_layout);
+
+	VkUtils::setDebugName(*context, VK_OBJECT_TYPE_DESCRIPTOR_SET, uint64_t(_set.handle), "%s set-%s", "Samplers", "shared");
+
 }
 
 
@@ -98,5 +103,6 @@ VkSampler SamplerLibrary::setupSampler(const SamplerSettings& settings) {
 	if(vkCreateSampler(context->device, &samplerInfo, nullptr, &sampler) != VK_SUCCESS) {
 		Log::error("GPU: Unable to create a sampler.");
 	}
+	VkUtils::setDebugName(*context, VK_OBJECT_TYPE_SAMPLER, uint64_t(sampler), "%s", settings.name.c_str());
 	return sampler;
 }

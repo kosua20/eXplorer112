@@ -441,6 +441,7 @@ VkPipeline PipelineCache::buildGraphicsPipeline(const GPUState& state){
 		Log::error("GPU: Unable to create pipeline.");
 	}
 	++GPU::_metrics.pipelines;
+	VkUtils::setDebugName(*context, VK_OBJECT_TYPE_PIPELINE, uint64_t(pipeline), "Graphic-%s", state.graphicsProgram->name().c_str());
 	return pipeline;
 }
 

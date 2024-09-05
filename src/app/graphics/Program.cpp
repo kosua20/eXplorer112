@@ -222,6 +222,7 @@ void Program::reflect(){
 		if(vkCreateDescriptorSetLayout(context->device, &setInfo, nullptr, &_state.setLayouts[IMAGES_SET]) != VK_SUCCESS){
 			Log::error("GPU: Unable to create set layout.");
 		}
+		VkUtils::setDebugName(*context, VK_OBJECT_TYPE_DESCRIPTOR_SET_LAYOUT, uint64_t(_state.setLayouts[IMAGES_SET]), "%s-%s", "Images", _name.c_str());
 	}
 
 	// Static buffers.
@@ -245,6 +246,7 @@ void Program::reflect(){
 		if(vkCreateDescriptorSetLayout(context->device, &setInfo, nullptr, &_state.setLayouts[BUFFERS_SET]) != VK_SUCCESS){
 			Log::error("GPU: Unable to create set layout.");
 		}
+		VkUtils::setDebugName(*context, VK_OBJECT_TYPE_DESCRIPTOR_SET_LAYOUT, uint64_t(_state.setLayouts[BUFFERS_SET]), "%s-%s", "Buffers", _name.c_str());
 	}
 
 	// Samplers
@@ -282,6 +284,7 @@ void Program::reflect(){
 	if(vkCreatePipelineLayout(context->device, &layoutInfo, nullptr, &_state.layout) != VK_SUCCESS){
 		Log::error("GPU: Unable to create pipeline layout.");
 	}
+	VkUtils::setDebugName(*context, VK_OBJECT_TYPE_PIPELINE_LAYOUT, uint64_t(_state.layout), "Layout-%s", _name.c_str());
 
 }
 
@@ -355,6 +358,8 @@ void Program::update(){
 		context->descriptorAllocator.freeSet(_currentSets[IMAGES_SET]);
 		_currentSets[IMAGES_SET] = context->descriptorAllocator.allocateSet(_state.setLayouts[IMAGES_SET]);
 
+		VkUtils::setDebugName(*context, VK_OBJECT_TYPE_DESCRIPTOR_SET, uint64_t(_currentSets[IMAGES_SET].handle), "%s set-%s", "Images", _name.c_str());
+
 		std::vector<std::vector<VkDescriptorImageInfo>> imageInfos(_textures.size());
 		std::vector<VkWriteDescriptorSet> writes;
 		uint tid = 0;
@@ -388,6 +393,8 @@ void Program::update(){
 		// We can't just update the current descriptor set as it might be in use.
 		context->descriptorAllocator.freeSet(_currentSets[BUFFERS_SET]);
 		_currentSets[BUFFERS_SET] = context->descriptorAllocator.allocateSet(_state.setLayouts[BUFFERS_SET]);
+
+		VkUtils::setDebugName(*context, VK_OBJECT_TYPE_DESCRIPTOR_SET, uint64_t(_currentSets[BUFFERS_SET].handle), "%s set-%s", "Buffers", _name.c_str());
 
 		std::vector<std::vector<VkDescriptorBufferInfo>> infos(_staticBuffers.size());
 		std::vector<VkWriteDescriptorSet> writes;
