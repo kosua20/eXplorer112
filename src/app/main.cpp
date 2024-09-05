@@ -300,8 +300,17 @@ void addEmitterGizmo(Mesh& mesh, const World::ParticleSystem& fx){
 
 	// Add box.
 	{
+		//(m,m,m), \p (m,m,M), \p (m,M,m), \p (m,M,M), \p (M,m,m), \p (M,m,M), \p (M,M,m), \p (M,M,M)
+		const auto& corners = fx.bbox.getCorners();
+		const uint indexShift = mesh.positions.size();
+		mesh.positions.insert( mesh.positions.end(), corners.begin(), corners .end());
 		
+		for( const uint ind : boxIndices )
+		{
+			mesh.indices.push_back( indexShift + ind );
+		}
 	}
+
 	// Fill colors.
 	const uint vertexFinalCount = mesh.positions.size() - firstVertexIndex;
 	mesh.colors.insert(mesh.colors.end(), vertexFinalCount, glm::vec3(1.0f,0.0f,1.0f));

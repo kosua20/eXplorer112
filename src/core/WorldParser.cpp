@@ -206,8 +206,11 @@ uint World::registerTextureMaterial(Object::Material::Type type, const std::stri
 
 BoundingBox getFxDefParams(const std::string& inFxDefPath, const fs::path& resourcePath){
 
+	BoundingBox emptyBox;
+	emptyBox.merge( glm::vec3(1.f ) );
+	emptyBox.merge( glm::vec3(-1.f ) );
 	if(inFxDefPath.empty()){
-		return {};
+		return emptyBox;
 	}
 
 	std::string fxDefStr(inFxDefPath);
@@ -226,7 +229,7 @@ BoundingBox getFxDefParams(const std::string& inFxDefPath, const fs::path& resou
 
 	if(!res){
 		Log::error("Unable to load fxDef file at path %s: %s", fxDefPath.string().c_str(), res.description());
-		return {};
+		return emptyBox;
 	}
 
 	const auto& emitters = fxDef.child("fxDef").child("emitters");
