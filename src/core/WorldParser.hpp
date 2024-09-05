@@ -66,6 +66,14 @@ public:
 		uint material;
 	};
 
+	struct Billboard {
+		glm::mat4 frame;
+		glm::vec3 color;
+		glm::vec2 size;
+		std::string name;
+		uint material;
+	};
+
 	bool load(const fs::path& path, const fs::path& resourcesPath);
 
 	const std::vector<Object>& objects() const {  return _objects; };
@@ -79,6 +87,8 @@ public:
 	const std::vector<Light>& lights() const {  return _lights; };
 
 	const std::vector<ParticleSystem>& particles() const {  return _particles; };
+
+	const std::vector<Billboard>& billboards() const {  return _billboards; };
 	
 	const std::vector<Zone>& zones() const {  return _zones; };
 
@@ -99,6 +109,7 @@ private:
 	std::vector<Camera> _cameras;
 	std::vector<Light> _lights;
 	std::vector<ParticleSystem> _particles;
+	std::vector<Billboard> _billboards;
 	std::vector<Zone> _zones;
 	std::string _name;
 

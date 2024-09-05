@@ -362,9 +362,10 @@ void World::processEntity(const pugi::xml_node& entity, const glm::mat4& globalF
 		if(fxType == 9){
 			// Billboard
 			// Type: 0,1,3
+			// 0 is probably world space.
 			const char* billboardTypeStr = entity.find_child_by_attribute("name", "billboardType").child_value();
 			const int billboardType = Area::parseInt(billboardTypeStr, 0);
-
+			// Blending 1 is additive?
 			const char* blendingStr = entity.find_child_by_attribute("name", "blending").child_value();
 			const int blending = Area::parseInt(blendingStr, 0);
 
@@ -379,6 +380,13 @@ void World::processEntity(const pugi::xml_node& entity, const glm::mat4& globalF
 			const std::string materialStr = getEntityAttribute(entity, "material");
 			const std::string textureName = getMaterialTexture(materialStr, resourcePath);
 			const uint materialId = registerTextureMaterial(Object::Material::BILLBOARD, textureName);
+
+			Billboard& fx = _billboards.emplace_back();
+			fx.name = objName;
+			fx.frame = frame;
+			fx.material = materialId;
+			fx.size = glm::vec2( width, height );
+			fx.color = color;
 
 			Log::info("Billboard %s: %d,%d, %fx%f, %s, %f,%f,%f", objName.c_str(), billboardType, blending, width, height, textureName.c_str(), color[0], color[1], color[2]);
 		} else if(fxType == 7){
