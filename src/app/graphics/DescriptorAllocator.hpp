@@ -5,7 +5,7 @@
 
 #include <deque>
 
-#define BINDLESS_SET_MAX_SIZE 64
+#define BINDLESS_SET_MAX_SIZE 96
 
 struct GPUContext;
 
