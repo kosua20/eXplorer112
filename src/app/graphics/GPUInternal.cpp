@@ -649,7 +649,7 @@ glm::uvec2 VkUtils::copyTextureRegionToBuffer(VkCommandBuffer& commandBuffer, co
 		currentCount += imageCount;
 	}
 
-	dstBuffer.reset(new Buffer(currentSize, BufferType::GPUTOCPU));
+	dstBuffer.reset(new Buffer(currentSize, BufferType::GPUTOCPU, "ImageCopy"));
 
 	// Copy from the intermediate texture.
 	vkCmdCopyImageToBuffer(commandBuffer, transferTexture.gpu->image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, dstBuffer->gpu->buffer, uint32_t(blitRegions.size()), blitRegions.data());

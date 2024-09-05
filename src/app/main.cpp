@@ -527,10 +527,10 @@ int main(int argc, char ** argv) {
 	programPool.push_back(loadProgram("fog_gbuffer"));
 	Program* fogCompute = programPool.back().program;
 
-	UniformBuffer<FrameData> frameInfos(1, 64);
-	UniformBuffer<FrameData> shadowInfos(1, 2);
-	UniformBuffer<glm::vec2> blurInfosV(1, 2);
-	UniformBuffer<glm::vec2> blurInfosH(1, 2);
+	UniformBuffer<FrameData> frameInfos(1, 64, "FrameInfos");
+	UniformBuffer<FrameData> shadowInfos(1, 2, "ShadowInfos");
+	UniformBuffer<glm::vec2> blurInfosV(1, 2, "BlurInfosV");
+	UniformBuffer<glm::vec2> blurInfosH(1, 2, "BlurInfosH");
 
 	const glm::uvec2 renderRes(config.resolutionRatio * config.screenResolution);
 
@@ -634,8 +634,8 @@ int main(int argc, char ** argv) {
 		// Allocate commands buffer.
 		const size_t meshCount = scene.meshInfos->size();
 		const size_t instanceCount = scene.instanceInfos->size();
-		drawCommands = std::make_unique<Buffer>( meshCount * sizeof( GPU::DrawCommand ), BufferType::INDIRECT );
-		drawInstances = std::make_unique<Buffer>( instanceCount * sizeof( uint ), BufferType::STORAGE );
+		drawCommands = std::make_unique<Buffer>( meshCount * sizeof( GPU::DrawCommand ), BufferType::INDIRECT, "DrawCommands" );
+		drawInstances = std::make_unique<Buffer>( instanceCount * sizeof( uint ), BufferType::STORAGE, "DrawInstances" );
 
 		uint shadowCount = 0u;
 		currentShadowcastingLight = 0u;

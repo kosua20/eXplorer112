@@ -786,7 +786,7 @@ void GPU::uploadTexture(const Texture & texture) {
 	std::vector<size_t> imageOffsets(texture.images.size());
 
 	// Transfer the complete CPU image data to a staging buffer, handling conversion..
-	Buffer transferBuffer(totalSize, BufferType::CPUTOGPU);
+	Buffer transferBuffer(totalSize, BufferType::CPUTOGPU, "ImageUpload");
 
 	// TODO: could handle float values as a special case converted on the CPU.
 	{
@@ -1188,7 +1188,7 @@ void GPU::uploadBuffer(const Buffer & buffer, size_t size, uchar * data, size_t 
 	}
 
 	// Otherwise, create a transfer buffer.
-	Buffer transferBuffer(size, BufferType::CPUTOGPU);
+	Buffer transferBuffer(size, BufferType::CPUTOGPU, "BufferStaging");
 	transferBuffer.upload(size, data, 0);
 	// Copy operation.
 	VkBufferCopy copyRegion = {};
@@ -1222,7 +1222,7 @@ void GPU::downloadBufferSync(const Buffer & buffer, size_t size, uchar * data, s
 	}
 
 	// Otherwise, create a transfer buffer.
-	Buffer transferBuffer(size, BufferType::GPUTOCPU);
+	Buffer transferBuffer(size, BufferType::GPUTOCPU, "Download");
 
 	// Copy operation.
 	VkCommandBuffer commandBuffer = VkUtils::beginSyncOperations(_context);
@@ -1319,8 +1319,8 @@ void GPU::setupMesh(Mesh & mesh) {
 
 	// Upload data to the buffers. Staging will be handled internally.
 	mesh.gpu->count = mesh.indices.size();
-	mesh.gpu->vertexBuffer.reset(new Buffer(totalSize, BufferType::VERTEX));
-	mesh.gpu->indexBuffer.reset(new Buffer(inSize, BufferType::INDEX));
+	mesh.gpu->vertexBuffer.reset(new Buffer(totalSize, BufferType::VERTEX, "Vertices " + mesh.name()));
+	mesh.gpu->indexBuffer.reset(new Buffer(inSize, BufferType::INDEX, "Indices " + mesh.name()));
 
 	mesh.gpu->vertexBuffer->upload(totalSize, vertexBufferData.data(), 0);
 	mesh.gpu->indexBuffer->upload(inSize, reinterpret_cast<unsigned char *>(mesh.indices.data()), 0);

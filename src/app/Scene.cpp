@@ -153,7 +153,7 @@ void Scene::upload(const World& world, const GameFiles& files){
 			meshCount += obj.faceSets.size();
 			objectMeshIndicesRange.emplace_back(oldMeshCount, meshCount);
 		}
-		meshInfos = std::make_unique<StructuredBuffer<MeshInfos>>(meshCount, BufferType::STORAGE);
+		meshInfos = std::make_unique<StructuredBuffer<MeshInfos>>(meshCount, BufferType::STORAGE, "MeshInfos");
 		meshDebugInfos.resize(meshCount);
 
 		uint currentMeshId = 0;
@@ -245,7 +245,7 @@ void Scene::upload(const World& world, const GameFiles& files){
 		}
 
 		// Build a list of unrolled instance data (frames...) and update mesh infos.
-		instanceInfos = std::make_unique<StructuredBuffer<MeshInstanceInfos>>(totalInstancesCount, BufferType::STORAGE);
+		instanceInfos = std::make_unique<StructuredBuffer<MeshInstanceInfos>>(totalInstancesCount, BufferType::STORAGE, "InstanceInfos");
 		instanceDebugInfos.resize(totalInstancesCount);
 
 		uint currentInstanceId = 0u;
@@ -277,7 +277,7 @@ void Scene::upload(const World& world, const GameFiles& files){
 	/// Material and textures.
 	{
 		const std::vector<Object::Material>& materials = world.materials();
-		materialInfos = std::make_unique<StructuredBuffer<MaterialInfos>>(materials.size(), BufferType::STORAGE);
+		materialInfos = std::make_unique<StructuredBuffer<MaterialInfos>>(materials.size(), BufferType::STORAGE, "MaterialInfos");
 
 		// Load all textures.
 		std::vector<Texture> textures2D;
@@ -355,7 +355,7 @@ void Scene::upload(const World& world, const GameFiles& files){
 		const float sceneRadius = computeBoundingBox().getSphere().radius;
 
 		const uint lightsCount = world.lights().size();
-		lightInfos = std::make_unique<StructuredBuffer<LightInfos>>(lightsCount, BufferType::STORAGE);
+		lightInfos = std::make_unique<StructuredBuffer<LightInfos>>(lightsCount, BufferType::STORAGE, "LightInfos");
 		uint shadowIndex = 0u;
 		for(uint i = 0; i < lightsCount; ++i){
 			const World::Light& light = world.lights()[i];

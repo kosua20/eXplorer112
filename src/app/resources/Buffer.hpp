@@ -14,7 +14,7 @@ public:
 	\param sizeInBytes the size of the buffer in bytes
 	\param atype the use type of the buffer (uniform, index, vertex, storage...)
 	 */
-	Buffer(size_t sizeInBytes, BufferType atype);
+	Buffer(size_t sizeInBytes, BufferType atype, const std::string& name);
 
 	/** Upload data to the buffer. You have to take care of synchronization when
 	 updating a subregion of the buffer that is currently in use.
@@ -64,22 +64,26 @@ public:
 
 	const BufferType type; ///< Buffer type.
 
+	const std::string& name() const { return _name; }
+	
 protected:
 
 	/** Internal constructor, exposed for subclasses that override the size.
 	\param atype the use type of the buffer (uniform, index, vertex, storage...)
 	*/
-	Buffer(BufferType atype);
+	Buffer(BufferType atype, const std::string & name);
 
 	size_t size; ///< Buffer size in bytes.
 	
 public:
 
-
 	size_t sizeInBytes() const { return size; }
 
 	std::unique_ptr<GPUBuffer> gpu; ///< The GPU data (optional).
 
+private:
+
+	std::string _name;
 };
 
 template<typename T>
@@ -99,7 +103,7 @@ public:
    /** Constructor.
 	\param count the number of elements
 	*/
-	StructuredBuffer(size_t count, BufferType type);
+	StructuredBuffer(size_t count, BufferType type, const std::string& name);
 
    /** Accessor.
 	\param i the location of the item to retrieve
@@ -167,8 +171,8 @@ public:
 };
 
 template <typename T>
-StructuredBuffer<T>::StructuredBuffer(size_t count, BufferType type) :
-   Buffer(count * sizeof(T), type) {
+StructuredBuffer<T>::StructuredBuffer(size_t count, BufferType type, const std::string& name) :
+   Buffer(count * sizeof(T), type, name) {
    data.resize(count);
 }
 
@@ -186,7 +190,7 @@ public:
 	\param sizeInBytes size of the uniform buffer
 	\param use the update frequency
 	*/
-   UniformBufferBase(size_t sizeInBytes, int updateFrequency);
+   UniformBufferBase(size_t sizeInBytes, int updateFrequency, const std::string& name);
 
    /** Upload data. The buffer will internally copy the data (using the internal size)
 	to a region of mapped GPU memory. Buffering will be handled based on the update frequency.
@@ -243,7 +247,7 @@ public:
 	\param count the number of elements
 	\param frequency the update frequency of the buffer content
 	*/
-   UniformBuffer(size_t count, int updateFrequency);
+   UniformBuffer(size_t count, int updateFrequency, const std::string& name);
 
    /** Accessor.
 	\param i the location of the item to retrieve
@@ -311,8 +315,8 @@ public:
 };
 
 template <typename T>
-UniformBuffer<T>::UniformBuffer(size_t count, int updateFrequency) :
-   UniformBufferBase(count * sizeof(T), updateFrequency) {
+UniformBuffer<T>::UniformBuffer(size_t count, int updateFrequency, const std::string& name) :
+   UniformBufferBase(count * sizeof(T), updateFrequency, name) {
    data.resize(count);
 }
 
