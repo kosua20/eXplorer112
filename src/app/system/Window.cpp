@@ -33,24 +33,21 @@ _config(config), _allowEscape(escapeQuit) {
 	glfwWindowHint(GLFW_VISIBLE, hidden ? GLFW_FALSE : GLFW_TRUE);
 	glfwWindowHint(GLFW_FOCUSED, hidden ? GLFW_FALSE : GLFW_TRUE);
 	glfwWindowHint(GLFW_SRGB_CAPABLE, GLFW_TRUE);
-
+	glfwWindowHint(GLFW_AUTO_ICONIFY, GL_FALSE); // Avoid random minification in fullscreen on macOS.
 	const GLFWvidmode * mode = glfwGetVideoMode(glfwGetPrimaryMonitor());
-	glfwWindowHint(GLFW_RED_BITS, mode->redBits);
-	glfwWindowHint(GLFW_GREEN_BITS, mode->greenBits);
-	glfwWindowHint(GLFW_BLUE_BITS, mode->blueBits);
-	glfwWindowHint(GLFW_REFRESH_RATE, mode->refreshRate);
 
 	if(config.fullscreen) {
+		glfwWindowHint(GLFW_RED_BITS, mode->redBits);
+		glfwWindowHint(GLFW_GREEN_BITS, mode->greenBits);
+		glfwWindowHint(GLFW_BLUE_BITS, mode->blueBits);
+		glfwWindowHint(GLFW_REFRESH_RATE, mode->refreshRate);
 		/// \note We might want to impose the configured size here. This means the monitor could be set in a non-native mode.
 		_window = glfwCreateWindow(mode->width, mode->height, name.c_str(), glfwGetPrimaryMonitor(), nullptr);
 	} else {
-		const unsigned int defaultWidth = mode->width;
-		const unsigned int defaultHeight = mode->height;
-		// If the initial size has not been customized, fill with default parameters.
-		const int tgtWidth = _config.initialWidth > 0.f ? int(_config.initialWidth) : defaultWidth;
-		const int tgtHeight = _config.initialHeight > 0.f ? int(_config.initialHeight) : defaultHeight;
 		// Create a window with a given size. Width and height are defined in the configuration.
-		_window = glfwCreateWindow(tgtWidth, tgtHeight, name.c_str(), nullptr, nullptr);
+		int width = _config.initialWidth != 0 ? int(_config.initialWidth) : mode->width;
+		int height = _config.initialHeight != 0 ? int(_config.initialHeight) : mode->height;
+		_window = glfwCreateWindow(width, height, name.c_str(), nullptr, nullptr);
 	}
 
 	if(!_window) {
@@ -188,6 +185,12 @@ bool Window::nextFrame() {
 	do {
 		// Update events (inputs,...).
 		Input::manager().update();
+		// On some platforms, when the window is minimized, the swapchain is invalidated and expected to have a 0,0 extent
+		// which is technicaly forbidden by the specification, leading to invalidate operations.
+		// To prevent this, wait for new events without rendering while we are minimized.
+		if(Input::manager().minimized()){
+			continue;
+		}
 		// Handle quitting.
 		if(_allowEscape && Input::manager().pressed(Input::Key::Escape)) {
 			perform(Action::Quit);
