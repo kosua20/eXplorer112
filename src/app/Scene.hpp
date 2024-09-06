@@ -11,6 +11,8 @@
 #include "resources/Buffer.hpp"
 #include "Common.hpp"
 
+#define BLENDING_MODE_COUNT 4
+
 struct GameFiles {
 
 	GameFiles();
@@ -93,6 +95,14 @@ public:
 		TextureInfos data;
 	};
 
+	struct Range {
+		int firstIndex = 0;
+		int indexCount = 0;
+	};
+
+	using BlendingInfos = std::array<Range,BLENDING_MODE_COUNT>;
+
+
 public:
 
 	void clean();
@@ -123,6 +133,9 @@ public:
 	World world;
 
 	Mesh globalMesh{"None"};
+	Mesh billboardsMesh{"Billboards"};
+	BlendingInfos billboardRanges;
+
 	std::vector<Texture> textures;
 
 	std::unique_ptr<StructuredBuffer<MeshInfos>> meshInfos;

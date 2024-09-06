@@ -41,6 +41,8 @@ GameFiles::GameFiles(const fs::path& installPath){
 
 void Scene::clean(){
 	globalMesh.clean();
+	billboardsMesh.clean();
+	billboardRanges.fill({0,0});
 
 	meshInfos.reset();
 	instanceInfos.reset();
@@ -398,9 +400,71 @@ void Scene::upload(const World& world, const GameFiles& files){
 			info.materialIndex = light.material;
 		}
 	}
+	// Billboards
+	{
+		const std::array<glm::vec2, 4> uvs = {
+			glm::vec2(0.f, 1.f),
+			glm::vec2(0.f, 0.f),
+			glm::vec2(1.f, 0.f),
+			glm::vec2(1.f, 1.f),
+		};
+
+		const std::array<glm::vec2, 4> positions = {
+			glm::vec2(-0.5f, -0.5f),
+			glm::vec2(-0.5f,  0.5f),
+			glm::vec2( 0.5f,  0.5f),
+			glm::vec2( 0.5f, -0.5f),
+		};
+
+		const std::array<uint, 6> indices = {
+			0, 2, 1,
+			0, 3, 2,
+		};
+
+		const size_t vertCount = world.billboards().size() * 4;
+		const size_t indicesCount = world.billboards().size() * indices.size();
+		billboardsMesh.positions.reserve(vertCount);
+		billboardsMesh.texcoords.reserve(vertCount);
+		billboardsMesh.colors.reserve(vertCount);
+		billboardsMesh.normals.reserve(vertCount); // Used for material index
+		billboardsMesh.indices.reserve(indicesCount);
+		uint currentBlend = 0;
+		for(const World::Billboard& billboard : world.billboards()){
+			// Generate a quad with vertex colors.
+			std::array<glm::vec3, 4> verts;
+			for(int i = 0; i < 4; ++i){
+				verts[i] = glm::vec3(billboard.frame * glm::vec4(billboard.size * positions[i], 0.f, 1.0f));
+			}
+			const uint firstVertexIndex = billboardsMesh.positions.size();
+			billboardsMesh.positions.insert(billboardsMesh.positions.end(), verts.begin(), verts.end());
+			billboardsMesh.colors.insert(billboardsMesh.colors.end(), 4, billboard.color);
+			billboardsMesh.normals.insert(billboardsMesh.normals.end(), 4, glm::vec3(billboard.material,0.f,0.f));
+			billboardsMesh.texcoords.insert(billboardsMesh.texcoords.end(), uvs.begin(), uvs.end());
+
+			if(billboard.blending != currentBlend){
+				const uint firstIndex = billboardsMesh.indices.size();
+				assert(billboard.blending < BLENDING_MODE_COUNT);
+				billboardRanges[currentBlend].indexCount = firstIndex - billboardRanges[currentBlend].firstIndex;
+				currentBlend = billboard.blending;
+				billboardRanges[currentBlend].firstIndex = firstIndex;
+			}
+
+			for(uint ind : indices){
+				billboardsMesh.indices.push_back(firstVertexIndex + ind);
+			}
+		}
+		billboardRanges[currentBlend].indexCount = billboardsMesh.indices.size() - billboardRanges[currentBlend].firstIndex;
+
+		uint dbg = 0;
+		for(auto& range : billboardRanges){
+			Log::info("Range %d: %d %d", dbg, range.firstIndex, range.indexCount);
+			++dbg;
+		}
+	}
 
 	// Send data to the GPU.
 	globalMesh.upload();
+	billboardsMesh.upload();
 	instanceInfos->upload();
 	meshInfos->upload();
 	materialInfos->upload();
