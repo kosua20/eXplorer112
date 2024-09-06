@@ -59,13 +59,23 @@ public:
 		float fogDensity;
 	};
 
+	enum Alignment {
+		ALIGN_WORLD = 0, ALIGN_AROUND_X = 1, ALIGN_SCREEN = 2, ALIGN_AROUND_Y = 3, ALIGN_COUNT
+	};
+
+	enum Blending {
+		BLEND_OPAQUE = 0, BLEND_ADDITIVE = 1, BLEND_MULTIPLY = 2, BLEND_ALPHA = 3, BLEND_COUNT
+	};
+
 	struct Emitter {
 		BoundingBox bbox;
 		glm::mat4 frame;
 		std::string name;
 		glm::vec3 color;
 		uint material;
-		uint type, blending, shape;
+		uint type;
+		Alignment alignment;
+		Blending blending;
 	};
 
 	struct Billboard {
@@ -74,7 +84,8 @@ public:
 		glm::vec2 size;
 		std::string name;
 		uint material;
-		uint type, blending;
+		Alignment alignment;
+		Blending blending;
 	};
 
 	bool load(const fs::path& path, const fs::path& resourcesPath);

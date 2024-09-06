@@ -43,17 +43,33 @@ static const std::vector<uint> octaIndices = {
 	0, 1, 0, 2, 3, 2, 4, 5, 4
 };
 
-static const std::array<BlendFunction, BLENDING_MODE_COUNT> srcFuncs = {
+static const std::array<BlendFunction, World::BLEND_COUNT> srcFuncs = {
 	BlendFunction::ONE,
 	BlendFunction::ONE,
 	BlendFunction::DST_COLOR,
 	BlendFunction::SRC_ALPHA,
 };
-static const std::array<BlendFunction, BLENDING_MODE_COUNT> dstFuncs = {
+static const std::array<BlendFunction, World::BLEND_COUNT> dstFuncs = {
 	BlendFunction::ZERO,
 	BlendFunction::ONE,
 	BlendFunction::ZERO,
 	BlendFunction::ONE_MINUS_SRC_ALPHA,
+};
+
+static const std::unordered_map<World::Blending, const char*> blendNames = {
+			{ World::BLEND_OPAQUE, "Opaque" },
+			{ World::BLEND_ADDITIVE, "Additive" },
+			{ World::BLEND_MULTIPLY, "Multiply" },
+	{ World::BLEND_ALPHA, "Alpha" },
+	{ World::BLEND_COUNT, "Unknown" },
+};
+
+static const std::unordered_map<World::Alignment, const char*> alignNames = {
+			{ World::ALIGN_WORLD, "World" },
+			{ World::ALIGN_AROUND_X, "Around X" },
+			{ World::ALIGN_SCREEN, "Screen" },
+	{ World::ALIGN_AROUND_Y, "Around Y" },
+	{ World::ALIGN_COUNT, "Unknown" },
 };
 
 
@@ -1167,7 +1183,7 @@ int main(int argc, char ** argv) {
 							// Header
 							ImGui::TableSetupScrollFreeze(0, 1); // Make top row always visible
 							ImGui::TableSetupColumn("Name", ImGuiTableColumnFlags_None);
-							ImGui::TableSetupColumn("Type", ImGuiTableColumnFlags_None);
+							ImGui::TableSetupColumn("Alignment", ImGuiTableColumnFlags_None);
 							ImGui::TableSetupColumn("Blending", ImGuiTableColumnFlags_None);
 							ImGui::TableSetupColumn("Color", ImGuiTableColumnFlags_None);
 							ImGui::TableHeadersRow();
@@ -1189,10 +1205,11 @@ int main(int argc, char ** argv) {
 									camera.pose(camPos, camCenter, glm::vec3(0.0f, 1.0f, 0.0f));
 									camera.fov(45.0f * glm::pi<float>() / 180.0f);
 								}
+								
 								ImGui::TableNextColumn();
-								ImGui::Text("%u", billboard.type);
+								ImGui::Text("%s", alignNames.at(billboard.alignment));
 								ImGui::TableNextColumn();
-								ImGui::Text("%u", billboard.blending);
+								ImGui::Text("%s", blendNames.at(billboard.blending));
 								ImGui::TableNextColumn();
 								glm::vec3 tmpColor = billboard.color;
 								ImGui::ColorEdit3("##BillboardColor", &tmpColor[0], ImGuiColorEditFlags_NoLabel | ImGuiColorEditFlags_NoInputs);
@@ -1213,8 +1230,8 @@ int main(int argc, char ** argv) {
 							ImGui::TableSetupScrollFreeze(0, 1); // Make top row always visible
 							ImGui::TableSetupColumn("Name", ImGuiTableColumnFlags_None);
 							ImGui::TableSetupColumn("Type", ImGuiTableColumnFlags_None);
+							ImGui::TableSetupColumn("Alignment", ImGuiTableColumnFlags_None);
 							ImGui::TableSetupColumn("Blending", ImGuiTableColumnFlags_None);
-							ImGui::TableSetupColumn("Shape", ImGuiTableColumnFlags_None);
 							ImGui::TableSetupColumn("Color", ImGuiTableColumnFlags_None);
 							ImGui::TableHeadersRow();
 
@@ -1238,9 +1255,9 @@ int main(int argc, char ** argv) {
 								ImGui::TableNextColumn();
 								ImGui::Text("%u", emitter.type);
 								ImGui::TableNextColumn();
-								ImGui::Text("%u", emitter.blending);
+								ImGui::Text("%s", alignNames.at(emitter.alignment));
 								ImGui::TableNextColumn();
-								ImGui::Text("%u", emitter.shape);
+								ImGui::Text("%s", blendNames.at(emitter.blending));
 								ImGui::TableNextColumn();
 								glm::vec3 tmpColor = emitter.color;
 								ImGui::ColorEdit3("##EmitterColor", &tmpColor[0], ImGuiColorEditFlags_NoLabel | ImGuiColorEditFlags_NoInputs);
@@ -1762,7 +1779,7 @@ int main(int argc, char ** argv) {
 				billboardObject->buffer(*scene.materialInfos, 1);
 
 
-				for(uint i = 0; i < BLENDING_MODE_COUNT; ++i){
+				for(uint i = 0; i < World::BLEND_COUNT; ++i){
 					const Scene::Range & range = scene.billboardRanges[i];
 					if(range.indexCount <= 0){
 						continue;

@@ -212,7 +212,7 @@ void World::processFxDef(const pugi::xml_document& fxDef, const std::string& bas
 
 		/* Emitter type: 0: punctual, 2: in box
 		 Blending: 1,2,3: see existing
-		 Particle type: 0,2
+		 Particle type: 0,2 (see billboard)
 		 */
 		/*
 	   <param name="particletype" data="int">0</param>
@@ -255,8 +255,8 @@ void World::processFxDef(const pugi::xml_document& fxDef, const std::string& bas
 		fx.material = materialId;
 		fx.bbox = BoundingBox(minDim, maxDim);
 		fx.type = emitterType;
-		fx.shape = particleType;
-		fx.blending = blending;
+		fx.alignment = Alignment(particleType);
+		fx.blending = Blending(blending);
 		++i;
 
 		const glm::vec3 sizes = fx.bbox.getSize();
@@ -357,8 +357,8 @@ void World::processEntity(const pugi::xml_node& entity, const glm::mat4& globalF
 			// Type: 0,1,3
 			// 0 is probably world space?
 			// 1 is rotate around X ? (la_croisee)
-			// 2 is rotate around Y ? or track camera fully?
-			// 3 is rotate around Z (ct03_06)
+			// 2 is track camera fully?
+			// 3 is rotate around Y (ct03_06)
 			const char* billboardTypeStr = entity.find_child_by_attribute("name", "billboardType").child_value();
 			const int billboardType = Area::parseInt(billboardTypeStr, 0);
 			// Blending 1 is additive. 2 could be multiply. 3 is alpha blend. 0 could be opaque.
@@ -387,8 +387,8 @@ void World::processEntity(const pugi::xml_node& entity, const glm::mat4& globalF
 			fx.material = materialId;
 			fx.size = glm::vec2( width, height );
 			fx.color = color;
-			fx.type = billboardType;
-			fx.blending = blending;
+			fx.alignment = Alignment(billboardType);
+			fx.blending = Blending(blending);
 			
 			Log::verbose("Billboard %s: %d,%d, %fx%f, %s, %f,%f,%f", objName.c_str(), billboardType, blending, width, height, textureName.c_str(), color[0], color[1], color[2]);
 
@@ -684,10 +684,10 @@ bool World::load(const fs::path& path, const fs::path& resourcePath){
 
 	// Sort billboards and FX by blending types
 	std::sort(_billboards.begin(), _billboards.end(), [](const Billboard& a, const Billboard& b){
-		return (a.blending < b.blending ) || ((a.blending == b.blending) && (a.type < b.type));
+		return (a.blending < b.blending ) || ((a.blending == b.blending) && (a.alignment < b.alignment));
 	});
 	std::sort(_particles.begin(), _particles.end(), [](const Emitter& a, const Emitter& b){
-		return (a.blending < b.blending ) || ((a.blending == b.blending) && (a.type < b.type));
+		return (a.blending < b.blending ) || ((a.blending == b.blending) && (a.alignment < b.alignment));
 	});
 
 	return true;

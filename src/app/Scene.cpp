@@ -427,18 +427,23 @@ void Scene::upload(const World& world, const GameFiles& files){
 		billboardsMesh.texcoords.reserve(vertCount);
 		billboardsMesh.colors.reserve(vertCount);
 		billboardsMesh.normals.reserve(vertCount); // Used for material index
+		billboardsMesh.tangents.reserve(vertCount); // Used for material index
 		billboardsMesh.indices.reserve(indicesCount);
 		uint currentBlend = 0;
 		for(const World::Billboard& billboard : world.billboards()){
 			// Generate a quad with vertex colors.
+			const glm::mat4 frame = billboard.alignment == World::ALIGN_WORLD ? billboard.frame : glm::mat4(1.0f);
+			const glm::vec3 center = glm::vec3(billboard.frame * glm::vec4(0.f, 0.f,0.f, 1.0f));
 			std::array<glm::vec3, 4> verts;
 			for(int i = 0; i < 4; ++i){
-				verts[i] = glm::vec3(billboard.frame * glm::vec4(billboard.size * positions[i], 0.f, 1.0f));
+				verts[i] = glm::vec3(frame * glm::vec4(billboard.size * positions[i], 0.f, 1.0f));
 			}
+
 			const uint firstVertexIndex = billboardsMesh.positions.size();
 			billboardsMesh.positions.insert(billboardsMesh.positions.end(), verts.begin(), verts.end());
 			billboardsMesh.colors.insert(billboardsMesh.colors.end(), 4, billboard.color);
-			billboardsMesh.normals.insert(billboardsMesh.normals.end(), 4, glm::vec3(billboard.material,0.f,0.f));
+			billboardsMesh.normals.insert(billboardsMesh.normals.end(), 4, glm::vec3(billboard.material, billboard.alignment, 0.f));
+			billboardsMesh.tangents.insert(billboardsMesh.tangents.end(), 4, center);
 			billboardsMesh.texcoords.insert(billboardsMesh.texcoords.end(), uvs.begin(), uvs.end());
 
 			if(billboard.blending != currentBlend){
@@ -455,11 +460,6 @@ void Scene::upload(const World& world, const GameFiles& files){
 		}
 		billboardRanges[currentBlend].indexCount = billboardsMesh.indices.size() - billboardRanges[currentBlend].firstIndex;
 
-		uint dbg = 0;
-		for(auto& range : billboardRanges){
-			Log::info("Range %d: %d %d", dbg, range.firstIndex, range.indexCount);
-			++dbg;
-		}
 	}
 
 	// Send data to the GPU.

@@ -11,8 +11,6 @@
 #include "resources/Buffer.hpp"
 #include "Common.hpp"
 
-#define BLENDING_MODE_COUNT 4
-
 struct GameFiles {
 
 	GameFiles();
@@ -100,7 +98,7 @@ public:
 		int indexCount = 0;
 	};
 
-	using BlendingInfos = std::array<Range,BLENDING_MODE_COUNT>;
+	using BlendingInfos = std::array<Range, World::BLEND_COUNT>;
 
 
 public:

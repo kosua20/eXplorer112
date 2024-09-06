@@ -54,6 +54,11 @@ layout(set = 0, binding = 0) uniform EngineData {
 #define MODE_POSTPROCESS_BLOOM 1
 #define MODE_POSTPROCESS_GRAIN 2
 
+#define BILLBOARD_WORLD 0
+#define BILLBOARD_AROUND_X 1
+#define BILLBOARD_SCREEN 2
+#define BILLBOARD_AROUND_Y 3
+
 const uint NO_MATERIAL = 0xFFFF;
 const uint NO_SHADOW = 0xFFFF;
 
