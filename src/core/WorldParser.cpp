@@ -203,73 +203,54 @@ uint World::registerTextureMaterial(Object::Material::Type type, const std::stri
 	return mid;
 }
 
-
-BoundingBox getFxDefParams(const std::string& inFxDefPath, const fs::path& resourcePath){
-
-	BoundingBox emptyBox;
-	emptyBox.merge( glm::vec3(1.f ) );
-	emptyBox.merge( glm::vec3(-1.f ) );
-	if(inFxDefPath.empty()){
-		return emptyBox;
-	}
-
-	std::string fxDefStr(inFxDefPath);
-	TextUtilities::replace(fxDefStr, "\\", "/");
-	fxDefStr = TextUtilities::trim(fxDefStr, "/");
-
-	// Load the mtl XML file.
-	const fs::path fxDefPath = resourcePath / fxDefStr;
-
-	// Uuuuurgh.
-	std::string fxDefContent = System::loadString(fxDefPath);
-	TextUtilities::replace(fxDefContent, "\"name=\"", "\" name=\"");
-
-	pugi::xml_document fxDef;
-	pugi::xml_parse_result res = fxDef.load_string(fxDefContent.c_str());
-
-	if(!res){
-		Log::error("Unable to load fxDef file at path %s: %s", fxDefPath.string().c_str(), res.description());
-		return emptyBox;
-	}
+void World::processFxDef(const pugi::xml_document& fxDef, const std::string& baseName, const glm::mat4& frame, const fs::path& resourcePath){
 
 	const auto& emitters = fxDef.child("fxDef").child("emitters");
-	BoundingBox bbox;
+	uint i = 0;
 	for(const auto& emitter : emitters.children("emitter")){
 		//"position" and "rotation" always zero
+		/*
+	   <param name="type" data="int">2</param>
+	   <param name="particletype" data="int">0</param>
+	   <param name="tanksize" data="int">400</param>
+	   <param name="timing" data="real[2]">(0.800, 2.500)</param>
+	   <param name="size" data="real[2]">(0.500, 1.000)</param>
+	   <param name="angle" data="real[2]">(-70.000, 70.000)</param>
+	   <param name="velocity" data="real[2]">(-1.000, -1.000)</param>
+	   <param name="rollspeed" data="real[2]">(1500.000, 150.000)</param>
+	   <param name="radius" data="real">0.000</param>
+	   <param name="regenrate" data="real">400.000</param>
+	   <param name="blending" data="int">1</param>
+		*/
 
 		std::string materialStr = emitter.find_child_by_attribute("name", "material").child_value();
 		materialStr = TextUtilities::trim(materialStr, "\"");
 		const std::string textureName = getMaterialTexture(materialStr, resourcePath);
-		//const uint materialId = registerTextureMaterial(Object::Material::BILLBOARD, textureName);
-		Log::info("* %s", textureName.c_str());
+		const uint materialId = registerTextureMaterial(Object::Material::PARTICLE, textureName);
+		//Log::info("* %s", textureName.c_str());
 
 		const char* minDimStr =  emitter.find_child_by_attribute("name", "dimension_min").child_value();
 		const char* maxDimStr =  emitter.find_child_by_attribute("name", "dimension_max").child_value();
 		const glm::vec3 minDim = Area::parseVec3(minDimStr, glm::vec3(0.f));
 		const glm::vec3 maxDim = Area::parseVec3(maxDimStr, glm::vec3(0.f));
-		bbox.merge(minDim);
-		bbox.merge(maxDim);
-		 /*
-		<param name="type" data="int">2</param>
-		<param name="particletype" data="int">0</param>
-		<param name="material" data="string">"textures\effects\ponpon_02.DDS"</param>
-		<param name="tanksize" data="int">400</param>
-		<param name="timing" data="real[2]">(0.800, 2.500)</param>
-		<param name="size" data="real[2]">(0.500, 1.000)</param>
-		<param name="angle" data="real[2]">(-70.000, 70.000)</param>
-		<param name="velocity" data="real[2]">(-1.000, -1.000)</param>
-		<param name="rollspeed" data="real[2]">(1500.000, 150.000)</param>
-		<param name="dimension_min" data="real[3]">(-100.000 -250.000 -150.000)</param>
-		<param name="dimension_max" data="real[3]">(100.000 0.000 150.000)</param>
-		<param name="color_min" data="real[4]">(0.250 0.250 0.000 1.000)</param>
-		<param name="color_max" data="real[4]">(0.300 0.250 0.000 1.000)</param>
-		<param name="radius" data="real">0.000</param>
-		<param name="regenrate" data="real">400.000</param>
-		<param name="blending" data="int">1</param>
-		 */
+
+		const char* minColorStr =  emitter.find_child_by_attribute("name", "color_min").child_value();
+		const char* maxColorStr =  emitter.find_child_by_attribute("name", "color_max").child_value();
+		const glm::vec4 minColor = Area::parseVec4(minColorStr, glm::vec4(1.f));
+		const glm::vec4 maxColor = Area::parseVec4(maxColorStr, glm::vec4(1.f));
+
+		ParticleSystem& fx = _particles.emplace_back();
+		fx.name = baseName + "_emitter_" + std::to_string(i);
+		fx.frame = frame;
+		fx.color = 0.5f * (minColor + maxColor);
+		fx.material = materialId;
+		fx.bbox = BoundingBox(minDim, maxDim);
+		++i;
+
+		const glm::vec3 sizes = fx.bbox.getSize();
+		Log::info("Emitter %s: %fx%fx%f, %s, %f,%f,%f", fx.name.c_str(), sizes[0], sizes[1], sizes[2], textureName.c_str(), fx.color[0], fx.color[1], fx.color[2]);
+
 	}
-	Log::info(" bbox: %f,%f,%f %f,%f,%f", bbox.minis[0], bbox.minis[1], bbox.minis[2], bbox.maxis[0],bbox.maxis[1],bbox.maxis[2]);
-	return bbox;
 }
 
 void World::processEntity(const pugi::xml_node& entity, const glm::mat4& globalFrame, bool templated, const fs::path& resourcePath, ObjectReferenceList& objectRefs, EntityFrameList& entitiesList){
@@ -362,7 +343,7 @@ void World::processEntity(const pugi::xml_node& entity, const glm::mat4& globalF
 		if(fxType == 9){
 			// Billboard
 			// Type: 0,1,3
-			// 0 is probably world space.
+			// 0 is probably world space?
 			const char* billboardTypeStr = entity.find_child_by_attribute("name", "billboardType").child_value();
 			const int billboardType = Area::parseInt(billboardTypeStr, 0);
 			// Blending 1 is additive?
@@ -392,14 +373,28 @@ void World::processEntity(const pugi::xml_node& entity, const glm::mat4& globalF
 		} else if(fxType == 7){
 			// System
 			// Immediately retrieve fxDef path.
-			std::string fxDefPathStr = getEntityAttribute(entity, "sourceName");
-			Log::info("Particle %s: %s", objName.c_str(), fxDefPathStr.c_str());
-			BoundingBox bbox = getFxDefParams(fxDefPathStr, resourcePath);
-			ParticleSystem& fx = _particles.emplace_back();
-			fx.name = objName;
-			fx.frame = frame;
-			fx.material = Object::Material::NO_MATERIAL;
-			fx.bbox = bbox;
+			std::string fxDefStr = getEntityAttribute(entity, "sourceName");
+			TextUtilities::replace(fxDefStr, "\\", "/");
+			fxDefStr = TextUtilities::trim(fxDefStr, "/");
+			if(fxDefStr.empty()){
+				return;
+			}
+			// Load the FXDEF XML file.
+			const fs::path fxDefPath = resourcePath / fxDefStr;
+			std::string fxDefContent = System::loadString(fxDefPath);
+			if(fxDefContent.empty()){
+				return;
+			}
+
+			// Uuuuurgh.
+			TextUtilities::replace(fxDefContent, "\"name=\"", "\" name=\"");
+			pugi::xml_document fxDef;
+			pugi::xml_parse_result res = fxDef.load_string(fxDefContent.c_str());
+			if(!res){
+				Log::error("Unable to load fxDef file at path %s: %s", fxDefPath.string().c_str(), res.description());
+				return;
+			}
+			processFxDef(fxDef, objName, frame, resourcePath);
 		}
 		// No model associated, exit.
 		return;

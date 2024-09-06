@@ -63,6 +63,7 @@ public:
 		BoundingBox bbox;
 		glm::mat4 frame;
 		std::string name;
+		glm::vec3 color;
 		uint material;
 	};
 
@@ -102,6 +103,8 @@ private:
 	uint registerTextureMaterial(Object::Material::Type type, const std::string& textureName);
 
 	void processEntity(const pugi::xml_node& entity, const glm::mat4& globalFrame, bool templated, const fs::path& resourcePath, ObjectReferenceList& objectRefs, EntityFrameList& entitiesList);
+
+	void processFxDef(const pugi::xml_document& fxDef, const std::string& baseName, const glm::mat4& frame, const fs::path& resourcePath);
 
 	std::vector<Object> _objects;
 	std::vector<Instance> _instances;
