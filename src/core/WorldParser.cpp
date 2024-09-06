@@ -371,6 +371,10 @@ void World::processEntity(const pugi::xml_node& entity, const glm::mat4& globalF
 			const float height = Area::parseFloat(heightStr, 1.f);
 
 			const char* colorStr = entity.find_child_by_attribute("name", "color").child_value();
+			if(!colorStr){
+				// Typo found in some files
+				colorStr = entity.find_child_by_attribute("name", " color").child_value();
+			}
 			const glm::vec3 color = Area::parseVec3(colorStr, glm::vec3(1.0f));
 
 			const std::string materialStr = getEntityAttribute(entity, "material");
