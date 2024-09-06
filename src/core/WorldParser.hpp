@@ -59,7 +59,7 @@ public:
 		float fogDensity;
 	};
 
-	struct ParticleSystem {
+	struct Emitter {
 		BoundingBox bbox;
 		glm::mat4 frame;
 		std::string name;
@@ -89,7 +89,7 @@ public:
 
 	const std::vector<Light>& lights() const {  return _lights; };
 
-	const std::vector<ParticleSystem>& particles() const {  return _particles; };
+	const std::vector<Emitter>& particles() const {  return _particles; };
 
 	const std::vector<Billboard>& billboards() const {  return _billboards; };
 	
@@ -113,7 +113,7 @@ private:
 	std::vector<Object::Material> _materials;
 	std::vector<Camera> _cameras;
 	std::vector<Light> _lights;
-	std::vector<ParticleSystem> _particles;
+	std::vector<Emitter> _particles;
 	std::vector<Billboard> _billboards;
 	std::vector<Zone> _zones;
 	std::string _name;

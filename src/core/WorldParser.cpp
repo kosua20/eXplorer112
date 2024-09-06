@@ -209,6 +209,11 @@ void World::processFxDef(const pugi::xml_document& fxDef, const std::string& bas
 	uint i = 0;
 	for(const auto& emitter : emitters.children("emitter")){
 		//"position" and "rotation" always zero
+
+		/* Emitter type: 0: punctual, 2: in box
+		 Blending: 1,2,3: see existing
+		 Particle type: 0,2
+		 */
 		/*
 	   <param name="particletype" data="int">0</param>
 	   <param name="tanksize" data="int">400</param>
@@ -243,7 +248,7 @@ void World::processFxDef(const pugi::xml_document& fxDef, const std::string& bas
 		const glm::vec4 minColor = Area::parseVec4(minColorStr, glm::vec4(1.f));
 		const glm::vec4 maxColor = Area::parseVec4(maxColorStr, glm::vec4(1.f));
 
-		ParticleSystem& fx = _particles.emplace_back();
+		Emitter& fx = _particles.emplace_back();
 		fx.name = baseName + "_emitter_" + std::to_string(i);
 		fx.frame = frame;
 		fx.color = 0.5f * (minColor + maxColor);
@@ -351,9 +356,12 @@ void World::processEntity(const pugi::xml_node& entity, const glm::mat4& globalF
 			// Billboard
 			// Type: 0,1,3
 			// 0 is probably world space?
+			// 1 is rotate around X ? (la_croisee)
+			// 2 is rotate around Y ? or track camera fully?
+			// 3 is rotate around Z (ct03_06)
 			const char* billboardTypeStr = entity.find_child_by_attribute("name", "billboardType").child_value();
 			const int billboardType = Area::parseInt(billboardTypeStr, 0);
-			// Blending 1 is additive? 3 is multiply or alpha blend?
+			// Blending 1 is additive. 2 could be multiply. 3 is alpha blend. 0 could be opaque.
 			const char* blendingStr = entity.find_child_by_attribute("name", "blending").child_value();
 			const int blending = Area::parseInt(blendingStr, 0);
 
@@ -378,7 +386,7 @@ void World::processEntity(const pugi::xml_node& entity, const glm::mat4& globalF
 			fx.type = billboardType;
 			fx.blending = blending;
 			
-			Log::info("Billboard %s: %d,%d, %fx%f, %s, %f,%f,%f", objName.c_str(), billboardType, blending, width, height, textureName.c_str(), color[0], color[1], color[2]);
+			Log::verbose("Billboard %s: %d,%d, %fx%f, %s, %f,%f,%f", objName.c_str(), billboardType, blending, width, height, textureName.c_str(), color[0], color[1], color[2]);
 
 		} else if(fxType == 7){
 			// System
@@ -669,5 +677,14 @@ bool World::load(const fs::path& path, const fs::path& resourcePath){
 		object.materials.clear();
 
 	}
+
+	// Sort billboards and FX by blending types
+	std::sort(_billboards.begin(), _billboards.end(), [](const Billboard& a, const Billboard& b){
+		return (a.blending < b.blending ) || ((a.blending == b.blending) && (a.type < b.type));
+	});
+	std::sort(_particles.begin(), _particles.end(), [](const Emitter& a, const Emitter& b){
+		return (a.blending < b.blending ) || ((a.blending == b.blending) && (a.type < b.type));
+	});
+
 	return true;
 }
