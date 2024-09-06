@@ -1415,6 +1415,20 @@ void GPU::drawMesh(const Mesh & mesh) {
 	++_metrics.drawCalls;
 }
 
+void GPU::drawMesh(const Mesh & mesh, uint firstIndex, uint indexCount) {
+	_state.mesh = mesh.gpu.get();
+
+	bindGraphicsPipelineIfNeeded();
+	_state.graphicsProgram->update();
+
+	vkCmdBindVertexBuffers(_context.getRenderCommandBuffer(), 0, uint32_t(mesh.gpu->state.offsets.size()), mesh.gpu->state.buffers.data(), mesh.gpu->state.offsets.data());
+	vkCmdBindIndexBuffer(_context.getRenderCommandBuffer(), mesh.gpu->indexBuffer->gpu->buffer, 0, VK_INDEX_TYPE_UINT32);
+	++_metrics.meshBindings;
+
+	vkCmdDrawIndexed(_context.getRenderCommandBuffer(), indexCount, 1, firstIndex, 0, 0);
+	++_metrics.drawCalls;
+}
+
 void GPU::drawIndirectMesh(const Mesh & mesh, const Buffer& args, uint argIndex) {
 	const bool needVertexAndIndexBufferBindings = (_state.mesh != mesh.gpu.get()) || _context.newRenderPass;
 

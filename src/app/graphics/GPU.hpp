@@ -218,6 +218,8 @@ public:
 	 \param mesh the mesh to draw
 	 */
 	static void drawMesh(const Mesh & mesh);
+	
+	static void drawMesh(const Mesh & mesh, uint firstIndex, uint indexCount);
 
 	struct DrawCommand {
 		uint32_t indexCount;
