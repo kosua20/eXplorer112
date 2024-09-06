@@ -166,6 +166,10 @@ void Window::bind(const LoadOperation& colorOp, const LoadOperation& depthOp, co
 	GPU::bind(_swapchain->color(), _swapchain->depth(), colorOp, depthOp, stencilOp);
 }
 
+Texture& Window::color(){
+	return _swapchain->color();
+}
+
 bool Window::nextFrame() {
 	if(_frameStarted){
 		// Render the interface.

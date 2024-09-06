@@ -398,7 +398,7 @@ void deselect(FrameData& _frame, SelectionState& _state, SelectionFilter _filter
 
 }
 
-void loadEngineTextures(const GameFiles& gameFiles, Texture& fogXYTexture, Texture& fogZTexture, Texture& noiseTexture){
+void loadEngineTextures(const GameFiles& gameFiles, Texture& fogXYTexture, Texture& fogZTexture, Texture& noiseTexture, Texture& bgTexture){
 	if(gameFiles.texturesPath.empty()){
 		return;
 	}
@@ -444,6 +444,16 @@ void loadEngineTextures(const GameFiles& gameFiles, Texture& fogXYTexture, Textu
 	noiseTexture.depth = 1;
 	noiseTexture.levels = 1;
 	noiseTexture.upload(Layout::RGBA8, false);
+
+	bgTexture.clean();
+	Image& imgBg = bgTexture.images.emplace_back();
+	imgBg.load(gameFiles.texturesPath / "ui" / "background.tga");
+	bgTexture.width = imgBg.width;
+	bgTexture.height = imgBg.height;
+	bgTexture.shape = TextureShape::D2;
+	bgTexture.depth = 1;
+	bgTexture.levels = 1;
+	bgTexture.upload(Layout::RGBA8, false);
 }
 
 
@@ -500,6 +510,9 @@ int main(int argc, char ** argv) {
 
 	programPool.push_back(loadProgram("texture_passthrough", "postprocess_blur"));
 	Program* bloomBlur = programPool.back().program;
+
+	programPool.push_back(loadProgram("texture_passthrough", "texture_passthrough"));
+	Program* passthrough = programPool.back().program;
 
 	programPool.push_back(loadProgram("debug/object_color", "debug/object_color"));
 	Program* coloredDebugDraw = programPool.back().program;
@@ -624,7 +637,8 @@ int main(int argc, char ** argv) {
 	Texture fogXYTexture("fogXYMap");
 	Texture fogZTexture("fogZMap");
 	Texture noiseTexture("noiseMap");
-	loadEngineTextures(gameFiles, fogXYTexture, fogZTexture, noiseTexture);
+	Texture bgTexture("backgroundMap");
+	loadEngineTextures(gameFiles, fogXYTexture, fogZTexture, noiseTexture, bgTexture);
 
 	deselect( frameInfos[ 0 ], selected, SelectionFilter::ALL );
 	
@@ -776,7 +790,7 @@ int main(int argc, char ** argv) {
 		}
 
 
-		ImGui::DockSpaceOverViewport();
+		ImGui::DockSpaceOverViewport(nullptr, ImGuiDockNodeFlags_PassthruCentralNode);
 
 		const ImGuiTableFlags tableFlags = ImGuiTableFlags_ScrollY | ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersOuter | ImGuiTableFlags_BordersV | ImGuiTableFlags_Resizable;
 		const ImGuiSelectableFlags selectableTableFlags = ImGuiSelectableFlags_SpanAllColumns | ImGuiSelectableFlags_AllowItemOverlap;
@@ -789,7 +803,7 @@ int main(int argc, char ** argv) {
 					fs::path newInstallPath;
 					if(Window::showDirectoryPicker(fs::path(""), newInstallPath)){
 						gameFiles = GameFiles( newInstallPath);
-						loadEngineTextures(gameFiles, fogXYTexture, fogZTexture, noiseTexture);
+						loadEngineTextures(gameFiles, fogXYTexture, fogZTexture, noiseTexture, bgTexture);
 						scene = Scene();
 						deselect(frameInfos[0], selected, SelectionFilter::ALL);
 					}
@@ -1287,6 +1301,17 @@ int main(int argc, char ** argv) {
 
 		glm::vec4 mainViewport(0.0f);
 
+		// Funny styling to mimick the game windows.
+		const ImVec4 bgColor(0.9f, 0.9f, 0.9f, 0.5f);
+		const ImVec4 fgColor(0.9f, 0.9f, 0.9f, 1.0f);
+
+		ImGui::PushStyleColor(ImGuiCol_WindowBg, bgColor);
+		ImGui::PushStyleColor(ImGuiCol_TitleBg, bgColor);
+		ImGui::PushStyleColor(ImGuiCol_TitleBgCollapsed, bgColor);
+		ImGui::PushStyleColor(ImGuiCol_TitleBgActive, bgColor);
+		ImGui::PushStyleColor(ImGuiCol_Border, fgColor);
+		ImGui::PushStyleColor(ImGuiCol_Text, fgColor);
+
 		if(ImGui::Begin("Main view", nullptr)){
 			// Adjust the texture display to the window size.
 			ImVec2 winSize = ImGui::GetContentRegionAvail();
@@ -1321,6 +1346,7 @@ int main(int argc, char ** argv) {
 			}
 		}
 		ImGui::End();
+		ImGui::PopStyleColor(6);
 
 		if(renderingShadow ){
 			if( ImGui::Begin( "Work in progress" ) ) {
@@ -1827,8 +1853,18 @@ int main(int argc, char ** argv) {
 			scrollToItem = true;
 		}
 
-		window.bind(glm::vec4(0.2f, 0.2f, 0.2f, 1.0f), LoadOperation::DONTCARE, LoadOperation::DONTCARE);
-		
+		window.bind(glm::vec4(0.058f, 0.133f, 0.219f, 1.0f), LoadOperation::DONTCARE, LoadOperation::DONTCARE);
+
+		if(bgTexture.gpu){
+			GPU::setViewport(window.color());
+			GPU::setDepthState(false);
+			GPU::setCullState(true, Faces::BACK );
+			GPU::setPolygonState(PolygonMode::FILL);
+			GPU::setBlendState(false);
+			passthrough->use();
+			passthrough->texture(bgTexture, 0);
+			GPU::drawQuad();
+		}
 	}
 
 	scene.clean();

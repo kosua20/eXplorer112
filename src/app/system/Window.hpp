@@ -46,7 +46,9 @@ public:
 	bool nextFrame();
 
 	void bind(const LoadOperation& colorOp, const LoadOperation& depthOp, const LoadOperation& stencilOp);
-	
+
+	Texture& color();
+
 	/** Copy constructor.*/
 	Window(const Window &) = delete;
 	
