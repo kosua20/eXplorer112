@@ -25,14 +25,14 @@ workspace("eXplorer112")
 
 	filter({})
 
-	startproject("eXporter")
+	startproject("eXplorer112")
 
 
 	-- Projects
 	group("Projects")
 
 	-- Command line exporter
-	project("eXporter")
+	project("eXporter112")
 		kind("ConsoleApp")
 
 		language("C++")
