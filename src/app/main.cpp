@@ -43,6 +43,19 @@ static const std::vector<uint> octaIndices = {
 	0, 1, 0, 2, 3, 2, 4, 5, 4
 };
 
+static const std::array<BlendFunction, BLENDING_MODE_COUNT> srcFuncs = {
+	BlendFunction::ONE,
+	BlendFunction::ONE,
+	BlendFunction::DST_COLOR,
+	BlendFunction::SRC_ALPHA,
+};
+static const std::array<BlendFunction, BLENDING_MODE_COUNT> dstFuncs = {
+	BlendFunction::ZERO,
+	BlendFunction::ONE,
+	BlendFunction::ZERO,
+	BlendFunction::ONE_MINUS_SRC_ALPHA,
+};
+
 
 class ViewerConfig : public RenderingConfig {
 public:
@@ -282,7 +295,7 @@ void addLightGizmo(Mesh& mesh, const World::Light& light){
 	}
 }
 
-void addEmitterGizmo(Mesh& mesh, const World::ParticleSystem& fx){
+void addEmitterGizmo(Mesh& mesh, const World::Emitter& fx){
 
 	const uint firstVertexIndex = mesh.positions.size();
 	// Always generate a small cross.
@@ -535,6 +548,9 @@ int main(int argc, char ** argv) {
 	programPool.push_back(loadProgram("objects/object_instanced_selection", "objects/object_instanced_selection"));
 	Program* selectionObject = programPool.back().program;
 
+	programPool.push_back(loadProgram("objects/object_billboard", "objects/object_billboard"));
+	Program* billboardObject = programPool.back().program;
+
 	programPool.push_back(loadProgram("draw_arguments_all"));
 	Program* drawArgsCompute = programPool.back().program;
 
@@ -617,10 +633,11 @@ int main(int argc, char ** argv) {
 	int albedoMode = MODE_ALBEDO_TEXTURE;
 	SelectionState selected;
 	bool showDecals = true;
-	bool showTransparents = true;
+	bool showBillboards = true;
+	bool showTransparents = false;
 	bool showOpaques = true;
-	bool showFog = true;
-	bool showBloom = true;
+	bool showFog = false;
+	bool showBloom = false;
 	bool showNoise = false;
 	bool freezeCulling = false;
 	bool showWireframe = false;
@@ -701,7 +718,7 @@ int main(int argc, char ** argv) {
 			debugLights.upload();
 		}
 		if( !scene.world.particles().empty() ){
-			for( const World::ParticleSystem& fx : scene.world.particles() ){
+			for( const World::Emitter& fx : scene.world.particles() ){
 				addEmitterGizmo( debugFxs, fx );
 			}
 			for( const World::Billboard& fx : scene.world.billboards() ){
@@ -935,6 +952,8 @@ int main(int argc, char ** argv) {
 				const std::string texturesTabName = "Textures (" + std::to_string(scene.textureDebugInfos.size()) + ")###TexturesTab";
 				const std::string lightsTabName = "Lights (" + std::to_string(scene.world.lights().size()) + ")###LightsTab";
 				const std::string camerasTabName = "Cameras (" + std::to_string(scene.world.cameras().size()) + ")###CamerasTab";
+				const std::string billboardsTabName = "Billboards (" + std::to_string(scene.world.billboards().size()) + ")###BillboardsTab";
+				const std::string particlesTabName = "Particles (" + std::to_string(scene.world.particles().size()) + ")###ParticlesTab";
 
 				if(ImGui::BeginTabBar("InspectorTabbar")){
 
@@ -1138,6 +1157,100 @@ int main(int argc, char ** argv) {
 						}
 						ImGui::EndTabItem();
 					}
+
+					if(ImGui::BeginTabItem(billboardsTabName.c_str())){
+
+						static ImGuiTextFilter billboardFilter;
+						billboardFilter.Draw();
+
+						if(ImGui::BeginTable("#BillboardsList", 4, tableFlags, winSize)){
+							// Header
+							ImGui::TableSetupScrollFreeze(0, 1); // Make top row always visible
+							ImGui::TableSetupColumn("Name", ImGuiTableColumnFlags_None);
+							ImGui::TableSetupColumn("Type", ImGuiTableColumnFlags_None);
+							ImGui::TableSetupColumn("Blending", ImGuiTableColumnFlags_None);
+							ImGui::TableSetupColumn("Color", ImGuiTableColumnFlags_None);
+							ImGui::TableHeadersRow();
+
+							const int rowCount = (int)scene.world.billboards().size();
+							for(int row = 0; row < rowCount; ++row){
+
+								const World::Billboard& billboard = scene.world.billboards()[row];
+								if(!billboardFilter.PassFilter(billboard.name.c_str())){
+									continue;
+								}
+								ImGui::TableNextColumn();
+								ImGui::PushID(row);
+
+								if(ImGui::Selectable(billboard.name.c_str())){
+									const glm::vec3 camCenter = glm::vec3(billboard.frame[3]);
+									const float radius = glm::max(glm::length(billboard.size), 10.0f);
+									const glm::vec3 camPos = camCenter + glm::vec3(billboard.frame * glm::vec4(0.f, 0.0f, radius, 0.f));
+									camera.pose(camPos, camCenter, glm::vec3(0.0f, 1.0f, 0.0f));
+									camera.fov(45.0f * glm::pi<float>() / 180.0f);
+								}
+								ImGui::TableNextColumn();
+								ImGui::Text("%u", billboard.type);
+								ImGui::TableNextColumn();
+								ImGui::Text("%u", billboard.blending);
+								ImGui::TableNextColumn();
+								glm::vec3 tmpColor = billboard.color;
+								ImGui::ColorEdit3("##BillboardColor", &tmpColor[0], ImGuiColorEditFlags_NoLabel | ImGuiColorEditFlags_NoInputs);
+								ImGui::PopID();
+							}
+							ImGui::EndTable();
+						}
+						ImGui::EndTabItem();
+					}
+
+					if(ImGui::BeginTabItem(particlesTabName.c_str())){
+
+						static ImGuiTextFilter particleFilter;
+						particleFilter.Draw();
+
+						if(ImGui::BeginTable("#ParticlesList", 5, tableFlags, winSize)){
+							// Header
+							ImGui::TableSetupScrollFreeze(0, 1); // Make top row always visible
+							ImGui::TableSetupColumn("Name", ImGuiTableColumnFlags_None);
+							ImGui::TableSetupColumn("Type", ImGuiTableColumnFlags_None);
+							ImGui::TableSetupColumn("Blending", ImGuiTableColumnFlags_None);
+							ImGui::TableSetupColumn("Shape", ImGuiTableColumnFlags_None);
+							ImGui::TableSetupColumn("Color", ImGuiTableColumnFlags_None);
+							ImGui::TableHeadersRow();
+
+							const int rowCount = (int)scene.world.particles().size();
+							for(int row = 0; row < rowCount; ++row){
+
+								const World::Emitter& emitter = scene.world.particles()[row];
+								if(!particleFilter.PassFilter(emitter.name.c_str())){
+									continue;
+								}
+								ImGui::TableNextColumn();
+								ImGui::PushID(row);
+
+								if(ImGui::Selectable(emitter.name.c_str())){
+									const glm::vec3 camCenter = glm::vec3(emitter.frame[3]);
+									const float radius = glm::max(glm::length(emitter.bbox.getSize()), 10.0f);
+									const glm::vec3 camPos = camCenter - glm::vec3(radius, 0.0f, 0.0f);
+									camera.pose(camPos, camCenter, glm::vec3(0.0f, 1.0f, 0.0f));
+									camera.fov(45.0f * glm::pi<float>() / 180.0f);
+								}
+								ImGui::TableNextColumn();
+								ImGui::Text("%u", emitter.type);
+								ImGui::TableNextColumn();
+								ImGui::Text("%u", emitter.blending);
+								ImGui::TableNextColumn();
+								ImGui::Text("%u", emitter.shape);
+								ImGui::TableNextColumn();
+								glm::vec3 tmpColor = emitter.color;
+								ImGui::ColorEdit3("##EmitterColor", &tmpColor[0], ImGuiColorEditFlags_NoLabel | ImGuiColorEditFlags_NoInputs);
+								ImGui::PopID();
+							}
+							ImGui::EndTable();
+						}
+						ImGui::EndTabItem();
+					}
+
 					ImGui::EndTabBar();
 				}
 			}
@@ -1261,6 +1374,7 @@ int main(int argc, char ** argv) {
 			if(ImGui::BeginPopup("visibilityPopup")){
 				ImGui::Checkbox("Opaques",  &showOpaques);
 				ImGui::Checkbox("Decals", &showDecals);
+				ImGui::Checkbox("Billboards", &showBillboards);
 				ImGui::Checkbox("Transparents", &showTransparents);
 				ImGui::Checkbox("Fog", &showFog);
 				ImGui::EndPopup();
@@ -1634,6 +1748,27 @@ int main(int argc, char ** argv) {
 						continue;
 					}
 					GPU::drawIndirectMesh(scene.globalMesh, *drawCommands, mid);
+				}
+			}
+			// Then render billboards
+			if(showBillboards){
+				GPU::bind(sceneLit, sceneDepth, LoadOperation::LOAD, LoadOperation::LOAD, LoadOperation::DONTCARE);
+				GPU::setViewport(sceneLit);
+				GPU::setPolygonState(PolygonMode::FILL);
+				GPU::setCullState(false, Faces::BACK);
+				GPU::setDepthState(true, TestFunction::GEQUAL, false);
+				billboardObject->use();
+				billboardObject->buffer(frameInfos, 0);
+				billboardObject->buffer(*scene.materialInfos, 1);
+
+
+				for(uint i = 0; i < BLENDING_MODE_COUNT; ++i){
+					const Scene::Range & range = scene.billboardRanges[i];
+					if(range.indexCount <= 0){
+						continue;
+					}
+					GPU::setBlendState(true, BlendEquation::ADD, srcFuncs[i], dstFuncs[i]);
+					GPU::drawMesh(scene.billboardsMesh, range.firstIndex, range.indexCount);
 				}
 			}
 			
