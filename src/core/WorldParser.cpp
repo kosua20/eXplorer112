@@ -210,7 +210,6 @@ void World::processFxDef(const pugi::xml_document& fxDef, const std::string& bas
 	for(const auto& emitter : emitters.children("emitter")){
 		//"position" and "rotation" always zero
 		/*
-	   <param name="type" data="int">2</param>
 	   <param name="particletype" data="int">0</param>
 	   <param name="tanksize" data="int">400</param>
 	   <param name="timing" data="real[2]">(0.800, 2.500)</param>
@@ -220,14 +219,19 @@ void World::processFxDef(const pugi::xml_document& fxDef, const std::string& bas
 	   <param name="rollspeed" data="real[2]">(1500.000, 150.000)</param>
 	   <param name="radius" data="real">0.000</param>
 	   <param name="regenrate" data="real">400.000</param>
-	   <param name="blending" data="int">1</param>
 		*/
+
+		const char* emitterTypeStr = emitter.find_child_by_attribute("name", "type").child_value();
+		const int emitterType = Area::parseInt(emitterTypeStr, 0);
+		const char* blendingStr = emitter.find_child_by_attribute("name", "blending").child_value();
+		const int blending = Area::parseInt(blendingStr, 0);
+		const char* particleTypeStr = emitter.find_child_by_attribute("name", "particletype").child_value();
+		const int particleType = Area::parseInt(particleTypeStr, 0);
 
 		std::string materialStr = emitter.find_child_by_attribute("name", "material").child_value();
 		materialStr = TextUtilities::trim(materialStr, "\"");
 		const std::string textureName = getMaterialTexture(materialStr, resourcePath);
 		const uint materialId = registerTextureMaterial(Object::Material::PARTICLE, textureName);
-		//Log::info("* %s", textureName.c_str());
 
 		const char* minDimStr =  emitter.find_child_by_attribute("name", "dimension_min").child_value();
 		const char* maxDimStr =  emitter.find_child_by_attribute("name", "dimension_max").child_value();
@@ -245,10 +249,13 @@ void World::processFxDef(const pugi::xml_document& fxDef, const std::string& bas
 		fx.color = 0.5f * (minColor + maxColor);
 		fx.material = materialId;
 		fx.bbox = BoundingBox(minDim, maxDim);
+		fx.type = emitterType;
+		fx.shape = particleType;
+		fx.blending = blending;
 		++i;
 
 		const glm::vec3 sizes = fx.bbox.getSize();
-		Log::info("Emitter %s: %fx%fx%f, %s, %f,%f,%f", fx.name.c_str(), sizes[0], sizes[1], sizes[2], textureName.c_str(), fx.color[0], fx.color[1], fx.color[2]);
+		Log::verbose("Emitter %s: %d,%d,%d %fx%fx%f, %s, %f,%f,%f", fx.name.c_str(), emitterType, blending, particleType, sizes[0], sizes[1], sizes[2], textureName.c_str(), fx.color[0], fx.color[1], fx.color[2]);
 
 	}
 }
@@ -346,7 +353,7 @@ void World::processEntity(const pugi::xml_node& entity, const glm::mat4& globalF
 			// 0 is probably world space?
 			const char* billboardTypeStr = entity.find_child_by_attribute("name", "billboardType").child_value();
 			const int billboardType = Area::parseInt(billboardTypeStr, 0);
-			// Blending 1 is additive?
+			// Blending 1 is additive? 3 is multiply or alpha blend?
 			const char* blendingStr = entity.find_child_by_attribute("name", "blending").child_value();
 			const int blending = Area::parseInt(blendingStr, 0);
 
@@ -363,13 +370,16 @@ void World::processEntity(const pugi::xml_node& entity, const glm::mat4& globalF
 			const uint materialId = registerTextureMaterial(Object::Material::BILLBOARD, textureName);
 
 			Billboard& fx = _billboards.emplace_back();
-			fx.name = objName;
+			fx.name = objName + "_" + textureName;
 			fx.frame = frame;
 			fx.material = materialId;
 			fx.size = glm::vec2( width, height );
 			fx.color = color;
-
+			fx.type = billboardType;
+			fx.blending = blending;
+			
 			Log::info("Billboard %s: %d,%d, %fx%f, %s, %f,%f,%f", objName.c_str(), billboardType, blending, width, height, textureName.c_str(), color[0], color[1], color[2]);
+
 		} else if(fxType == 7){
 			// System
 			// Immediately retrieve fxDef path.

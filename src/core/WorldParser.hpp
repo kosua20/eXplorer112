@@ -65,6 +65,7 @@ public:
 		std::string name;
 		glm::vec3 color;
 		uint material;
+		uint type, blending, shape;
 	};
 
 	struct Billboard {
@@ -73,6 +74,7 @@ public:
 		glm::vec2 size;
 		std::string name;
 		uint material;
+		uint type, blending;
 	};
 
 	bool load(const fs::path& path, const fs::path& resourcesPath);
