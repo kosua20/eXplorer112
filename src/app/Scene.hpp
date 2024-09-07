@@ -133,6 +133,7 @@ public:
 	Mesh globalMesh{"None"};
 	Mesh billboardsMesh{"Billboards"};
 	BlendingInfos billboardRanges;
+	BlendingInfos particleRanges;
 
 	std::vector<Texture> textures;
 

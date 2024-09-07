@@ -2,6 +2,7 @@
 
 #include "core/DFFParser.hpp"
 #include "core/AreaParser.hpp"
+#include "core/Random.hpp"
 
 #include "graphics/GPU.hpp"
 #include "Common.hpp"
@@ -43,6 +44,7 @@ void Scene::clean(){
 	globalMesh.clean();
 	billboardsMesh.clean();
 	billboardRanges.fill({0,0});
+	particleRanges.fill({0,0});
 
 	meshInfos.reset();
 	instanceInfos.reset();
@@ -400,7 +402,7 @@ void Scene::upload(const World& world, const GameFiles& files){
 			info.materialIndex = light.material;
 		}
 	}
-	// Billboards
+	// FXs
 	{
 		const std::array<glm::vec2, 4> uvs = {
 			glm::vec2(0.f, 1.f),
@@ -421,44 +423,126 @@ void Scene::upload(const World& world, const GameFiles& files){
 			0, 3, 2,
 		};
 
-		const size_t vertCount = world.billboards().size() * 4;
-		const size_t indicesCount = world.billboards().size() * indices.size();
+		const size_t approximateQuadCount = world.billboards().size() + 4 * world.particles().size();
+		const size_t vertCount = approximateQuadCount * positions.size();
+		const size_t indicesCount = approximateQuadCount * indices.size();
+
 		billboardsMesh.positions.reserve(vertCount);
 		billboardsMesh.texcoords.reserve(vertCount);
 		billboardsMesh.colors.reserve(vertCount);
 		billboardsMesh.normals.reserve(vertCount); // Used for material index
-		billboardsMesh.tangents.reserve(vertCount); // Used for material index
+		billboardsMesh.tangents.reserve(vertCount);
+		billboardsMesh.bitangents.reserve(vertCount);
 		billboardsMesh.indices.reserve(indicesCount);
-		uint currentBlend = 0;
-		for(const World::Billboard& billboard : world.billboards()){
-			// Generate a quad with vertex colors.
-			const glm::mat4 frame = billboard.alignment == World::ALIGN_WORLD ? billboard.frame : glm::mat4(1.0f);
-			const glm::vec3 center = glm::vec3(billboard.frame * glm::vec4(0.f, 0.f,0.f, 1.0f));
-			std::array<glm::vec3, 4> verts;
-			for(int i = 0; i < 4; ++i){
-				verts[i] = glm::vec3(frame * glm::vec4(billboard.size * positions[i], 0.f, 1.0f));
-			}
+		
+		// Billboards
+		{
+			uint currentBlend = 0;
+			particleRanges[currentBlend].firstIndex = billboardsMesh.indices.size();
 
-			const uint firstVertexIndex = billboardsMesh.positions.size();
-			billboardsMesh.positions.insert(billboardsMesh.positions.end(), verts.begin(), verts.end());
-			billboardsMesh.colors.insert(billboardsMesh.colors.end(), 4, billboard.color);
-			billboardsMesh.normals.insert(billboardsMesh.normals.end(), 4, glm::vec3(billboard.material, billboard.alignment, 0.f));
-			billboardsMesh.tangents.insert(billboardsMesh.tangents.end(), 4, center);
-			billboardsMesh.texcoords.insert(billboardsMesh.texcoords.end(), uvs.begin(), uvs.end());
+			for(const World::Billboard& billboard : world.billboards()){
 
-			if(billboard.blending != currentBlend){
-				const uint firstIndex = billboardsMesh.indices.size();
-				assert(billboard.blending < BLENDING_MODE_COUNT);
-				billboardRanges[currentBlend].indexCount = firstIndex - billboardRanges[currentBlend].firstIndex;
-				currentBlend = billboard.blending;
-				billboardRanges[currentBlend].firstIndex = firstIndex;
-			}
+				if(billboard.blending != currentBlend){
+					const uint firstIndex = billboardsMesh.indices.size();
+					assert(billboard.blending < BLENDING_MODE_COUNT);
+					billboardRanges[currentBlend].indexCount = firstIndex - billboardRanges[currentBlend].firstIndex;
+					currentBlend = billboard.blending;
+					billboardRanges[currentBlend].firstIndex = firstIndex;
+				}
 
-			for(uint ind : indices){
-				billboardsMesh.indices.push_back(firstVertexIndex + ind);
+				// Generate a quad with vertex colors.
+				const glm::mat4 frame = billboard.alignment == World::ALIGN_WORLD ? billboard.frame : glm::mat4(1.0f);
+				const glm::vec3 center = glm::vec3(billboard.frame * glm::vec4(0.f, 0.f,0.f, 1.0f));
+				std::array<glm::vec3, 4> verts;
+				for(int i = 0; i < 4; ++i){
+					verts[i] = glm::vec3(frame * glm::vec4(billboard.size * positions[i], 0.f, 1.0f));
+				}
+
+				const uint firstVertexIndex = billboardsMesh.positions.size();
+				billboardsMesh.positions.insert(billboardsMesh.positions.end(), verts.begin(), verts.end());
+				billboardsMesh.colors.insert(billboardsMesh.colors.end(), 4, billboard.color);
+				billboardsMesh.normals.insert(billboardsMesh.normals.end(), 4, glm::vec3(billboard.material, billboard.alignment, 0.f));
+				billboardsMesh.tangents.insert(billboardsMesh.tangents.end(), 4, center);
+				billboardsMesh.bitangents.insert(billboardsMesh.bitangents.end(), 4, glm::vec3(1.0f,0.0f,0.0f));
+				billboardsMesh.texcoords.insert(billboardsMesh.texcoords.end(), uvs.begin(), uvs.end());
+
+				for(uint ind : indices){
+					billboardsMesh.indices.push_back(firstVertexIndex + ind);
+				}
 			}
+			billboardRanges[currentBlend].indexCount = billboardsMesh.indices.size() - billboardRanges[currentBlend].firstIndex;
+
 		}
-		billboardRanges[currentBlend].indexCount = billboardsMesh.indices.size() - billboardRanges[currentBlend].firstIndex;
+		
+		// Append particles in the same mesh.
+		{
+			uint currentBlend = 0;
+			particleRanges[currentBlend].firstIndex = billboardsMesh.indices.size();
+
+			for(const World::Emitter& emitter : world.particles()){
+
+				if(emitter.blending != currentBlend){
+					const uint firstIndex = billboardsMesh.indices.size();
+					assert(emitter.blending < BLENDING_MODE_COUNT);
+					particleRanges[currentBlend].indexCount = firstIndex - particleRanges[currentBlend].firstIndex;
+					currentBlend = emitter.blending;
+					particleRanges[currentBlend].firstIndex = firstIndex;
+				}
+				// 'Interpete' parameters.
+				const bool isBoxFilling = emitter.type == 2u;
+				uint particleCount = isBoxFilling ? emitter.maxCount : glm::min(emitter.maxCount, (uint)(2.f * emitter.rate));
+				float radius = isBoxFilling ? 0.0f : glm::max(emitter.radius, 1.0f);
+				glm::vec2 sizeRange = emitter.sizeRange;
+				const glm::vec3 velocityScale(0.0f, 0.0f, -0.1f);
+				const bool needDrasticReduction = emitter.name.find("pheromone") != std::string::npos;
+				if(needDrasticReduction){
+					particleCount = 1u;
+				}
+
+				for(uint bId = 0; bId < particleCount; ++bId){
+					const uint firstVertexIndex = billboardsMesh.positions.size();
+					// Generate parameters for this quad.
+					float size = glm::mix(sizeRange.x, sizeRange.y, Random::Float());
+					glm::vec4 color = glm::mix(emitter.colorMin, emitter.colorMax, glm::vec4(Random::Float()));
+					glm::vec3 pos = glm::mix(emitter.bbox.minis, emitter.bbox.maxis, Random::Float3());
+					// Specific to punctual emitters.
+					if(!isBoxFilling){
+						pos += radius * Random::sampleBall();
+						// Pick a velocity.
+						float velocity = glm::mix(emitter.velocityRange.x, emitter.velocityRange.y, Random::Float());
+						pos += velocity * velocityScale;
+					}
+					// Angular rotation around Z axis.
+					float angle = glm::mix(emitter.angleRange.x, emitter.angleRange.y, Random::Float());
+					angle *= glm::pi<float>() / 180.f;
+					const glm::mat4 rotation = glm::rotate(glm::mat4(1.0f), angle, glm::vec3(0.0f,0.0f,1.0f));
+
+					const glm::mat4 billboardFrame = emitter.frame * glm::translate(glm::mat4(1.0f), pos) * rotation;
+					// Generate a quad with vertex colors.
+					const glm::vec3 center = glm::vec3(billboardFrame * glm::vec4(0.f, 0.f,0.f, 1.0f));
+					const glm::mat4 frame = emitter.alignment == World::ALIGN_WORLD ? billboardFrame : glm::mat4(1.0f);
+
+					std::array<glm::vec3, 4> verts;
+					for(int i = 0; i < 4; ++i){
+						verts[i] = glm::vec3(frame * glm::vec4(size * positions[i], 0.f, 1.0f));
+					}
+
+					billboardsMesh.positions.insert(billboardsMesh.positions.end(), verts.begin(), verts.end());
+					billboardsMesh.colors.insert(billboardsMesh.colors.end(), 4, color);
+					billboardsMesh.normals.insert(billboardsMesh.normals.end(), 4, glm::vec3(emitter.material, emitter.alignment, 0.f));
+					billboardsMesh.tangents.insert(billboardsMesh.tangents.end(), 4, center);
+					billboardsMesh.bitangents.insert(billboardsMesh.bitangents.end(), 4, glm::vec3(glm::cos(angle), glm::sin(angle), 0.f));
+					billboardsMesh.texcoords.insert(billboardsMesh.texcoords.end(), uvs.begin(), uvs.end());
+
+					for(uint ind : indices){
+						billboardsMesh.indices.push_back(firstVertexIndex + ind);
+					}
+				}
+
+			}
+			particleRanges[currentBlend].indexCount = billboardsMesh.indices.size() - particleRanges[currentBlend].firstIndex;
+
+		}
 
 	}
 
