@@ -1488,7 +1488,7 @@ int main(int argc, char ** argv) {
 		ImGui::PopStyleColor(6);
 
 		if(renderingShadow ){
-			if( ImGui::Begin( "Work in progress" ) ) {
+			if( ImGui::Begin( "Work in progress", nullptr, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse ) ) {
 				ImGui::Text( "Generating shadows..." );
 				std::string currProg = std::to_string( currentShadowMapLayer + 1 ) + "/" + std::to_string( shadowMaps.depth );
 				ImGui::ProgressBar( ( float )( currentShadowMapLayer + 1 ) / ( float )shadowMaps.depth, ImVec2( -1.0f, 0.0f ), currProg.c_str() );
