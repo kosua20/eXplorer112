@@ -215,14 +215,9 @@ void World::processFxDef(const pugi::xml_document& fxDef, const std::string& bas
 		 Particle type: 0,2 (see billboard)
 		 */
 		/*
-	   <param name="particletype" data="int">0</param>
-	   <param name="tanksize" data="int">400</param>
+
 	   <param name="timing" data="real[2]">(0.800, 2.500)</param>
-	   <param name="size" data="real[2]">(0.500, 1.000)</param>
-	   <param name="angle" data="real[2]">(-70.000, 70.000)</param>
-	   <param name="velocity" data="real[2]">(-1.000, -1.000)</param>
 	   <param name="rollspeed" data="real[2]">(1500.000, 150.000)</param>
-	   <param name="radius" data="real">0.000</param>
 	   <param name="regenrate" data="real">400.000</param>
 		*/
 
@@ -248,19 +243,49 @@ void World::processFxDef(const pugi::xml_document& fxDef, const std::string& bas
 		const glm::vec4 minColor = Area::parseVec4(minColorStr, glm::vec4(1.f));
 		const glm::vec4 maxColor = Area::parseVec4(maxColorStr, glm::vec4(1.f));
 
+		const char* tankSizeStr = emitter.find_child_by_attribute("name", "tanksize").child_value();
+		const int tankSize = Area::parseInt(tankSizeStr, 1);
+
+		const char* sizeStr =  emitter.find_child_by_attribute("name", "size").child_value();
+		const glm::vec2 size = Area::parseVec2(sizeStr, glm::vec2(1.f));
+
+		const char* angleStr =  emitter.find_child_by_attribute("name", "angle").child_value();
+		const glm::vec2 angle = Area::parseVec2(angleStr, glm::vec2(0.f));
+
+		const char* velocityStr =  emitter.find_child_by_attribute("name", "velocity").child_value();
+		const glm::vec2 velocity = Area::parseVec2(velocityStr, glm::vec2(0.f));
+
+		const char* radiusStr = emitter.find_child_by_attribute("name", "radius").child_value();
+		const float radius = Area::parseFloat(radiusStr, 0.0);
+
+		const char* rateStr = emitter.find_child_by_attribute("name", "regenrate").child_value();
+		const float rate = Area::parseFloat(rateStr, 1.0);
+
 		Emitter& fx = _particles.emplace_back();
 		fx.name = baseName + "_emitter_" + std::to_string(i);
 		fx.frame = frame;
-		fx.color = 0.5f * (minColor + maxColor);
 		fx.material = materialId;
 		fx.bbox = BoundingBox(minDim, maxDim);
+		fx.colorMin = minColor;
+		fx.colorMax = maxColor;
+		fx.maxCount = tankSize;
+		fx.rate = rate;
+		fx.angleRange = angle;
+		fx.velocityRange = velocity;
+		fx.sizeRange = size;
+		fx.radius = radius;
 		fx.type = emitterType;
 		fx.alignment = Alignment(particleType);
 		fx.blending = Blending(blending);
+		// From tests, this seems needed.
+		if(fx.blending  == BLEND_MULTIPLY){
+			fx.blending  = BLEND_COMPOSITE;
+		}
+
 		++i;
 
 		const glm::vec3 sizes = fx.bbox.getSize();
-		Log::verbose("Emitter %s: %d,%d,%d %fx%fx%f, %s, %f,%f,%f", fx.name.c_str(), emitterType, blending, particleType, sizes[0], sizes[1], sizes[2], textureName.c_str(), fx.color[0], fx.color[1], fx.color[2]);
+		Log::verbose("Emitter %s: %d,%d,%d %fx%fx%f, %s", fx.name.c_str(), emitterType, blending, particleType, sizes[0], sizes[1], sizes[2], textureName.c_str());
 
 	}
 }
@@ -357,7 +382,7 @@ void World::processEntity(const pugi::xml_node& entity, const glm::mat4& globalF
 			// Type: 0,1,3
 			// 0 is probably world space?
 			// 1 is rotate around X ? (la_croisee)
-			// 2 is track camera fully?
+			// 2 is track camera fully? (see emitters)
 			// 3 is rotate around Y (ct03_06)
 			const char* billboardTypeStr = entity.find_child_by_attribute("name", "billboardType").child_value();
 			const int billboardType = Area::parseInt(billboardTypeStr, 0);

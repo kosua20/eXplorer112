@@ -64,16 +64,23 @@ public:
 	};
 
 	enum Blending {
-		BLEND_OPAQUE = 0, BLEND_ADDITIVE = 1, BLEND_MULTIPLY = 2, BLEND_ALPHA = 3, BLEND_COUNT
+		BLEND_OPAQUE = 0, BLEND_ADDITIVE = 1, BLEND_MULTIPLY = 2, BLEND_ALPHA = 3, BLEND_COMPOSITE = 4,BLEND_COUNT
 	};
 
 	struct Emitter {
 		BoundingBox bbox;
 		glm::mat4 frame;
+		glm::vec4 colorMin;
+		glm::vec4 colorMax;
+		glm::vec2 sizeRange;
+		glm::vec2 velocityRange;
+		glm::vec2 angleRange;
 		std::string name;
-		glm::vec3 color;
+		uint maxCount;
 		uint material;
 		uint type;
+		float radius;
+		float rate;
 		Alignment alignment;
 		Blending blending;
 	};
