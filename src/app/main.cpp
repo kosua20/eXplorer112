@@ -3,6 +3,7 @@
 
 #include "core/System.hpp"
 #include "core/TextUtilities.hpp"
+#include "core/Random.hpp"
 #include "core/Common.hpp"
 
 #include "system/Window.hpp"
@@ -48,20 +49,23 @@ static const std::array<BlendFunction, World::BLEND_COUNT> srcFuncs = {
 	BlendFunction::ONE,
 	BlendFunction::DST_COLOR,
 	BlendFunction::SRC_ALPHA,
+	BlendFunction::ONE,
 };
 static const std::array<BlendFunction, World::BLEND_COUNT> dstFuncs = {
 	BlendFunction::ZERO,
 	BlendFunction::ONE,
 	BlendFunction::ZERO,
 	BlendFunction::ONE_MINUS_SRC_ALPHA,
+	BlendFunction::ONE_MINUS_SRC_COLOR,
 };
 
 static const std::unordered_map<World::Blending, const char*> blendNames = {
 			{ World::BLEND_OPAQUE, "Opaque" },
 			{ World::BLEND_ADDITIVE, "Additive" },
 			{ World::BLEND_MULTIPLY, "Multiply" },
-	{ World::BLEND_ALPHA, "Alpha" },
-	{ World::BLEND_COUNT, "Unknown" },
+			{ World::BLEND_ALPHA, "Alpha" },
+			{ World::BLEND_COMPOSITE, "Composite" },
+			{ World::BLEND_COUNT, "Unknown" },
 };
 
 static const std::unordered_map<World::Alignment, const char*> alignNames = {
@@ -337,7 +341,8 @@ void addEmitterGizmo(Mesh& mesh, const World::Emitter& fx){
 
 	// Fill colors.
 	const uint vertexFinalCount = mesh.positions.size() - firstVertexIndex;
-	mesh.colors.insert(mesh.colors.end(), vertexFinalCount, glm::vec3(fx.color));
+	const glm::vec3 color = 0.5f * (fx.colorMin + fx.colorMax);
+	mesh.colors.insert(mesh.colors.end(), vertexFinalCount, glm::vec3(color));
 	// Apply frame.
 	for(uint i = 0; i < vertexFinalCount; ++i){
 		glm::vec3& p = mesh.positions[firstVertexIndex + i];
@@ -496,6 +501,7 @@ int main(int argc, char ** argv) {
 	if(config.showHelp()) {
 		return 0;
 	}
+	Random::seed(112112);
 
 	bool allowEscapeQuit = false;
 #ifdef DEBUG
@@ -650,6 +656,7 @@ int main(int argc, char ** argv) {
 	SelectionState selected;
 	bool showDecals = true;
 	bool showBillboards = true;
+	bool showParticles = true;
 	bool showTransparents = false;
 	bool showOpaques = true;
 	bool showFog = false;
@@ -1259,7 +1266,7 @@ int main(int argc, char ** argv) {
 								ImGui::TableNextColumn();
 								ImGui::Text("%s", blendNames.at(emitter.blending));
 								ImGui::TableNextColumn();
-								glm::vec3 tmpColor = emitter.color;
+								glm::vec3 tmpColor = 0.5f*(emitter.colorMin + emitter.colorMax);
 								ImGui::ColorEdit3("##EmitterColor", &tmpColor[0], ImGuiColorEditFlags_NoLabel | ImGuiColorEditFlags_NoInputs);
 								ImGui::PopID();
 							}
@@ -1392,6 +1399,7 @@ int main(int argc, char ** argv) {
 				ImGui::Checkbox("Opaques",  &showOpaques);
 				ImGui::Checkbox("Decals", &showDecals);
 				ImGui::Checkbox("Billboards", &showBillboards);
+				ImGui::Checkbox("Particles", &showParticles);
 				ImGui::Checkbox("Transparents", &showTransparents);
 				ImGui::Checkbox("Fog", &showFog);
 				ImGui::EndPopup();
@@ -1768,25 +1776,40 @@ int main(int argc, char ** argv) {
 				}
 			}
 			// Then render billboards
-			if(showBillboards){
+			if(showBillboards || showParticles){
 				GPU::bind(sceneLit, sceneDepth, LoadOperation::LOAD, LoadOperation::LOAD, LoadOperation::DONTCARE);
 				GPU::setViewport(sceneLit);
 				GPU::setPolygonState(PolygonMode::FILL);
-				GPU::setCullState(false, Faces::BACK);
+				GPU::setCullState(false);
 				GPU::setDepthState(true, TestFunction::GEQUAL, false);
 				billboardObject->use();
 				billboardObject->buffer(frameInfos, 0);
 				billboardObject->buffer(*scene.materialInfos, 1);
 
-
-				for(uint i = 0; i < World::BLEND_COUNT; ++i){
-					const Scene::Range & range = scene.billboardRanges[i];
-					if(range.indexCount <= 0){
-						continue;
+				// First billboards
+				if(showBillboards){
+					for(uint i = 0; i < World::BLEND_COUNT; ++i){
+						const Scene::Range & range = scene.billboardRanges[i];
+						if(range.indexCount <= 0){
+							continue;
+						}
+						GPU::setBlendState(true, BlendEquation::ADD, srcFuncs[i], dstFuncs[i]);
+						GPU::drawMesh(scene.billboardsMesh, range.firstIndex, range.indexCount);
 					}
-					GPU::setBlendState(true, BlendEquation::ADD, srcFuncs[i], dstFuncs[i]);
-					GPU::drawMesh(scene.billboardsMesh, range.firstIndex, range.indexCount);
 				}
+
+				// Then particles
+				if(showParticles){
+					for(uint i = 0; i < World::BLEND_COUNT; ++i){
+						const Scene::Range & range = scene.particleRanges[i];
+						if(range.indexCount <= 0){
+							continue;
+						}
+						GPU::setBlendState(true, BlendEquation::ADD, srcFuncs[i], dstFuncs[i]);
+						GPU::drawMesh(scene.billboardsMesh, range.firstIndex, range.indexCount);
+					}
+				}
+
 			}
 			
 			// Fog
