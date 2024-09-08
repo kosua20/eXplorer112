@@ -51,6 +51,7 @@ public:
 
 	struct MeshInstanceInfos {
 		glm::mat4 frame;
+		float heat; uint pad0, pad1, pad2;
 	};
 
 	struct TextureInfos {

@@ -11,6 +11,8 @@ layout(set = 2, binding = 1) uniform texture2D bloomTexture;
 layout(set = 2, binding = 2) uniform texture2D grainNoiseTexture;
 layout(set = 2, binding = 3) uniform texture2D nightNoiseTexture;
 layout(set = 2, binding = 4) uniform texture2D nightPulseTexture;
+layout(set = 2, binding = 5) uniform texture2D heatMapTexture;
+layout(set = 2, binding = 6) uniform texture2D heatLookupTexture;
 
 layout(location = 0) out vec4 fragColor; ///< Color.
 
@@ -21,6 +23,7 @@ void main(){
 	bool wantsNight = (engine.postprocessMode & MODE_POSTPROCESS_NIGHT) != 0u;
 	bool wantsBAndW = (engine.postprocessMode & MODE_POSTPROCESS_BANDW) != 0u;
 	bool wantsJitter  = (engine.postprocessMode & MODE_POSTPROCESS_JITTER) != 0u;
+	bool wantsHeat  = (engine.postprocessMode & MODE_POSTPROCESS_HEAT) != 0u;
 
 	vec2 initialUV = In.uv;
 	if(wantsJitter){
@@ -41,6 +44,16 @@ void main(){
 		baseColor += 0.5 * bloomColor;
 	}
 
+	if(wantsHeat){
+		vec3 fLuminance = vec3(0.2125, 0.7154, 0.0721);
+		vec2 uv1 = In.uv;
+		vec3 lightMap = baseColor;
+		vec3 thermalMap = textureLod(sampler2D(heatMapTexture, sClampLinear), initialUV, 0.0).rgb;
+		float l = dot(lightMap, fLuminance) * 0.25 + thermalMap.r * 0.85;
+		float c = clamp(l, 0.01, 0.99);
+		vec3 thermal = textureLod(sampler2D(heatLookupTexture, sClampLinear), vec2(c, 0.5), 0.0).rgb;
+		baseColor = thermal;
+	}
 	if(wantsBAndW){
 		vec3 fLuminance = vec3(0.2125, 0.7154, 0.0721);
 		baseColor = vec3(dot(baseColor, fLuminance));

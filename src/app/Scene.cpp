@@ -267,6 +267,7 @@ void Scene::upload(const World& world, const GameFiles& files){
 				const World::Instance& instance = world.instances()[iid];
 				// Populate rendering info.
 				(*instanceInfos)[currentInstanceId].frame = instance.frame;
+				(*instanceInfos)[currentInstanceId].heat = instance.heat;
 				// ...and additional CPU info.
 				InstanceCPUInfos& debugInfos = instanceDebugInfos[currentInstanceId];
 				debugInfos.name = instance.name + "_" + parentDebugInfos.name;

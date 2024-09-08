@@ -29,6 +29,7 @@
 #define MODE_POSTPROCESS_NIGHT 4
 #define MODE_POSTPROCESS_BANDW 8
 #define MODE_POSTPROCESS_JITTER 16
+#define MODE_POSTPROCESS_HEAT 32
 
 #define CLUSTER_XY_SIZE 64
 #define CLUSTER_Z_COUNT 32
@@ -435,7 +436,7 @@ void deselect(FrameData& _frame, SelectionState& _state, SelectionFilter _filter
 
 }
 
-void loadEngineTextures(const GameFiles& gameFiles, Texture& fogXYTexture, Texture& fogZTexture, Texture& noiseTexture, Texture& bgTexture){
+void loadEngineTextures(const GameFiles& gameFiles, Texture& fogXYTexture, Texture& fogZTexture, Texture& noiseTexture, Texture& bgTexture, Texture& heatTexture){
 	if(gameFiles.texturesPath.empty()){
 		return;
 	}
@@ -491,6 +492,16 @@ void loadEngineTextures(const GameFiles& gameFiles, Texture& fogXYTexture, Textu
 	bgTexture.depth = 1;
 	bgTexture.levels = 1;
 	bgTexture.upload(Layout::RGBA8, false);
+
+	heatTexture.clean();
+	Image& imgHeat = heatTexture.images.emplace_back();
+	imgHeat.load(gameFiles.texturesPath / "commons" / "heat.png");
+	heatTexture.width = imgHeat.width;
+	heatTexture.height = imgHeat.height;
+	heatTexture.shape = TextureShape::D2;
+	heatTexture.depth = 1;
+	heatTexture.levels = 1;
+	heatTexture.upload(Layout::RGBA8, false);
 }
 
 
@@ -510,9 +521,6 @@ int main(int argc, char ** argv) {
 	//  * Some opaque objects are alpha blended on top of the others? are they sorted?
 	//		Are they just depth tested and blended in which case we could move them to
 	//		the end of the list and change the blending mode (similarly to billboards)
-	//	* Temperature reading could be a fun one:
-	//  	A unique value per material? in which case it could be put in the gbuffer.
-	//		Skip lighting, and convert it in a final fullscreen pass.
 	//	* Bug in the clustered lighting at least on MoltenVK, either a bug or a hidden
 	//		limitation somewhere? I am getting a different result on an Nvidia driver.
 	//  * Fog parameters should be applied based on each object location, not based on
@@ -617,10 +625,11 @@ int main(int argc, char ** argv) {
 	const glm::uvec2 renderRes(config.resolutionRatio * config.screenResolution);
 
 	// Gbuffer
-	Texture sceneColor("sceneColor"), sceneNormal("sceneNormal"), sceneDepth("sceneDepth");
+	Texture sceneColor("sceneColor"), sceneNormal("sceneNormal"), sceneDepth("sceneDepth"), sceneHeat("sceneHeat");
 	Texture::setupRendertarget(sceneColor, Layout::RGBA16F, renderRes[0], renderRes[1]);
 	Texture::setupRendertarget(sceneNormal, Layout::RGBA16F, renderRes[0], renderRes[1]);
 	Texture::setupRendertarget(sceneDepth, Layout::DEPTH_COMPONENT32F, renderRes[0], renderRes[1]);
+	Texture::setupRendertarget(sceneHeat, Layout::R8, renderRes[0], renderRes[1]);
 
 	// Lit result
 	Texture sceneLit("sceneLit");
@@ -726,7 +735,8 @@ int main(int argc, char ** argv) {
 	Texture fogZTexture("fogZMap");
 	Texture noiseTexture("noiseMap");
 	Texture bgTexture("backgroundMap");
-	loadEngineTextures(gameFiles, fogXYTexture, fogZTexture, noiseTexture, bgTexture);
+	Texture heatTexture("heatLookup");
+	loadEngineTextures(gameFiles, fogXYTexture, fogZTexture, noiseTexture, bgTexture, heatTexture);
 
 	deselect( frameInfos[ 0 ], selected, SelectionFilter::ALL );
 	
@@ -891,7 +901,7 @@ int main(int argc, char ** argv) {
 					fs::path newInstallPath;
 					if(Window::showDirectoryPicker(fs::path(""), newInstallPath)){
 						gameFiles = GameFiles( newInstallPath);
-						loadEngineTextures(gameFiles, fogXYTexture, fogZTexture, noiseTexture, bgTexture);
+						loadEngineTextures(gameFiles, fogXYTexture, fogZTexture, noiseTexture, bgTexture, heatTexture);
 						scene = Scene();
 						deselect(frameInfos[0], selected, SelectionFilter::ALL);
 					}
@@ -1420,6 +1430,7 @@ int main(int argc, char ** argv) {
 				sceneColor.resize(renderRes);
 				sceneNormal.resize(renderRes);
 				sceneDepth.resize(renderRes);
+				sceneHeat.resize(renderRes);
 				sceneLit.resize(renderRes);
 				sceneFog.resize(renderRes);
 				bloom0.resize(glm::uvec2(renderRes)/2u );
@@ -1465,6 +1476,7 @@ int main(int argc, char ** argv) {
 				ImGui::CheckboxFlags("B&W", &showPostprocess, MODE_POSTPROCESS_BANDW);
 				ImGui::CheckboxFlags("Grain", &showPostprocess, MODE_POSTPROCESS_GRAIN);
 				ImGui::CheckboxFlags("Jitter", &showPostprocess, MODE_POSTPROCESS_JITTER);
+				ImGui::CheckboxFlags("Heat map", &showPostprocess, MODE_POSTPROCESS_HEAT);
 				ImGui::EndPopup();
 			}
 			ImGui::SameLine();
@@ -1527,6 +1539,7 @@ int main(int argc, char ** argv) {
 				sceneColor.resize(renderRes);
 				sceneNormal.resize(renderRes);
 				sceneDepth.resize(renderRes);
+				sceneHeat.resize(renderRes);
 				sceneLit.resize(renderRes);
 				sceneFog.resize(renderRes);
 				bloom0.resize(glm::uvec2(renderRes)/2u);
@@ -1550,7 +1563,7 @@ int main(int argc, char ** argv) {
 #ifdef DEBUG_UI
 		if(ImGui::Begin("Debug view", nullptr)){
 
-			Texture& tex = shadowMaps;
+			Texture& tex = sceneHeat;
 			ImGui::PushItemWidth(220);
 			if(ImGui::SliderInt("Layer", &debugTextureLayerIndex, 0, tex.depth-1)){
 				debugTextureLayerIndex = glm::clamp(debugTextureLayerIndex, 0, (int)tex.depth-1);
@@ -1753,11 +1766,14 @@ int main(int argc, char ** argv) {
 			}
 
 			{
-				// Determine clearing color by finding the closest area.
-				glm::vec4 clearColor = effects.fogColor;
-				clearColor[3] = 0.0f;
+				// Determine clearing color by finding the closest area. Use alpha to skip lighting.
+				glm::vec4 clearColor = glm::vec4(glm::vec3(effects.fogColor), 0.0f);
+				// Don't want heat emissive background.
+				if(showPostprocess & MODE_POSTPROCESS_HEAT){
+					clearColor = glm::vec4(0.0f);
+				}
 
-				GPU::bind(sceneColor, sceneNormal, sceneDepth, clearColor, 0.0f, LoadOperation::DONTCARE);
+				GPU::bind(sceneColor, sceneNormal, sceneHeat, sceneDepth, clearColor, 0.0f, LoadOperation::DONTCARE);
 				GPU::setViewport(sceneColor);
 
 				if(showOpaques){
@@ -1952,6 +1968,8 @@ int main(int argc, char ** argv) {
 						noiseGrainQuad->texture(noiseTexture, 2);
 						noiseGrainQuad->texture(whiteTexture, 3); // TODO: find proper texture in capture
 						noiseGrainQuad->texture(whiteTexture, 4); // TODO: find proper texture in capture
+						noiseGrainQuad->texture(sceneHeat, 5);
+						noiseGrainQuad->texture(heatTexture, 6);
 						noiseGrainQuad->buffer(frameInfos, 0);
 						GPU::drawQuad();
 					}

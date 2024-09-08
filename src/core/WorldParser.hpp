@@ -19,8 +19,9 @@ public:
 		glm::mat4 frame;
 		std::string name;
 		uint object;
+		float heat;
 
-		Instance(const std::string& _name, uint _object, const glm::mat4& _frame);
+		Instance(const std::string& _name, uint _object, const glm::mat4& _frame, float _heat = 0.f);
 	};
 
 	struct Camera {

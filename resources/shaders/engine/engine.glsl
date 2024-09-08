@@ -56,6 +56,7 @@ layout(set = 0, binding = 0) uniform EngineData {
 #define MODE_POSTPROCESS_NIGHT 4
 #define MODE_POSTPROCESS_BANDW 8
 #define MODE_POSTPROCESS_JITTER 16
+#define MODE_POSTPROCESS_HEAT 32
 
 #define BILLBOARD_WORLD 0
 #define BILLBOARD_AROUND_X 1
@@ -79,6 +80,8 @@ struct MeshInfos {
 
 struct MeshInstanceInfos {
 	mat4 frame;
+	float heat;
+	uint pad0, pad1, pad2;
 };
 
 struct TextureInfos {

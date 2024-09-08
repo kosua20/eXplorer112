@@ -13,8 +13,8 @@
 
 //#define LOG_WORLD_LOADING
 
-World::Instance::Instance(const std::string& _name, uint _object, const glm::mat4& _frame) :
-	frame(_frame), name(_name), object(_object){
+World::Instance::Instance(const std::string& _name, uint _object, const glm::mat4& _frame, float _heat) :
+	frame(_frame), name(_name), object(_object), heat(_heat){
 
 }
 World::Camera::Camera(const std::string& _name, const glm::mat4& _frame, float _fov) :
@@ -509,13 +509,16 @@ void World::processEntity(const pugi::xml_node& entity, const glm::mat4& globalF
 	fs::path objPath = TextUtilities::lowercase(objPathStr);
 	objPath.replace_extension("dff");
 
-	// Has this model already been encountered?
+	// Parse heat if it exists.
+	const std::string heatStr = getEntityAttribute(entity, "heat");
+	const float heat = Area::parseFloat(heatStr.c_str(), 0.f);
 
+	// Has this model already been encountered?
 	if(objectRefs.count(objPath) == 0){
 		const uint objCount = (uint)objectRefs.size();
 		objectRefs[objPath] = objCount;
 	}
-	_instances.emplace_back(objName, objectRefs[objPath], frame);
+	_instances.emplace_back(objName, objectRefs[objPath], frame, heat);
 
 #ifdef LOG_WORLD_LOADING
 	Log::info("Actor: %s", objName);
@@ -685,6 +688,7 @@ bool World::load(const fs::path& path, const fs::path& resourcePath){
 
 	/// Extract list of unique materials.
 	for(Object& object : _objects){
+
 		for(Object::Set& set : object.faceSets){
 			const Object::Material& material = object.materials[set.material];
 
@@ -704,7 +708,6 @@ bool World::load(const fs::path& path, const fs::path& resourcePath){
 		}
 		// Remove local materials.
 		object.materials.clear();
-
 	}
 
 	// Sort billboards and FX by blending types

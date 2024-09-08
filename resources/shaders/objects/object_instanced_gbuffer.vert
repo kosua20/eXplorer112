@@ -14,7 +14,7 @@ layout(push_constant) uniform constants {
 
 layout(location = 0) out INTERFACE {
 	mat4 tbn; ///< Normal to view matrix.
-	vec4 uv; ///< Texture coordinates.
+	vec4 uvAndHeat; ///< Texture coordinates.
 } Out;
 
 
@@ -39,7 +39,8 @@ void main(){
 
 	vec4 worldPos = instance.frame * vec4(v, 1.0);
 	gl_Position = engine.vp * worldPos;
-	Out.uv.xy = uv;
+	Out.uvAndHeat.xy = uv;
+	Out.uvAndHeat.z = instance.heat;
 
 	// Compute the TBN matrix (from tangent space to view space). Could be stored ahead of time or written by command generation shader if view matrix needs to be taken into account.
 	mat3 nMat = inverse(transpose(mat3(instance.frame)));
