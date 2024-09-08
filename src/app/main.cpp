@@ -448,7 +448,7 @@ void loadTextureFromImage(const fs::path& path, Texture& dstTexture){
 	dstTexture.upload(Layout::RGBA8, false);
 }
 
-void loadEngineTextures(const GameFiles& gameFiles, Texture& fogXYTexture, Texture& fogZTexture, Texture& noiseTexture, Texture& noisePulseTexture, Texture& bgTexture, Texture& heatTexture){
+void loadEngineTextures(const GameFiles& gameFiles, Texture& fogXYTexture, Texture& fogZTexture, Texture& noiseTexture, std::array<Texture, 3>& noisePulseTexture, Texture& bgTexture, Texture& heatTexture){
 	if(gameFiles.texturesPath.empty()){
 		return;
 	}
@@ -456,7 +456,9 @@ void loadEngineTextures(const GameFiles& gameFiles, Texture& fogXYTexture, Textu
 	loadTextureFromImage(gameFiles.texturesPath / "commons" / "fog_xy.png", fogXYTexture);
 	loadTextureFromImage(gameFiles.texturesPath / "commons" / "fog_z.png", fogZTexture);
 	loadTextureFromImage(gameFiles.texturesPath / "commons" / "noise.tga", noiseTexture);
-	loadTextureFromImage(gameFiles.texturesPath / "caustics" / "pulsenoise_0.tga", noisePulseTexture);
+	loadTextureFromImage(gameFiles.texturesPath / "caustics" / "pulsenoise_0.tga", noisePulseTexture[0]);
+	loadTextureFromImage(gameFiles.texturesPath / "caustics" / "pulsenoise_1.tga", noisePulseTexture[1]);
+	loadTextureFromImage(gameFiles.texturesPath / "caustics" / "pulsenoise_2.tga", noisePulseTexture[2]);
 	loadTextureFromImage(gameFiles.texturesPath / "ui" / "background.tga", bgTexture);
 	loadTextureFromImage(gameFiles.texturesPath / "commons" / "heat.png", heatTexture);
 }
@@ -688,16 +690,17 @@ int main(int argc, char ** argv) {
 		blackTexture.upload(Layout::RGBA8, false);
 	}
 
+	std::array<Texture, 3> noisePulseTextures = { Texture{"noisePulseMap0"}, Texture{"noisePulseMap1"}, Texture{"noisePulseMap2"}};
 	Texture fogXYTexture("fogXYMap");
 	Texture fogZTexture("fogZMap");
 	Texture noiseTexture("noiseMap");
-	Texture noisePulseTexture("noisePulseMap");
 	Texture bgTexture("backgroundMap");
 	Texture heatTexture("heatLookup");
-	loadEngineTextures(gameFiles, fogXYTexture, fogZTexture, noiseTexture, noisePulseTexture, bgTexture, heatTexture);
+	loadEngineTextures(gameFiles, fogXYTexture, fogZTexture, noiseTexture, noisePulseTextures, bgTexture, heatTexture);
 
 	deselect( frameInfos[ 0 ], selected, SelectionFilter::ALL );
-	
+
+	uint64_t frameIndex = 0;
 #ifdef DEBUG_UI
 	bool showDemoWindow = false;
 	int debugTextureLayerIndex = 0;
@@ -859,7 +862,7 @@ int main(int argc, char ** argv) {
 					fs::path newInstallPath;
 					if(Window::showDirectoryPicker(fs::path(""), newInstallPath)){
 						gameFiles = GameFiles( newInstallPath);
-						loadEngineTextures(gameFiles, fogXYTexture, fogZTexture, noiseTexture, noisePulseTexture, bgTexture, heatTexture);
+						loadEngineTextures(gameFiles, fogXYTexture, fogZTexture, noiseTexture, noisePulseTextures, bgTexture, heatTexture);
 						scene = Scene();
 						deselect(frameInfos[0], selected, SelectionFilter::ALL);
 					}
@@ -1914,6 +1917,10 @@ int main(int argc, char ** argv) {
 
 					// Postprocesses
 					{
+						// Avoid updating it when not using the mode.
+						uint noisePulseIndex = (showPostprocess & MODE_POSTPROCESS_NIGHT) ? (frameIndex % 3u) : 0u;
+						Texture& noisePulse = noisePulseTextures[noisePulseIndex];
+
 						GPU::bind(sceneLit, LoadOperation::DONTCARE);
 						GPU::setViewport(sceneLit);
 						GPU::setDepthState(false);
@@ -1924,7 +1931,7 @@ int main(int argc, char ** argv) {
 						noiseGrainQuad->texture(sceneFog, 0);
 						noiseGrainQuad->texture(bloom0, 1);
 						noiseGrainQuad->texture(noiseTexture, 2);
-						noiseGrainQuad->texture(noisePulseTexture, 3);
+						noiseGrainQuad->texture(noisePulse, 3);
 						noiseGrainQuad->texture(sceneHeat, 4);
 						noiseGrainQuad->texture(heatTexture, 5);
 						noiseGrainQuad->buffer(frameInfos, 0);
@@ -2069,6 +2076,7 @@ int main(int argc, char ** argv) {
 			passthrough->texture(bgTexture, 0);
 			GPU::drawQuad();
 		}
+		++frameIndex;
 	}
 
 	scene.clean();

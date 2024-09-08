@@ -61,7 +61,6 @@ void main(){
 		vec3 fcol1 = vec3(0.66, 0.18, 0.22);
 		vec3 fcol2 = vec3(-0.02, 0.05, 0.04);
 		vec2 uv1 = vec2(gl_FragCoord.xy) / vec2(textureSize(nightNoisePulseTexture, 0).xy);
-		uv1 += vec2(engine.randomZ, engine.randomX);
 
 		vec3 nightColor = vec3(dot(baseColor, fcol1));
 		vec3 noisePulse = textureLod(sampler2D(nightNoisePulseTexture, sRepeatLinear), uv1, 0.0).rgb;
