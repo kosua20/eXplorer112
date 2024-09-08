@@ -436,72 +436,29 @@ void deselect(FrameData& _frame, SelectionState& _state, SelectionFilter _filter
 
 }
 
-void loadEngineTextures(const GameFiles& gameFiles, Texture& fogXYTexture, Texture& fogZTexture, Texture& noiseTexture, Texture& bgTexture, Texture& heatTexture){
+void loadTextureFromImage(const fs::path& path, Texture& dstTexture){
+	dstTexture.clean();
+	Image& img = dstTexture.images.emplace_back();
+	img.load(path);
+	dstTexture.width = img.width;
+	dstTexture.height = img.height;
+	dstTexture.shape = TextureShape::D2;
+	dstTexture.depth = 1;
+	dstTexture.levels = 1;
+	dstTexture.upload(Layout::RGBA8, false);
+}
+
+void loadEngineTextures(const GameFiles& gameFiles, Texture& fogXYTexture, Texture& fogZTexture, Texture& noiseTexture, Texture& noisePulseTexture, Texture& bgTexture, Texture& heatTexture){
 	if(gameFiles.texturesPath.empty()){
 		return;
 	}
 
-	fogXYTexture.clean();
-	Image& imgXY = fogXYTexture.images.emplace_back();
-	imgXY.load(gameFiles.texturesPath / "commons" / "fog_xy.png");
-	fogXYTexture.width = imgXY.width;
-	fogXYTexture.height = imgXY.height;
-	fogXYTexture.shape = TextureShape::D2;
-	fogXYTexture.depth = 1;
-	fogXYTexture.levels = 1;
-	fogXYTexture.upload(Layout::RGBA8, false);
-
-	fogZTexture.clean();
-	Image imgZTmp;
-	imgZTmp.load(gameFiles.texturesPath / "commons" / "fog_z.png");
-	// Artifically pad the fogZ texture as it is only one pixel high.
-	const uint kRepeatCount = 4u;
-	Image& imgZ = fogZTexture.images.emplace_back( imgZTmp.width, kRepeatCount *  imgZTmp.height, imgZTmp.components);
-	{
-		const uint srcPixelCount = imgZTmp.pixels.size();
-		for(uint rId = 0; rId < kRepeatCount; ++rId){
-			for(uint pId = 0u; pId < srcPixelCount; ++pId){
-				imgZ.pixels[rId * srcPixelCount + pId] = imgZTmp.pixels[pId];
-			}
-		}
-	}
-	imgZ.compressedFormat = imgZTmp.compressedFormat;
-	fogZTexture.width = imgZ.width;
-	fogZTexture.height = imgZ.height;
-	fogZTexture.shape = TextureShape::D2;
-	fogZTexture.depth = 1;
-	fogZTexture.levels = 1;
-	fogZTexture.upload(Layout::RGBA8, false);
-
-	noiseTexture.clean();
-	Image& imgNoise = noiseTexture.images.emplace_back();
-	imgNoise.load(gameFiles.texturesPath / "commons" / "noise.tga");
-	noiseTexture.width = imgNoise.width;
-	noiseTexture.height = imgNoise.height;
-	noiseTexture.shape = TextureShape::D2;
-	noiseTexture.depth = 1;
-	noiseTexture.levels = 1;
-	noiseTexture.upload(Layout::RGBA8, false);
-
-	bgTexture.clean();
-	Image& imgBg = bgTexture.images.emplace_back();
-	imgBg.load(gameFiles.texturesPath / "ui" / "background.tga");
-	bgTexture.width = imgBg.width;
-	bgTexture.height = imgBg.height;
-	bgTexture.shape = TextureShape::D2;
-	bgTexture.depth = 1;
-	bgTexture.levels = 1;
-	bgTexture.upload(Layout::RGBA8, false);
-
-	heatTexture.clean();
-	Image& imgHeat = heatTexture.images.emplace_back();
-	imgHeat.load(gameFiles.texturesPath / "commons" / "heat.png");
-	heatTexture.width = imgHeat.width;
-	heatTexture.height = imgHeat.height;
-	heatTexture.shape = TextureShape::D2;
-	heatTexture.depth = 1;
-	heatTexture.levels = 1;
-	heatTexture.upload(Layout::RGBA8, false);
+	loadTextureFromImage(gameFiles.texturesPath / "commons" / "fog_xy.png", fogXYTexture);
+	loadTextureFromImage(gameFiles.texturesPath / "commons" / "fog_z.png", fogZTexture);
+	loadTextureFromImage(gameFiles.texturesPath / "commons" / "noise.tga", noiseTexture);
+	loadTextureFromImage(gameFiles.texturesPath / "caustics" / "pulsenoise_0.tga", noisePulseTexture);
+	loadTextureFromImage(gameFiles.texturesPath / "ui" / "background.tga", bgTexture);
+	loadTextureFromImage(gameFiles.texturesPath / "commons" / "heat.png", heatTexture);
 }
 
 
@@ -734,9 +691,10 @@ int main(int argc, char ** argv) {
 	Texture fogXYTexture("fogXYMap");
 	Texture fogZTexture("fogZMap");
 	Texture noiseTexture("noiseMap");
+	Texture noisePulseTexture("noisePulseMap");
 	Texture bgTexture("backgroundMap");
 	Texture heatTexture("heatLookup");
-	loadEngineTextures(gameFiles, fogXYTexture, fogZTexture, noiseTexture, bgTexture, heatTexture);
+	loadEngineTextures(gameFiles, fogXYTexture, fogZTexture, noiseTexture, noisePulseTexture, bgTexture, heatTexture);
 
 	deselect( frameInfos[ 0 ], selected, SelectionFilter::ALL );
 	
@@ -901,7 +859,7 @@ int main(int argc, char ** argv) {
 					fs::path newInstallPath;
 					if(Window::showDirectoryPicker(fs::path(""), newInstallPath)){
 						gameFiles = GameFiles( newInstallPath);
-						loadEngineTextures(gameFiles, fogXYTexture, fogZTexture, noiseTexture, bgTexture, heatTexture);
+						loadEngineTextures(gameFiles, fogXYTexture, fogZTexture, noiseTexture, noisePulseTexture, bgTexture, heatTexture);
 						scene = Scene();
 						deselect(frameInfos[0], selected, SelectionFilter::ALL);
 					}
@@ -1966,10 +1924,9 @@ int main(int argc, char ** argv) {
 						noiseGrainQuad->texture(sceneFog, 0);
 						noiseGrainQuad->texture(bloom0, 1);
 						noiseGrainQuad->texture(noiseTexture, 2);
-						noiseGrainQuad->texture(whiteTexture, 3); // TODO: find proper texture in capture
-						noiseGrainQuad->texture(whiteTexture, 4); // TODO: find proper texture in capture
-						noiseGrainQuad->texture(sceneHeat, 5);
-						noiseGrainQuad->texture(heatTexture, 6);
+						noiseGrainQuad->texture(noisePulseTexture, 3);
+						noiseGrainQuad->texture(sceneHeat, 4);
+						noiseGrainQuad->texture(heatTexture, 5);
 						noiseGrainQuad->buffer(frameInfos, 0);
 						GPU::drawQuad();
 					}

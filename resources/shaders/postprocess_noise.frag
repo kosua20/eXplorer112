@@ -9,10 +9,9 @@ layout(location = 0) in INTERFACE {
 layout(set = 2, binding = 0) uniform texture2D screenTexture;
 layout(set = 2, binding = 1) uniform texture2D bloomTexture;
 layout(set = 2, binding = 2) uniform texture2D grainNoiseTexture;
-layout(set = 2, binding = 3) uniform texture2D nightNoiseTexture;
-layout(set = 2, binding = 4) uniform texture2D nightPulseTexture;
-layout(set = 2, binding = 5) uniform texture2D heatMapTexture;
-layout(set = 2, binding = 6) uniform texture2D heatLookupTexture;
+layout(set = 2, binding = 3) uniform texture2D nightNoisePulseTexture;
+layout(set = 2, binding = 4) uniform texture2D heatMapTexture;
+layout(set = 2, binding = 5) uniform texture2D heatLookupTexture;
 
 layout(location = 0) out vec4 fragColor; ///< Color.
 
@@ -46,7 +45,6 @@ void main(){
 
 	if(wantsHeat){
 		vec3 fLuminance = vec3(0.2125, 0.7154, 0.0721);
-		vec2 uv1 = In.uv;
 		vec3 lightMap = baseColor;
 		vec3 thermalMap = textureLod(sampler2D(heatMapTexture, sClampLinear), initialUV, 0.0).rgb;
 		float l = dot(lightMap, fLuminance) * 0.25 + thermalMap.r * 0.85;
@@ -62,15 +60,14 @@ void main(){
 	if(wantsNight){
 		vec3 fcol1 = vec3(0.66, 0.18, 0.22);
 		vec3 fcol2 = vec3(-0.02, 0.05, 0.04);
-		vec2 uv1 = vec2(gl_FragCoord.xy) / vec2(textureSize(nightNoiseTexture, 0).xy);
-		vec2 uv2 = vec2(gl_FragCoord.xy) / vec2(textureSize(nightPulseTexture, 0).xy);
+		vec2 uv1 = vec2(gl_FragCoord.xy) / vec2(textureSize(nightNoisePulseTexture, 0).xy);
+		uv1 += vec2(engine.randomZ, engine.randomX);
 
 		vec3 nightColor = vec3(dot(baseColor, fcol1));
-		vec3 noise = textureLod(sampler2D(nightNoiseTexture, sRepeatLinear), uv1, 0.0).rgb;
-		vec3 pulse = textureLod(sampler2D(nightPulseTexture, sRepeatLinear), uv2, 0.0).rgb;
+		vec3 noisePulse = textureLod(sampler2D(nightNoisePulseTexture, sRepeatLinear), uv1, 0.0).rgb;
 
 		baseColor = 4.0 * (nightColor + fcol2);
-		baseColor *= noise * pulse;
+		baseColor *= noisePulse;
 	}
 
 
