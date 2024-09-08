@@ -444,7 +444,7 @@ void Scene::upload(const World& world, const GameFiles& files){
 
 				if(billboard.blending != currentBlend){
 					const uint firstIndex = billboardsMesh.indices.size();
-					assert(billboard.blending < BLENDING_MODE_COUNT);
+					assert(billboard.blending < World::BLEND_COUNT);
 					billboardRanges[currentBlend].indexCount = firstIndex - billboardRanges[currentBlend].firstIndex;
 					currentBlend = billboard.blending;
 					billboardRanges[currentBlend].firstIndex = firstIndex;
@@ -483,7 +483,7 @@ void Scene::upload(const World& world, const GameFiles& files){
 
 				if(emitter.blending != currentBlend){
 					const uint firstIndex = billboardsMesh.indices.size();
-					assert(emitter.blending < BLENDING_MODE_COUNT);
+					assert(emitter.blending < World::BLEND_COUNT);
 					particleRanges[currentBlend].indexCount = firstIndex - particleRanges[currentBlend].firstIndex;
 					currentBlend = emitter.blending;
 					particleRanges[currentBlend].firstIndex = firstIndex;
