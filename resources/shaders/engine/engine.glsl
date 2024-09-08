@@ -53,6 +53,9 @@ layout(set = 0, binding = 0) uniform EngineData {
 // Bit field for postprocess
 #define MODE_POSTPROCESS_BLOOM 1
 #define MODE_POSTPROCESS_GRAIN 2
+#define MODE_POSTPROCESS_NIGHT 4
+#define MODE_POSTPROCESS_BANDW 8
+#define MODE_POSTPROCESS_JITTER 16
 
 #define BILLBOARD_WORLD 0
 #define BILLBOARD_AROUND_X 1

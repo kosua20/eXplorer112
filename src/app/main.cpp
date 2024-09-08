@@ -26,6 +26,9 @@
 
 #define MODE_POSTPROCESS_BLOOM 1
 #define MODE_POSTPROCESS_GRAIN 2
+#define MODE_POSTPROCESS_NIGHT 4
+#define MODE_POSTPROCESS_BANDW 8
+#define MODE_POSTPROCESS_JITTER 16
 
 #define CLUSTER_XY_SIZE 64
 #define CLUSTER_Z_COUNT 32
@@ -507,7 +510,6 @@ int main(int argc, char ** argv) {
 	//  * Some opaque objects are alpha blended on top of the others? are they sorted?
 	//		Are they just depth tested and blended in which case we could move them to
 	//		the end of the list and change the blending mode (similarly to billboards)
-	//  * Night vision and other simple postprocesses.
 	//	* Temperature reading could be a fun one:
 	//  	A unique value per material? in which case it could be put in the gbuffer.
 	//		Skip lighting, and convert it in a final fullscreen pass.
@@ -682,10 +684,10 @@ int main(int argc, char ** argv) {
 	bool showDecals = true;
 	bool showBillboards = true;
 	bool showParticles = true;
-
 	bool showFog = false;
-	bool showBloom = false;
-	bool showNoise = false;
+
+	uint showPostprocess = 0u;
+
 	bool freezeCulling = false;
 
 	bool showDebugWireframe = false;
@@ -698,6 +700,27 @@ int main(int argc, char ** argv) {
 	uint currentShadowcastingLight = 0u;
 	uint currentShadowMapLayer = 0u;
 	uint currentShadowcastingLightFace = 0u;
+
+
+	Texture whiteTexture("whiteMap");
+	Texture blackTexture("blackMap");
+	{
+		Image& imgWhite = whiteTexture.images.emplace_back(4, 4, 4, 255);
+		whiteTexture.width = imgWhite.width;
+		whiteTexture.height = imgWhite.height;
+		whiteTexture.shape = TextureShape::D2;
+		whiteTexture.depth = 1;
+		whiteTexture.levels = 1;
+		whiteTexture.upload(Layout::RGBA8, false);
+
+		Image& imgBlack = blackTexture.images.emplace_back(4, 4, 4, 0);
+		blackTexture.width = imgBlack.width;
+		blackTexture.height = imgBlack.height;
+		blackTexture.shape = TextureShape::D2;
+		blackTexture.depth = 1;
+		blackTexture.levels = 1;
+		blackTexture.upload(Layout::RGBA8, false);
+	}
 
 	Texture fogXYTexture("fogXYMap");
 	Texture fogZTexture("fogZMap");
@@ -1437,8 +1460,11 @@ int main(int argc, char ** argv) {
 				ImGui::OpenPopup("postprocessPopup");
 			}
 			if(ImGui::BeginPopup("postprocessPopup")){
-				ImGui::Checkbox("Bloom",  &showBloom);
-				ImGui::Checkbox("Grain", &showNoise);
+				ImGui::CheckboxFlags("Bloom", &showPostprocess, MODE_POSTPROCESS_BLOOM);
+				ImGui::CheckboxFlags("Night vision", &showPostprocess, MODE_POSTPROCESS_NIGHT);
+				ImGui::CheckboxFlags("B&W", &showPostprocess, MODE_POSTPROCESS_BANDW);
+				ImGui::CheckboxFlags("Grain", &showPostprocess, MODE_POSTPROCESS_GRAIN);
+				ImGui::CheckboxFlags("Jitter", &showPostprocess, MODE_POSTPROCESS_JITTER);
 				ImGui::EndPopup();
 			}
 			ImGui::SameLine();
@@ -1595,7 +1621,7 @@ int main(int argc, char ** argv) {
 
 		frameInfos[0].albedoMode = albedoMode;
 		frameInfos[0].shadingMode = shadingMode;
-		frameInfos[0].postprocessMode = (showBloom ? MODE_POSTPROCESS_BLOOM : 0u) | (showNoise ? MODE_POSTPROCESS_GRAIN : 0u);
+		frameInfos[0].postprocessMode = showPostprocess;
 
 		frameInfos[ 0 ].randomX = glm::linearRand( 0.f, 1.0f );
 		frameInfos[ 0 ].randomY = glm::linearRand( 0.f, 1.0f );
@@ -1892,7 +1918,7 @@ int main(int argc, char ** argv) {
 					GPU::setPolygonState(PolygonMode::FILL);
 
 					// Bloom
-					if(showBloom){
+					if(showPostprocess & MODE_POSTPROCESS_BLOOM){
 
 						GPU::blit(sceneFog, bloom0, 0, 0, Filter::LINEAR);
 						GPU::setViewport(0, 0, bloom0.width, bloom0.height);
@@ -1912,7 +1938,7 @@ int main(int argc, char ** argv) {
 
 					}
 
-					// Grain
+					// Postprocesses
 					{
 						GPU::bind(sceneLit, LoadOperation::DONTCARE);
 						GPU::setViewport(sceneLit);
@@ -1924,6 +1950,8 @@ int main(int argc, char ** argv) {
 						noiseGrainQuad->texture(sceneFog, 0);
 						noiseGrainQuad->texture(bloom0, 1);
 						noiseGrainQuad->texture(noiseTexture, 2);
+						noiseGrainQuad->texture(whiteTexture, 3); // TODO: find proper texture in capture
+						noiseGrainQuad->texture(whiteTexture, 4); // TODO: find proper texture in capture
 						noiseGrainQuad->buffer(frameInfos, 0);
 						GPU::drawQuad();
 					}
