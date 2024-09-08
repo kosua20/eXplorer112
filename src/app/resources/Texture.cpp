@@ -170,7 +170,7 @@ void Texture::resize(uint w, uint h, uint d){
 	height = h;
 	depth = d;
 	GPU::setupTexture(*this, gpu->typedFormat, true);
-	// TODO: resize CPU.
+	// \todo Resize CPU.
 }
 
 void Texture::setupRendertarget(Texture& texture, Layout format,uint width, uint height, uint mips, TextureShape shape, uint depth){

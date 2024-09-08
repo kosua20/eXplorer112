@@ -804,7 +804,7 @@ void GPU::uploadTexture(const Texture & texture) {
 	// Transfer the complete CPU image data to a staging buffer, handling conversion..
 	Buffer transferBuffer(totalSize, BufferType::CPUTOGPU, "ImageUpload");
 
-	// TODO: could handle float values as a special case converted on the CPU.
+	// \todo Could handle float values as a special case converted on the CPU.
 	{
 		// Copy arrays.
 		uint i = 0;

@@ -335,7 +335,7 @@ public:
 
 	/// \brief Current framebuffer information.
 	struct FramebufferInfos {
-		std::vector<const Texture*> colors; // todo store gpu texture instead ? what about resize?
+		std::vector<const Texture*> colors; // \todo Store gpu texture instead ? what about resize?
 		const Texture* depthStencil = nullptr;
 
 		uint mipStart = 0; ///< First mip to be used in the current render pass.

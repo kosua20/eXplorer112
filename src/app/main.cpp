@@ -496,6 +496,28 @@ uint roundUp(uint a, uint step){
 }
 
 int main(int argc, char ** argv) {
+
+	// TODO:
+	//	* Sort transparent objects back-to-front:
+	//		we can't just have a list of (mesh, instance count, instance list) anymore
+	//		for this pass, we need to interlace different meshes instances. Maybe just
+	//		allocate an indirect arg buffer for the worst (total instance count) case.
+	//		But with the MoltenVk limitation, this means one drawcall per instance per
+	//		mesh, far from an indirect approach (excepts if this ends up being fixed)?
+	//  * Some opaque objects are alpha blended on top of the others? are they sorted?
+	//		Are they just depth tested and blended in which case we could move them to
+	//		the end of the list and change the blending mode (similarly to billboards)
+	//  * Night vision and other simple postprocesses.
+	//	* Temperature reading could be a fun one:
+	//  	A unique value per material? in which case it could be put in the gbuffer.
+	//		Skip lighting, and convert it in a final fullscreen pass.
+	//	* Bug in the clustered lighting at least on MoltenVK, either a bug or a hidden
+	//		limitation somewhere? I am getting a different result on an Nvidia driver.
+	//  * Fog parameters should be applied based on each object location, not based on
+	//		the viewer location. Either cluster cull the zones, or preassign a zone ID
+	//		to each instance and store it in the gbuffer. Zones list used in fog pass.
+	//  * Are all billboards rendered after fog, even those used as alphablend decals?
+
 	// First, init/parse/load configuration.
 	ViewerConfig config(std::vector<std::string>(argv, argv + argc));
 	if(config.showHelp()) {
@@ -654,19 +676,22 @@ int main(int argc, char ** argv) {
 	int shadingMode = MODE_SHADING_LIGHT;
 	int albedoMode = MODE_ALBEDO_TEXTURE;
 	SelectionState selected;
+
+	bool showOpaques = true;
+	bool showTransparents = false;
 	bool showDecals = true;
 	bool showBillboards = true;
 	bool showParticles = true;
-	bool showTransparents = false;
-	bool showOpaques = true;
+
 	bool showFog = false;
 	bool showBloom = false;
 	bool showNoise = false;
 	bool freezeCulling = false;
-	bool showWireframe = false;
-	bool showLights = false;
-	bool showFxs = false;
-	bool showZones = false;
+
+	bool showDebugWireframe = false;
+	bool showDebugLights = false;
+	bool showDebugFxs = false;
+	bool showDebugZones = false;
 	bool renderingShadow = false;
 
 	AmbientEffects effects;
@@ -1419,13 +1444,13 @@ int main(int argc, char ** argv) {
 			ImGui::SameLine();
 			ImGui::Text("Postprocess");
 
-			ImGui::Checkbox("Wireframe", &showWireframe);
+			ImGui::Checkbox("Wireframe", &showDebugWireframe);
 			ImGui::SameLine();
-			ImGui::Checkbox("Lights", &showLights);
+			ImGui::Checkbox("Lights", &showDebugLights);
 			ImGui::SameLine();
-			ImGui::Checkbox("Zones", &showZones);
+			ImGui::Checkbox("Zones", &showDebugZones);
 			ImGui::SameLine();
-			ImGui::Checkbox("FXs", &showFxs );
+			ImGui::Checkbox("FXs", &showDebugFxs );
 
 			ImGui::Checkbox("Freeze culling", &freezeCulling);
 			ImGui::SameLine();
@@ -1775,10 +1800,24 @@ int main(int argc, char ** argv) {
 					GPU::drawIndirectMesh(scene.globalMesh, *drawCommands, mid);
 				}
 			}
+
+			// Fog
+			{
+				fogCompute->use();
+				fogCompute->buffer(frameInfos, 0);
+				fogCompute->texture(sceneDepth, 0);
+				fogCompute->texture(fogXYTexture, 1);
+				fogCompute->texture(fogZTexture, 2);
+				fogCompute->texture(sceneLit, 3);
+				fogCompute->texture(sceneFog, 4);
+
+				GPU::dispatch( sceneFog.width, sceneFog.height, 1u);
+			}
+
 			// Then render billboards
 			if(showBillboards || showParticles){
-				GPU::bind(sceneLit, sceneDepth, LoadOperation::LOAD, LoadOperation::LOAD, LoadOperation::DONTCARE);
-				GPU::setViewport(sceneLit);
+				GPU::bind(sceneFog, sceneDepth, LoadOperation::LOAD, LoadOperation::LOAD, LoadOperation::DONTCARE);
+				GPU::setViewport(sceneFog);
 				GPU::setPolygonState(PolygonMode::FILL);
 				GPU::setCullState(false);
 				GPU::setDepthState(true, TestFunction::GEQUAL, false);
@@ -1810,19 +1849,6 @@ int main(int argc, char ** argv) {
 					}
 				}
 
-			}
-			
-			// Fog
-			{
-				fogCompute->use();
-				fogCompute->buffer(frameInfos, 0);
-				fogCompute->texture(sceneDepth, 0);
-				fogCompute->texture(fogXYTexture, 1);
-				fogCompute->texture(fogZTexture, 2);
-				fogCompute->texture(sceneLit, 3);
-				fogCompute->texture(sceneFog, 4);
-
-				GPU::dispatch( sceneFog.width, sceneFog.height, 1u);
 			}
 
 			if(showTransparents){
@@ -1911,7 +1937,7 @@ int main(int argc, char ** argv) {
 					GPU::setBlendState( false );
 					GPU::setColorState(true, true, true, true);
 
-					if(showWireframe){
+					if(showDebugWireframe){
 						debugInstancedObject->use();
 						debugInstancedObject->buffer(frameInfos, 0);
 						debugInstancedObject->buffer(*scene.meshInfos, 1);
@@ -1932,13 +1958,13 @@ int main(int argc, char ** argv) {
 					if((selected.mesh >= 0 || selected.instance >= 0) && !boundingBox.indices.empty()){
 						GPU::drawMesh( boundingBox );
 					}
-					if(showLights && !debugLights.indices.empty()){
+					if(showDebugLights && !debugLights.indices.empty()){
 						GPU::drawMesh( debugLights );
 					}
-					if(showZones && !debugZones.indices.empty()){
+					if(showDebugZones && !debugZones.indices.empty()){
 						GPU::drawMesh( debugZones );
 					}
-					if(showFxs && !debugFxs.indices.empty()){
+					if(showDebugFxs && !debugFxs.indices.empty()){
 						GPU::drawMesh( debugFxs );
 					}
 				}
