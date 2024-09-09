@@ -585,7 +585,7 @@ int main(int argc, char ** argv) {
 
 	// Gbuffer
 	Texture sceneColor("sceneColor"), sceneNormal("sceneNormal"), sceneDepth("sceneDepth"), sceneHeat("sceneHeat");
-	Texture::setupRendertarget(sceneColor, Layout::RGBA16F, renderRes[0], renderRes[1]);
+	Texture::setupRendertarget(sceneColor, Layout::RGBA8, renderRes[0], renderRes[1]);
 	Texture::setupRendertarget(sceneNormal, Layout::RGBA16F, renderRes[0], renderRes[1]);
 	Texture::setupRendertarget(sceneDepth, Layout::DEPTH_COMPONENT32F, renderRes[0], renderRes[1]);
 	Texture::setupRendertarget(sceneHeat, Layout::R8, renderRes[0], renderRes[1]);
@@ -1443,13 +1443,21 @@ int main(int argc, char ** argv) {
 			ImGui::SameLine();
 			ImGui::Text("Postprocess");
 
-			ImGui::Checkbox("Wireframe", &showDebugWireframe);
 			ImGui::SameLine();
-			ImGui::Checkbox("Lights", &showDebugLights);
+			if( ImGui::ArrowButton( "DebugArrow", ImGuiDir_Down ) )
+			{
+				ImGui::OpenPopup( "DebugPopup" );
+			}
+			if( ImGui::BeginPopup( "DebugPopup" ) )
+			{
+				ImGui::Checkbox( "Objects", &showDebugWireframe );
+				ImGui::Checkbox( "Lights", &showDebugLights );
+				ImGui::Checkbox( "Zones", &showDebugZones );
+				ImGui::Checkbox( "FXs", &showDebugFxs );
+				ImGui::EndPopup();
+			}
 			ImGui::SameLine();
-			ImGui::Checkbox("Zones", &showDebugZones);
-			ImGui::SameLine();
-			ImGui::Checkbox("FXs", &showDebugFxs );
+			ImGui::Text( "Debug" );
 
 			ImGui::Checkbox("Freeze culling", &freezeCulling);
 			ImGui::SameLine();
@@ -1941,11 +1949,15 @@ int main(int argc, char ** argv) {
 
 				// Debug view.
 				{
+
+					GPU::bind( sceneLit, sceneDepth, LoadOperation::LOAD, LoadOperation::LOAD, LoadOperation::DONTCARE );
+					GPU::setViewport( sceneLit );
+
 					GPU::setPolygonState( PolygonMode::LINE );
 					GPU::setCullState( false, Faces::BACK );
 					GPU::setDepthState( true, TestFunction::GEQUAL, false );
 					GPU::setBlendState( false );
-					GPU::setColorState(true, true, true, true);
+					GPU::setColorState( true, true, true, true );
 
 					if(showDebugWireframe){
 						debugInstancedObject->use();
@@ -1960,22 +1972,25 @@ int main(int argc, char ** argv) {
 						}
 					}
 
-					GPU::bind(sceneLit, sceneDepth, LoadOperation::LOAD, LoadOperation::LOAD, LoadOperation::DONTCARE);
-					GPU::setViewport(sceneLit);
-					coloredDebugDraw->use();
-					coloredDebugDraw->buffer( frameInfos, 0 );
-
-					if((selected.mesh >= 0 || selected.instance >= 0) && !boundingBox.indices.empty()){
-						GPU::drawMesh( boundingBox );
-					}
-					if(showDebugLights && !debugLights.indices.empty()){
-						GPU::drawMesh( debugLights );
-					}
-					if(showDebugZones && !debugZones.indices.empty()){
-						GPU::drawMesh( debugZones );
-					}
-					if(showDebugFxs && !debugFxs.indices.empty()){
-						GPU::drawMesh( debugFxs );
+					{
+						coloredDebugDraw->use();
+						coloredDebugDraw->buffer( frameInfos, 0 );
+						if( ( selected.mesh >= 0 || selected.instance >= 0 ) && !boundingBox.indices.empty() )
+						{
+							GPU::drawMesh( boundingBox );
+						}
+						if( showDebugLights && !debugLights.indices.empty() )
+						{
+							GPU::drawMesh( debugLights );
+						}
+						if( showDebugZones && !debugZones.indices.empty() )
+						{
+							GPU::drawMesh( debugZones );
+						}
+						if( showDebugFxs && !debugFxs.indices.empty() )
+						{
+							GPU::drawMesh( debugFxs );
+						}
 					}
 				}
 			}
