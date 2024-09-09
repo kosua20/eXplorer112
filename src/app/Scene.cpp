@@ -364,7 +364,12 @@ void Scene::upload(const World& world, const GameFiles& files){
 		uint shadowIndex = 0u;
 		for(uint i = 0; i < lightsCount; ++i){
 			const World::Light& light = world.lights()[i];
-			const float maxRadius = std::max(light.radius.x, std::max(light.radius.y, light.radius.z));
+			float maxRadius = std::max( light.radius.x, std::max( light.radius.y, light.radius.z ) );
+			// Pessimize radius.
+			if( light.type == World::Light::DIRECTIONAL || maxRadius == 0.0f ){
+				maxRadius = 2.f * sceneRadius;
+			}
+
 			const glm::vec3 lightPos = glm::vec3(light.frame[3]);
 			LightInfos& info = (*lightInfos)[i];
 
@@ -381,7 +386,7 @@ void Scene::upload(const World& world, const GameFiles& files){
 			}
 
 			const float near = 5.0f;
-			const float far = 2.f * (maxRadius == 0.f ? sceneRadius : maxRadius);
+			const float far = 2.f * maxRadius;
 			if(light.type == World::Light::SPOT){
 				proj = Frustum::perspective(std::max(light.angle, 0.1f), 1.0f, far, near);
 			} else if(light.type == World::Light::DIRECTIONAL){
@@ -392,14 +397,15 @@ void Scene::upload(const World& world, const GameFiles& files){
 			}
 			info.vp = proj * view;
 
-			info.positionAndMaxRadius = glm::vec4(lightPos, maxRadius);
+			info.positionAndMaxRadius = glm::vec4( lightPos, maxRadius );
+
 			info.colorAndType = glm::vec4(light.color, float(light.type));
 			const glm::vec3 axisX = glm::normalize(glm::vec3(light.frame[0]));
 			const glm::vec3 axisY = glm::normalize(glm::vec3(light.frame[1]));
 			const glm::vec3 axisZ = glm::normalize(glm::vec3(light.frame[2]));
-			info.axisAndRadiusX = glm::vec4(axisX / light.radius.x, 0.0f);
-			info.axisAndRadiusY = glm::vec4(axisY / light.radius.y, 0.0f);
-			info.axisAndRadiusZ = glm::vec4(axisZ / light.radius.z, 0.0f);
+			info.axisAndRadiusX = glm::vec4(axisX / glm::max(light.radius.x, 1.f), 0.0f);
+			info.axisAndRadiusY = glm::vec4(axisY / glm::max(light.radius.y, 1.f), 0.0f);
+			info.axisAndRadiusZ = glm::vec4(axisZ / glm::max(light.radius.z, 1.f), 0.0f);
 			info.materialIndex = light.material;
 		}
 	}
