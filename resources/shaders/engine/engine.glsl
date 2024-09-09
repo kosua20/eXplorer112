@@ -171,3 +171,9 @@ vec3 worldPositionFromDepth(float depth, vec2 pix){
 	vec3 viewPos = vec3(-ndcPos * viewDepth / vec2(engine.p[0][0], engine.p[1][1]) , viewDepth);
 	return vec3(engine.iv * vec4(viewPos, 1.0));
 }
+
+vec3 decodeNormal(vec3 texValue){
+	vec3 n = normalize( 2.f * texValue - 1.0 );
+	n.y *= -1.0;
+	return n;
+}

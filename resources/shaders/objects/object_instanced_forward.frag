@@ -47,14 +47,12 @@ void main(){
 	mat3 tbn = mat3(In.tbn);
 	// Compute the normal at the fragment using the tangent space matrix and the normal read in the normal map.
 	vec4 normalAndR = texture( sampler2DArray(textures[normalMap.index], sRepeatLinearLinear), vec3(In.uv.xy, normalMap.layer));
-	vec3 n = normalize(normalAndR.xyz * 2.0 - 1.0);
+	vec3 n = decodeNormal(normalAndR.xyz);
 	n = normalize(tbn * n);
 
 	// Albedo
 	TextureInfos albedoMap = material.color;
 	vec4 albedo = texture(sampler2DArray(textures[albedoMap.index], sRepeatLinearLinear), vec3(In.uv.xy, albedoMap.layer));
-	// Gamma conversion
-	//albedo.rgb = gammaToLinear(albedo.rgb);
 
 	// Override albedo.
 	vec4 color = engine.color;

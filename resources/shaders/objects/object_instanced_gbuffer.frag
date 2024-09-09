@@ -38,14 +38,12 @@ void main(){
 	// Compute the normal at the fragment using the tangent space matrix and the normal read in the normal map.
 	vec4 normalAndR = texture( sampler2DArray(textures[normalMap.index], sRepeatLinearLinear), vec3(uv, normalMap.layer));
 	float gloss = normalAndR.a;
-	vec3 normal = normalize(normalAndR.xyz * 2.0 - 1.0);
-	normal = normalize(tbn * normal);
+	vec3 n = decodeNormal(normalAndR.xyz);
+	n = normalize(tbn * n);
 
 	// Albedo
 	TextureInfos albedoMap = material.color;
 	vec4 albedo = texture(sampler2DArray(textures[albedoMap.index], sRepeatLinearLinear), vec3(uv, albedoMap.layer));
-	// Gamma conversion
-	//albedo.rgb = gammaToLinear(albedo.rgb);
 	
 	// Alpha test.
 	if(albedo.a < 0.5){
@@ -55,13 +53,14 @@ void main(){
 	if(engine.albedoMode == MODE_ALBEDO_UNIFORM){
 		albedo = vec4(engine.color.rgb, 1.0);
 	} else if(engine.albedoMode == MODE_ALBEDO_NORMAL){
-		albedo = vec4(0.5 * normal + 0.5, 1.0);
+		albedo = vec4(0.5 * n + 0.5, 1.0);
 	}
 	// For now output in worldspace.
 	fragColor = vec4(albedo.rgb, 1.0);
-	fragNormal = vec4(normal, gloss);
+	fragNormal = vec4(n, gloss);
 
 	// Compute heat.
+	// Use geometric normal.
 	vec3 normalVS = transpose(mat3(engine.iv)) * tbn[2].xyz;
 	float heat = In.uvAndHeat.z;
 	fragHeat = clamp(heat * pow(-normalVS.z, 4.0), 0.01, 0.99);
