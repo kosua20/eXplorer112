@@ -57,6 +57,7 @@ layout(set = 0, binding = 0) uniform EngineData {
 #define MODE_POSTPROCESS_BANDW 8
 #define MODE_POSTPROCESS_JITTER 16
 #define MODE_POSTPROCESS_HEAT 32
+#define MODE_POSTPROCESS_UNDERWATER 64
 
 #define BILLBOARD_WORLD 0
 #define BILLBOARD_AROUND_X 1

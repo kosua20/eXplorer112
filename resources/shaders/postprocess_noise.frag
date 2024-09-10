@@ -23,6 +23,7 @@ void main(){
 	bool wantsBAndW = (engine.postprocessMode & MODE_POSTPROCESS_BANDW) != 0u;
 	bool wantsJitter  = (engine.postprocessMode & MODE_POSTPROCESS_JITTER) != 0u;
 	bool wantsHeat  = (engine.postprocessMode & MODE_POSTPROCESS_HEAT) != 0u;
+	bool wantsUnderwater = (engine.postprocessMode & MODE_POSTPROCESS_UNDERWATER) != 0u;
 
 	vec2 initialUV = In.uv;
 	if(wantsJitter){
@@ -34,6 +35,13 @@ void main(){
 		if( t > 1.0 ) t -= 1.0;
 		initialUV = vec2(s,t);
 	}
+
+	if(wantsUnderwater){
+		// TODO: maybe use noisevolume instead?
+		vec3 distortion =  textureLod(sampler2D(grainNoiseTexture, sRepeatLinear), 0.5 * In.uv, 0.0).rgb * 2.0 - 1.0;
+		initialUV = In.uv + 0.01 * distortion.xy;
+	}
+
 	vec3 baseColor = textureLod(sampler2D(screenTexture, sClampLinear), initialUV, 0.0).rgb;
 
 
@@ -41,6 +49,10 @@ void main(){
 	if(wantsBloom){
 		vec3 bloomColor = textureLod(sampler2D(bloomTexture, sClampLinear), initialUV, 0.0).rgb;
 		baseColor += 0.5 * bloomColor;
+	}
+
+	if(wantsUnderwater){
+		baseColor *= vec3(0.5, 0.55, 0.8);
 	}
 
 	if(wantsHeat){

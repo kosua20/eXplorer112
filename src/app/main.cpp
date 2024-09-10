@@ -30,6 +30,7 @@
 #define MODE_POSTPROCESS_BANDW 8
 #define MODE_POSTPROCESS_JITTER 16
 #define MODE_POSTPROCESS_HEAT 32
+#define MODE_POSTPROCESS_UNDERWATER 64
 
 #define CLUSTER_XY_SIZE 64
 #define CLUSTER_Z_COUNT 32
@@ -1438,6 +1439,7 @@ int main(int argc, char ** argv) {
 				ImGui::CheckboxFlags("Grain", &showPostprocess, MODE_POSTPROCESS_GRAIN);
 				ImGui::CheckboxFlags("Jitter", &showPostprocess, MODE_POSTPROCESS_JITTER);
 				ImGui::CheckboxFlags("Heat map", &showPostprocess, MODE_POSTPROCESS_HEAT);
+				ImGui::CheckboxFlags("Underwater", &showPostprocess, MODE_POSTPROCESS_UNDERWATER);
 				ImGui::EndPopup();
 			}
 			ImGui::SameLine();
