@@ -227,11 +227,11 @@ void addLightGizmo(Mesh& mesh, const World::Light& light){
 		}
 	}
 
-	const uint firstVertexIndex = mesh.positions.size();
+	const uint firstVertexIndex = ( uint )mesh.positions.size();
 
 	// Always generate a small cross.
 	for(uint i = 0; i < 3; ++i){
-		const uint iIndex = mesh.positions.size();
+		const uint iIndex = ( uint )mesh.positions.size();
 		glm::vec3 offset(0.0f);
 		offset[i] = 10.0f;
 		mesh.positions.push_back(-offset);
@@ -245,7 +245,7 @@ void addLightGizmo(Mesh& mesh, const World::Light& light){
 		case World::Light::DIRECTIONAL:
 		{
 			// Arrow.
-			const uint iIndex = mesh.positions.size();
+			const uint iIndex = ( uint )mesh.positions.size();
 			const float arrowEdgesLength = 0.8f * arrowScale;
 			const float arrowEdgesSpread = 0.2f * arrowScale;
 			mesh.positions.emplace_back(0.0f, 0.0f, arrowScale);
@@ -264,7 +264,7 @@ void addLightGizmo(Mesh& mesh, const World::Light& light){
 		case World::Light::SPOT:
 		{
 			// Cone
-			const uint iIndex = mesh.positions.size();
+			const uint iIndex = ( uint )mesh.positions.size();
 			mesh.positions.emplace_back(0.0f, 0.0f, 0.0f);
 			mesh.positions.emplace_back(-light.radius.x, -light.radius.y, light.radius.z);
 			mesh.positions.emplace_back( light.radius.x, -light.radius.y, light.radius.z);
@@ -288,13 +288,13 @@ void addLightGizmo(Mesh& mesh, const World::Light& light){
 		{
 			// Three circles of radius 1, along the three axis.
 			const uint totalVertCount = 3 * circeSubdivs;
-			mesh.positions.reserve(mesh.positions.size() + totalVertCount);
-			mesh.indices.reserve(mesh.indices.size() + 3 * totalVertCount);
+			mesh.positions.reserve(mesh.positions.size() + (size_t)totalVertCount);
+			mesh.indices.reserve(mesh.indices.size() + 3 * (size_t)totalVertCount);
 
 			for(int i = 0; i < 3; ++i){
 				const uint xIndex = (i + 1) % 3;
 				const uint yIndex = (i + 2) % 3;
-				const uint iIndex = mesh.positions.size();
+				const uint iIndex = (uint)mesh.positions.size();
 				for(uint a = 0u; a < circeSubdivs; ++a){
 					glm::vec3& p = mesh.positions.emplace_back(0.0f);
 					p[xIndex] = coordinates[a][0] * light.radius[xIndex];
@@ -315,7 +315,7 @@ void addLightGizmo(Mesh& mesh, const World::Light& light){
 	}
 
 	// Fill colors.
-	const uint vertexFinalCount = mesh.positions.size() - firstVertexIndex;
+	const uint vertexFinalCount = ( uint )mesh.positions.size() - firstVertexIndex;
 	mesh.colors.insert(mesh.colors.end(), vertexFinalCount, light.color);
 	// Apply light frame.
 	for(uint i = 0; i < vertexFinalCount; ++i){
@@ -326,10 +326,10 @@ void addLightGizmo(Mesh& mesh, const World::Light& light){
 
 void addEmitterGizmo(Mesh& mesh, const World::Emitter& fx){
 
-	const uint firstVertexIndex = mesh.positions.size();
+	const uint firstVertexIndex = ( uint )mesh.positions.size();
 	// Always generate a small cross.
 	for(uint i = 0; i < 3; ++i){
-		const uint iIndex = mesh.positions.size();
+		const uint iIndex = ( uint )mesh.positions.size();
 		glm::vec3 offset(0.0f);
 		offset[(i+1)%3] = 10.0f;
 		offset[(i+2)%3] = 10.0f;
@@ -342,14 +342,14 @@ void addEmitterGizmo(Mesh& mesh, const World::Emitter& fx){
 
 	// Add box.
 	const auto& corners = fx.bbox.getCorners();
-	const uint indexShift = mesh.positions.size();
+	const uint indexShift = ( uint )mesh.positions.size();
 	mesh.positions.insert( mesh.positions.end(), corners.begin(), corners .end());
 	for( const uint ind : boxIndices ){
 		mesh.indices.push_back( indexShift + ind );
 	}
 
 	// Fill colors.
-	const uint vertexFinalCount = mesh.positions.size() - firstVertexIndex;
+	const uint vertexFinalCount = ( uint )mesh.positions.size() - firstVertexIndex;
 	const glm::vec3 color = 0.5f * (fx.colorMin + fx.colorMax);
 	mesh.colors.insert(mesh.colors.end(), vertexFinalCount, glm::vec3(color));
 	// Apply frame.
@@ -361,7 +361,7 @@ void addEmitterGizmo(Mesh& mesh, const World::Emitter& fx){
 void addBillboardGizmo( Mesh& mesh, const World::Billboard& fx )
 {
 
-	const uint firstVertexIndex = mesh.positions.size();
+	const uint firstVertexIndex = (uint)mesh.positions.size();
 	// Generate a quad.
 	const glm::vec3 c00 = glm::vec3( -0.5f * fx.size, 0.f);
 	const glm::vec3 c11 = glm::vec3(  0.5f * fx.size, 0.f);
@@ -390,7 +390,7 @@ void addBillboardGizmo( Mesh& mesh, const World::Billboard& fx )
 	mesh.indices.push_back( firstVertexIndex + 3 );
 
 	// Fill colors.
-	const uint vertexFinalCount = mesh.positions.size() - firstVertexIndex;
+	const uint vertexFinalCount = ( uint )mesh.positions.size() - firstVertexIndex;
 	mesh.colors.insert( mesh.colors.end(), vertexFinalCount, fx.color );
 	// Apply frame.
 	for( uint i = 0; i < vertexFinalCount; ++i )
@@ -475,7 +475,7 @@ void loadEngineTextures(const GameFiles& gameFiles, Texture& fogXYTexture, Textu
 		noisePulseTexture.width = noisePulseTexture.images[0].width;
 		noisePulseTexture.height = noisePulseTexture.images[ 0 ].height;
 		noisePulseTexture.levels = 1;
-		noisePulseTexture.depth = noisePulseTexture.images.size();
+		noisePulseTexture.depth = ( uint )noisePulseTexture.images.size();
 		noisePulseTexture.shape = TextureShape::Array2D;
 		noisePulseTexture.upload( Layout::RGBA8, false );
 	}
@@ -499,15 +499,18 @@ void loadEngineTextures(const GameFiles& gameFiles, Texture& fogXYTexture, Textu
 		waterTexture.width = waterTexture.images[ 0 ].width;
 		waterTexture.height = waterTexture.images[ 0 ].height;
 		waterTexture.levels = 1;
-		waterTexture.depth = waterTexture.images.size();
+		waterTexture.depth = ( uint )waterTexture.images.size();
 		waterTexture.shape = TextureShape::D3;
 		waterTexture.upload( Layout::R8, false );
 	}
 }
 
 
-uint roundUp(uint a, uint step){
-	return std::floor(int(a) - 1) / int(step) + 1;
+uint roundUp(float a, uint step){
+	return (int)std::floor(a - 1.f) / int(step) + 1;
+}
+uint roundUp( uint a, uint step ){
+	return (int)std::floor( int(a) - 1) / int( step ) + 1;
 }
 
 int main(int argc, char ** argv) {
@@ -1029,7 +1032,7 @@ int main(int argc, char ** argv) {
 				}
 
 				ImVec2 winSize = ImGui::GetContentRegionAvail();
-				winSize.y *= 0.9;
+				winSize.y *= 0.9f;
 				winSize.y -= ImGui::GetTextLineHeightWithSpacing(); // For search field.
 
 
@@ -1657,7 +1660,7 @@ int main(int argc, char ** argv) {
 		frameInfos[0].clustersSize = glm::uvec4(lightClusters.width, lightClusters.height, lightClusters.depth, clusterDims.x);
 		const float logRatio = float(clusterDims.y) / std::log(nearFar.y / nearFar.x);
 		frameInfos[0].clustersParams = glm::vec4(logRatio, std::log(nearFar.x) * logRatio, 0.0f, 0.0f);
-		frameInfos[0].frameIndex = frameIndex;
+		frameInfos[0].frameIndex = (uint)(frameIndex % UINT32_MAX);
 
 		frameInfos.upload();
 
@@ -1671,7 +1674,7 @@ int main(int argc, char ** argv) {
 
 		if(selected.item >= 0){
 			// Bruteforce shadow map once per frame.
-			const uint lightsCount = scene.world.lights().size();
+			const uint lightsCount = ( uint )scene.world.lights().size();
 
 			renderingShadow = false;
 			// As long as we have a light left to process and enough room in the texture array.

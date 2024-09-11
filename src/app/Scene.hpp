@@ -95,8 +95,8 @@ public:
 	};
 
 	struct Range {
-		int firstIndex = 0;
-		int indexCount = 0;
+		uint firstIndex = 0;
+		uint indexCount = 0;
 	};
 
 	using BlendingInfos = std::array<Range, World::BLEND_COUNT>;

@@ -728,7 +728,7 @@ void convertToObj(Model& model, Object& outObject){
 
 				Object::Set& faceSet = outObject.faceSets.emplace_back();
 				faceSet.faces.reserve(256);
-				faceSet.material = outObject.materials.size()-1;
+				faceSet.material = (uint32_t)outObject.materials.size()-1;
 			}
 
 			Object::Set& faceSet = outObject.faceSets.back();

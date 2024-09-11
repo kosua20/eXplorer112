@@ -610,7 +610,7 @@ bool World::load(const fs::path& path, const fs::path& resourcePath){
 			_objects.pop_back();
 			continue;
 		}
-		_instances.emplace_back(areaName, _objects.size()-1, glm::mat4(1.0f));
+		_instances.emplace_back(areaName, ( uint )_objects.size()-1, glm::mat4(1.0f));
 
 		// Parse postprocess infos.
 		Zone& zone = _zones.emplace_back();
@@ -634,7 +634,7 @@ bool World::load(const fs::path& path, const fs::path& resourcePath){
 
 	/// Empty objects cleanup.
 	// Remove empty objects, and update instance indices.
-	const uint objCount = _objects.size();
+	const uint objCount = ( uint )_objects.size();
 	std::vector<uint> indicesToDelete;
 	std::vector<bool> shouldBeDeleted(objCount, false);
 	std::vector<bool> isSwappable(objCount, true);

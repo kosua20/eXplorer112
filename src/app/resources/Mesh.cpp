@@ -245,7 +245,7 @@ void Mesh::computeTangentsAndBitangents(bool force) {
 	interface.m_setTSpace = nullptr;
 
 	// Wrap our data.
-	const uint indexCount = indices.size();
+	const uint indexCount = ( uint )indices.size();
 	MikktspaceWrapper meshWrapper;
 	meshWrapper.mesh = this;
 	meshWrapper.faceCount = indexCount / 3;
@@ -283,7 +283,7 @@ void Mesh::computeTangentsAndBitangents(bool force) {
 	std::vector<bool> collidedVertices(posCount, false);
 	for(uint vid = 0; vid < posCount; ++vid){
 		auto & remaps = perVertexRemaps[vid];
-		const uint remapCount = remaps.size();
+		const uint remapCount = ( uint )remaps.size();
 		if(remapCount == 0){
 			continue;
 		}
@@ -355,7 +355,7 @@ void Mesh::computeTangentsAndBitangents(bool force) {
 			continue;
 		}
 		// Remapping.
-		const uint remapCount = remaps.size();
+		const uint remapCount = ( uint )remaps.size();
 		for(uint i = 1; i < remapCount; ++i){
 			// If no offset has been stored, we just have to update the vertex index in the corresponding face
 			// to point to an earlier instance with the same tangent.
@@ -364,7 +364,7 @@ void Mesh::computeTangentsAndBitangents(bool force) {
 				continue;
 			}
 			// Append to the end of the positions/...
-			const uint finalIndex = posCount + remaps[i].refOffset;
+			const uint finalIndex = ( uint )(posCount + remaps[i].refOffset);
 			indices[remaps[i].initialIndex] = finalIndex;
 			// Copy other attributes as-is.
 			positions[finalIndex] = positions[vid];

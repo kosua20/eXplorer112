@@ -242,7 +242,7 @@ void Scene::upload(const World& world, const GameFiles& files){
 			const World::Instance& instance = world.instances()[iid];
 			const auto meshIndicesRange = objectMeshIndicesRange[instance.object];
 
-			for(uint mid = meshIndicesRange.first; mid < meshIndicesRange.second; ++mid){
+			for(uint mid = (uint)meshIndicesRange.first; mid < ( uint )meshIndicesRange.second; ++mid){
 				perMeshInstanceIndices[mid].push_back(iid);
 				++totalInstancesCount;
 			}
@@ -359,7 +359,7 @@ void Scene::upload(const World& world, const GameFiles& files){
 	{
 		const float sceneRadius = computeBoundingBox().getSphere().radius;
 
-		const uint lightsCount = world.lights().size();
+		const uint lightsCount = ( uint )world.lights().size();
 		lightInfos = std::make_unique<StructuredBuffer<LightInfos>>(lightsCount, BufferType::STORAGE, "LightInfos");
 		uint shadowIndex = 0u;
 		for(uint i = 0; i < lightsCount; ++i){
@@ -445,12 +445,12 @@ void Scene::upload(const World& world, const GameFiles& files){
 		// Billboards
 		{
 			uint currentBlend = 0;
-			particleRanges[currentBlend].firstIndex = billboardsMesh.indices.size();
+			particleRanges[currentBlend].firstIndex = (uint)billboardsMesh.indices.size();
 
 			for(const World::Billboard& billboard : world.billboards()){
 
 				if(billboard.blending != currentBlend){
-					const uint firstIndex = billboardsMesh.indices.size();
+					const uint firstIndex = ( uint )billboardsMesh.indices.size();
 					assert(billboard.blending < World::BLEND_COUNT);
 					billboardRanges[currentBlend].indexCount = firstIndex - billboardRanges[currentBlend].firstIndex;
 					currentBlend = billboard.blending;
@@ -465,7 +465,7 @@ void Scene::upload(const World& world, const GameFiles& files){
 					verts[i] = glm::vec3(frame * glm::vec4(billboard.size * positions[i], 0.f, 1.0f));
 				}
 
-				const uint firstVertexIndex = billboardsMesh.positions.size();
+				const uint firstVertexIndex = ( uint )billboardsMesh.positions.size();
 				billboardsMesh.positions.insert(billboardsMesh.positions.end(), verts.begin(), verts.end());
 				billboardsMesh.colors.insert(billboardsMesh.colors.end(), 4, billboard.color);
 				billboardsMesh.normals.insert(billboardsMesh.normals.end(), 4, glm::vec3(billboard.material, billboard.alignment, 0.f));
@@ -477,19 +477,19 @@ void Scene::upload(const World& world, const GameFiles& files){
 					billboardsMesh.indices.push_back(firstVertexIndex + ind);
 				}
 			}
-			billboardRanges[currentBlend].indexCount = billboardsMesh.indices.size() - billboardRanges[currentBlend].firstIndex;
+			billboardRanges[currentBlend].indexCount = ( uint )billboardsMesh.indices.size() - billboardRanges[currentBlend].firstIndex;
 
 		}
 		
 		// Append particles in the same mesh.
 		{
 			uint currentBlend = 0;
-			particleRanges[currentBlend].firstIndex = billboardsMesh.indices.size();
+			particleRanges[currentBlend].firstIndex = ( uint )billboardsMesh.indices.size();
 
 			for(const World::Emitter& emitter : world.particles()){
 
 				if(emitter.blending != currentBlend){
-					const uint firstIndex = billboardsMesh.indices.size();
+					const uint firstIndex = ( uint )billboardsMesh.indices.size();
 					assert(emitter.blending < World::BLEND_COUNT);
 					particleRanges[currentBlend].indexCount = firstIndex - particleRanges[currentBlend].firstIndex;
 					currentBlend = emitter.blending;
@@ -507,7 +507,7 @@ void Scene::upload(const World& world, const GameFiles& files){
 				}
 
 				for(uint bId = 0; bId < particleCount; ++bId){
-					const uint firstVertexIndex = billboardsMesh.positions.size();
+					const uint firstVertexIndex = ( uint )billboardsMesh.positions.size();
 					// Generate parameters for this quad.
 					float size = glm::mix(sizeRange.x, sizeRange.y, Random::Float());
 					glm::vec4 color = glm::mix(emitter.colorMin, emitter.colorMax, glm::vec4(Random::Float()));
@@ -547,7 +547,7 @@ void Scene::upload(const World& world, const GameFiles& files){
 				}
 
 			}
-			particleRanges[currentBlend].indexCount = billboardsMesh.indices.size() - particleRanges[currentBlend].firstIndex;
+			particleRanges[currentBlend].indexCount = ( uint )billboardsMesh.indices.size() - particleRanges[currentBlend].firstIndex;
 
 		}
 

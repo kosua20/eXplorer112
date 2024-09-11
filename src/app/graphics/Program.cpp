@@ -254,7 +254,7 @@ void Program::reflect(){
 		_state.setLayouts[SAMPLERS_SET] = context->samplerLibrary.getLayout();
 	}
 
-	uint32_t layoutCount = _state.setLayouts.size()-1;
+	uint32_t layoutCount = ( uint32_t)_state.setLayouts.size()-1;
 	// Bindless
 	if(_useBindless){
 		_state.setLayouts[BINDLESS_SET] = context->textureLibrary.getLayout();
@@ -528,7 +528,7 @@ void Program::bufferArray(const std::vector<const Buffer * >& buffers, uint slot
 	auto existingBuff = _staticBuffers.find(slot);
 	if(existingBuff != _staticBuffers.end()) {
 		StaticBufferState& refBuff = existingBuff->second;
-		const uint buffCount = buffers.size();
+		const uint buffCount = (uint)buffers.size();
 		assert(buffCount <= refBuff.count);
 
 		for(uint did = 0; did < buffCount; ++did){
@@ -566,7 +566,7 @@ void Program::textureArray(const std::vector<const Texture *> & textures, uint s
 	auto existingTex = _textures.find(slot);
 	if(existingTex != _textures.end()) {
 		TextureState & refTex = existingTex->second;
-		const uint texCount = textures.size();
+		const uint texCount = ( uint )textures.size();
 		assert(texCount <= refTex.count);
 
 		for(uint did = 0; did < texCount; ++did){

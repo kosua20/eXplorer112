@@ -279,7 +279,7 @@ bool load(const fs::path& path, Object& outObject){
 
 				Shader& shader = shaders[shaderFullName];
 				if(shader.index < 0){
-					shader.index = outObject.materials.size();
+					shader.index = ( int )outObject.materials.size();
 					outObject.materials.push_back(shader.material);
 					outObject.materials.back().type = materialType;
 				}

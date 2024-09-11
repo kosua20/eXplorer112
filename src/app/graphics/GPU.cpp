@@ -365,7 +365,7 @@ bool GPU::setupWindow(Window * window){
 		texture.levels = 1;
 		texture.images.resize(texture.depth);
 		for(uint iid = 0; iid < texture.depth; ++iid){
-			texture.images[iid] = Image(texture.width, texture.height, 1, 1.0f);
+			texture.images[iid] = Image(texture.width, texture.height, 1, 1);
 		}
 
 		// Assume the texture is used on both the CPU and GPU.
@@ -525,7 +525,7 @@ void GPU::bindFramebuffer(uint layer, uint mip, const LoadOperation& depthOp, co
 
 	if(colorsCount != 0){
 		info.pColorAttachments = colorInfos.data();
-		info.colorAttachmentCount = colorsCount;
+		info.colorAttachmentCount = ( uint32_t )colorsCount;
 	}
 
 	if(_state.pass.depthStencil){
@@ -1753,7 +1753,7 @@ void GPU::unbindFramebufferIfNeeded(){
 	++_metrics.renderPasses;
 	_context.hadRenderPass = true;
 
-	const uint attachCount = _state.pass.colors.size();
+	const uint attachCount = ( uint )_state.pass.colors.size();
 	for(uint cid = 0; cid < attachCount; ++cid ){
 		const Texture* color = _state.pass.colors[cid];
 		VkUtils::imageLayoutBarrier(commandBuffer, *(color->gpu), color->gpu->defaultLayout, _state.pass.mipStart, _state.pass.mipCount, _state.pass.layerStart, _state.pass.layerCount);

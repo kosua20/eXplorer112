@@ -343,7 +343,7 @@ VkPipeline PipelineCache::buildGraphicsPipeline(const GPUState& state){
 	}
 	// Color blending
 	VkPipelineColorBlendStateCreateInfo colorState{};
-	const uint attachmentCount = state.pass.colors.size();
+	const size_t attachmentCount = state.pass.colors.size();
 	std::vector<VkPipelineColorBlendAttachmentState> attachmentStates(attachmentCount);
 	{
 		static const std::unordered_map<BlendEquation, VkBlendOp> eqs = {
@@ -376,7 +376,7 @@ VkPipeline PipelineCache::buildGraphicsPipeline(const GPUState& state){
 								 | (state.colorWriteMask[1] ? VK_COLOR_COMPONENT_G_BIT : 0)
 								 | (state.colorWriteMask[2] ? VK_COLOR_COMPONENT_B_BIT : 0)
 								 | (state.colorWriteMask[3] ? VK_COLOR_COMPONENT_A_BIT : 0);
-		for(uint aid = 0; aid < attachmentCount; ++aid){
+		for(uint aid = 0; aid < (uint)attachmentCount; ++aid){
 			VkPipelineColorBlendAttachmentState& blendState = attachmentStates[aid];
 			blendState.blendEnable = state.blend;
 			blendState.alphaBlendOp = eqs.at(state.blendEquationAlpha);
@@ -387,7 +387,7 @@ VkPipeline PipelineCache::buildGraphicsPipeline(const GPUState& state){
 			blendState.dstAlphaBlendFactor = funcs.at(state.blendDstAlpha);
 			blendState.colorWriteMask = colorMask;
 		}
-		colorState.attachmentCount = attachmentCount;
+		colorState.attachmentCount = (uint32_t)attachmentCount;
 		colorState.pAttachments = attachmentStates.data();
 
 		pipelineInfo.pColorBlendState = &colorState;
