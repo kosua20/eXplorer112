@@ -453,7 +453,7 @@ void loadTextureFromImage(const fs::path& path, Texture& dstTexture){
 	dstTexture.upload(Layout::RGBA8, false);
 }
 
-void loadEngineTextures(const GameFiles& gameFiles, Texture& fogXYTexture, Texture& fogZTexture, Texture& noiseTexture, Texture& noisePulseTexture, Texture& bgTexture, Texture& heatTexture){
+void loadEngineTextures(const GameFiles& gameFiles, Texture& fogXYTexture, Texture& fogZTexture, Texture& noiseTexture, Texture& noisePulseTexture, Texture& waterTexture, Texture& bgTexture, Texture& heatTexture){
 	if(gameFiles.texturesPath.empty()){
 		return;
 	}
@@ -462,7 +462,7 @@ void loadEngineTextures(const GameFiles& gameFiles, Texture& fogXYTexture, Textu
 	loadTextureFromImage(gameFiles.texturesPath / "commons" / "fog_z.png", fogZTexture);
 	loadTextureFromImage(gameFiles.texturesPath / "commons" / "noise.tga", noiseTexture);
 	loadTextureFromImage(gameFiles.texturesPath / "ui" / "background.tga", bgTexture);
-	loadTextureFromImage(gameFiles.texturesPath / "commons" / "heat.png", heatTexture);
+	loadTextureFromImage( gameFiles.texturesPath / "commons" / "heat.png", heatTexture );
 	// Texture array
 	{
 		noisePulseTexture.clean();
@@ -478,6 +478,30 @@ void loadEngineTextures(const GameFiles& gameFiles, Texture& fogXYTexture, Textu
 		noisePulseTexture.depth = noisePulseTexture.images.size();
 		noisePulseTexture.shape = TextureShape::Array2D;
 		noisePulseTexture.upload( Layout::RGBA8, false );
+	}
+	// 3D texture (hack)
+	{
+		const fs::path path = gameFiles.texturesPath / "commons" / "noisevolume.dds";
+		waterTexture.clean();
+		uint layer = 0;
+		while( true )
+		{
+			Image& img = waterTexture.images.emplace_back();
+			if( !img.load( path, layer ) )
+			{
+				// We reached the last slice.
+				waterTexture.images.pop_back();
+				break;
+			}
+			++layer;
+		}
+		
+		waterTexture.width = waterTexture.images[ 0 ].width;
+		waterTexture.height = waterTexture.images[ 0 ].height;
+		waterTexture.levels = 1;
+		waterTexture.depth = waterTexture.images.size();
+		waterTexture.shape = TextureShape::D3;
+		waterTexture.upload( Layout::R8, false );
 	}
 }
 
@@ -499,7 +523,7 @@ int main(int argc, char ** argv) {
 	//		Are they just depth tested and blended in which case we could move them to
 	//		the end of the list and change the blending mode (similarly to billboards)
 	//	* Bug in the clustered lighting at least on MoltenVK, either a bug or a hidden
-	//		limitation somewhere? I am getting a different result on an Nvidia driver.
+	//		limitation somewhere? I am getting no issue on an Nvidia driver.
 	//  * Fog parameters should be applied based on each object location, not based on
 	//		the viewer location. Either cluster cull the zones, or preassign a zone ID
 	//		to each instance and store it in the gbuffer. Zones list used in fog pass.
@@ -711,10 +735,11 @@ int main(int argc, char ** argv) {
 	Texture noisePulseTexture( "noisePulseMap" );
 	Texture fogXYTexture("fogXYMap");
 	Texture fogZTexture("fogZMap");
-	Texture noiseTexture("noiseMap");
-	Texture bgTexture("backgroundMap");
+	Texture noiseTexture( "noiseMap" );
+	Texture waterTexture( "waterMap" );
+	Texture bgTexture( "backgroundMap" );
 	Texture heatTexture("heatLookup");
-	loadEngineTextures(gameFiles, fogXYTexture, fogZTexture, noiseTexture, noisePulseTexture, bgTexture, heatTexture);
+	loadEngineTextures(gameFiles, fogXYTexture, fogZTexture, noiseTexture, noisePulseTexture, waterTexture, bgTexture, heatTexture);
 
 	deselect( frameInfos[ 0 ], selected, SelectionFilter::ALL );
 
@@ -880,7 +905,7 @@ int main(int argc, char ** argv) {
 					fs::path newInstallPath;
 					if(Window::showDirectoryPicker(fs::path(""), newInstallPath)){
 						gameFiles = GameFiles( newInstallPath);
-						loadEngineTextures(gameFiles, fogXYTexture, fogZTexture, noiseTexture, noisePulseTexture, bgTexture, heatTexture);
+						loadEngineTextures(gameFiles, fogXYTexture, fogZTexture, noiseTexture, noisePulseTexture, waterTexture, bgTexture, heatTexture);
 						scene = Scene();
 						deselect(frameInfos[0], selected, SelectionFilter::ALL);
 					}
@@ -1958,6 +1983,7 @@ int main(int argc, char ** argv) {
 						noiseGrainQuad->texture(noisePulseTexture, 3);
 						noiseGrainQuad->texture(sceneHeat, 4);
 						noiseGrainQuad->texture(heatTexture, 5);
+						noiseGrainQuad->texture(waterTexture, 6);
 						noiseGrainQuad->buffer(frameInfos, 0);
 						GPU::drawQuad();
 					}

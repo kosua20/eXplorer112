@@ -12,6 +12,7 @@ layout(set = 2, binding = 2) uniform texture2D grainNoiseTexture;
 layout(set = 2, binding = 3) uniform texture2DArray nightNoisePulseTexture;
 layout(set = 2, binding = 4) uniform texture2D heatMapTexture;
 layout(set = 2, binding = 5) uniform texture2D heatLookupTexture;
+layout(set = 2, binding = 6) uniform texture3D waterNoiseTexture;
 
 layout(location = 0) out vec4 fragColor; ///< Color.
 
@@ -37,8 +38,8 @@ void main(){
 	}
 
 	if(wantsUnderwater){
-		// TODO: maybe use noisevolume instead?
-		vec3 distortion =  textureLod(sampler2D(grainNoiseTexture, sRepeatLinear), 0.5 * In.uv, 0.0).rgb * 2.0 - 1.0;
+		float texDepth = fract(float(engine.frameIndex) / float(textureSize(waterNoiseTexture, 0).z));
+		vec3 distortion =  textureLod(sampler3D(waterNoiseTexture, sRepeatLinear), vec3(0.5 * In.uv, texDepth), 0.0).rrr * 2.0 - 1.0;
 		initialUV = In.uv + 0.01 * distortion.xy;
 	}
 
