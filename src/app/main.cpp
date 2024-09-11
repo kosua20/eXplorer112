@@ -73,6 +73,13 @@ static const std::unordered_map<World::Blending, const char*> blendNames = {
 			{ World::BLEND_COUNT, "Unknown" },
 };
 
+static const std::vector<World::Blending> blendsPreFog = {
+	World::BLEND_OPAQUE, World::BLEND_MULTIPLY, World::BLEND_ALPHA
+};
+static const std::vector<World::Blending> blendsPostFog = {
+	World::BLEND_ADDITIVE, World::BLEND_COMPOSITE
+};
+
 static const std::unordered_map<World::Alignment, const char*> alignNames = {
 			{ World::ALIGN_WORLD, "World" },
 			{ World::ALIGN_AROUND_X, "Around X" },
@@ -80,6 +87,7 @@ static const std::unordered_map<World::Alignment, const char*> alignNames = {
 	{ World::ALIGN_AROUND_Y, "Around Y" },
 	{ World::ALIGN_COUNT, "Unknown" },
 };
+
 
 
 class ViewerConfig : public RenderingConfig {
@@ -530,7 +538,6 @@ int main(int argc, char ** argv) {
 	//  * Fog parameters should be applied based on each object location, not based on
 	//		the viewer location. Either cluster cull the zones, or preassign a zone ID
 	//		to each instance and store it in the gbuffer. Zones list used in fog pass.
-	//  * Are all billboards rendered after fog, even those used as alphablend decals?
 
 	// First, init/parse/load configuration.
 	ViewerConfig config(std::vector<std::string>(argv, argv + argc));
@@ -1859,7 +1866,40 @@ int main(int argc, char ** argv) {
 					GPU::drawIndirectMesh(scene.globalMesh, *drawCommands, mid);
 				}
 			}
+			// First billboard and particle passes
+			if(showBillboards || showParticles){
+				GPU::bind(sceneLit, sceneDepth, LoadOperation::LOAD, LoadOperation::LOAD, LoadOperation::DONTCARE);
+				GPU::setViewport(sceneLit);
+				GPU::setPolygonState(PolygonMode::FILL);
+				GPU::setCullState(false);
+				GPU::setDepthState(true, TestFunction::GEQUAL, false);
+				billboardObject->use();
+				billboardObject->buffer(frameInfos, 0);
+				billboardObject->buffer(*scene.materialInfos, 1);
+				// First billboards
+				if(showBillboards){
+					for(World::Blending blend : blendsPreFog){
+						const Scene::Range & range = scene.billboardRanges[blend];
+						if(range.indexCount <= 0){
+							continue;
+						}
+						GPU::setBlendState(true, BlendEquation::ADD, srcFuncs[blend], dstFuncs[blend]);
+						GPU::drawMesh(scene.billboardsMesh, range.firstIndex, range.indexCount);
+					}
+				}
 
+				// Then particles
+				if(showParticles){
+					for(World::Blending blend : blendsPreFog){
+						const Scene::Range & range = scene.particleRanges[blend];
+						if(range.indexCount <= 0){
+							continue;
+						}
+						GPU::setBlendState(true, BlendEquation::ADD, srcFuncs[blend], dstFuncs[blend]);
+						GPU::drawMesh(scene.billboardsMesh, range.firstIndex, range.indexCount);
+					}
+				}
+			}
 			// Fog
 			{
 				fogCompute->use();
@@ -1873,7 +1913,7 @@ int main(int argc, char ** argv) {
 				GPU::dispatch( sceneFog.width, sceneFog.height, 1u);
 			}
 
-			// Then render billboards
+			// Then render post fog emissive billboards
 			if(showBillboards || showParticles){
 				GPU::bind(sceneFog, sceneDepth, LoadOperation::LOAD, LoadOperation::LOAD, LoadOperation::DONTCARE);
 				GPU::setViewport(sceneFog);
@@ -1886,24 +1926,24 @@ int main(int argc, char ** argv) {
 
 				// First billboards
 				if(showBillboards){
-					for(uint i = 0; i < World::BLEND_COUNT; ++i){
-						const Scene::Range & range = scene.billboardRanges[i];
+					for(World::Blending blend : blendsPostFog){
+						const Scene::Range & range = scene.billboardRanges[blend];
 						if(range.indexCount <= 0){
 							continue;
 						}
-						GPU::setBlendState(true, BlendEquation::ADD, srcFuncs[i], dstFuncs[i]);
+						GPU::setBlendState(true, BlendEquation::ADD, srcFuncs[blend], dstFuncs[blend]);
 						GPU::drawMesh(scene.billboardsMesh, range.firstIndex, range.indexCount);
 					}
 				}
 
 				// Then particles
 				if(showParticles){
-					for(uint i = 0; i < World::BLEND_COUNT; ++i){
-						const Scene::Range & range = scene.particleRanges[i];
+					for(World::Blending blend : blendsPostFog){
+						const Scene::Range & range = scene.particleRanges[blend];
 						if(range.indexCount <= 0){
 							continue;
 						}
-						GPU::setBlendState(true, BlendEquation::ADD, srcFuncs[i], dstFuncs[i]);
+						GPU::setBlendState(true, BlendEquation::ADD, srcFuncs[blend], dstFuncs[blend]);
 						GPU::drawMesh(scene.billboardsMesh, range.firstIndex, range.indexCount);
 					}
 				}
