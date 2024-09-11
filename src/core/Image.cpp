@@ -54,8 +54,7 @@ void Image::clone( Image& dst ) const {
 	dst.pixels = pixels;
 }
 
-
-bool Image::load(const fs::path & path) {
+bool Image::load(const fs::path & path, uint layer) {
 	pixels.clear();
 	width = height = 0;
 
@@ -90,12 +89,12 @@ bool Image::load(const fs::path & path) {
 		if(!ddsktx_parse(&tc, allCompressedData.data(), ddsSize, NULL)) {
 			return false;
 		}
-
-		static const std::unordered_map<ddsktx_format, Compression> formats = {
-			{ DDSKTX_FORMAT_BC1, Compression::BC1 },
-			{ DDSKTX_FORMAT_BC2, Compression::BC2 },
-			{ DDSKTX_FORMAT_BC3, Compression::BC3 },
-			{ DDSKTX_FORMAT_BGRA8, Compression::NONE },
+		static const std::unordered_map<ddsktx_format, std::pair<Compression, uint>> formats = {
+			{ DDSKTX_FORMAT_BC1, { Compression::BC1, 4u } },
+			{ DDSKTX_FORMAT_BC2, { Compression::BC2, 4u } },
+			{ DDSKTX_FORMAT_BC3, { Compression::BC3, 4u } },
+			{ DDSKTX_FORMAT_BGRA8, {Compression::NONE , 4u }},
+			{ DDSKTX_FORMAT_R8,{ Compression::NONE, 1u} },
 		};
 
 		if(formats.count(tc.format) == 0){
@@ -103,9 +102,10 @@ bool Image::load(const fs::path & path) {
 			return false;
 		}
 
-		compressedFormat = formats.at(tc.format);
+		const auto& formatInfos = formats.at( tc.format );
+		compressedFormat = formatInfos.first;
 
-		components = 4;
+		components = formatInfos.second;
 		// Apparently not needed?
 		//if((tc.flags & DDSKTX_TEXTURE_FLAG_ALPHA) == 0){
 		//	components = 3;
@@ -122,13 +122,24 @@ bool Image::load(const fs::path & path) {
 			pixels.resize(linearSize);
 			// Query first layer/face/level only.
 			ddsktx_sub_data subData;
-			ddsktx_get_sub(&tc, &subData, allCompressedData.data(), ddsSize, 0, 0, 0);
-			// Flip BGRA8 data.
-			std::memcpy(pixels.data(), subData.buff, subData.size_bytes);
-			for(uint32_t pix = 0; pix < (uint32_t)subData.size_bytes; pix += 4){
-				// BGRA to RGBA
-				std::swap(pixels[pix], pixels[pix+2]);
+			// Hack for one volume texture.
+			// \todo To improve volume/array/cubemap support on uncompressed textures, we could defer the slicing to the texture, as we do for compressed images.
+			if( (int)layer >= tc.depth ){
+				return false;
 			}
+			ddsktx_get_sub(&tc, &subData, allCompressedData.data(), ddsSize, 0, layer, 0);
+
+			std::memcpy( pixels.data(), subData.buff, subData.size_bytes );
+			// Flip BGRA8 data if needed
+			if( components == 4 )
+			{
+				for( uint32_t pix = 0; pix < ( uint32_t )subData.size_bytes; pix += 4 )
+				{
+					// BGRA to RGBA
+					std::swap( pixels[ pix ], pixels[ pix + 2 ] );
+				}
+			}
+			
 		} else {
 			// Store everything, we will sort it out when uploading or uncompressing.
 			pixels.resize(ddsSize);
@@ -164,12 +175,12 @@ bool Image::uncompress(){
 	}
 	// Query DDS header again.
 	ddsktx_texture_info tc = {};
-	if(!ddsktx_parse(&tc, pixels.data(), pixels.size(), NULL)) {
+	if(!ddsktx_parse(&tc, pixels.data(), (int)pixels.size(), NULL)) {
 		return false;
 	}
 	// Retrieve first image.
 	ddsktx_sub_data subData;
-	ddsktx_get_sub(&tc, &subData, pixels.data(), pixels.size(), 0, 0, 0);
+	ddsktx_get_sub(&tc, &subData, pixels.data(), (int)pixels.size(), 0, 0, 0);
 	std::vector<char> compressedPixels(subData.size_bytes);
 	std::memcpy(compressedPixels.data(), subData.buff, subData.size_bytes);
 

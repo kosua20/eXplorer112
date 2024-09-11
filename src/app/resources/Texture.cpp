@@ -24,7 +24,7 @@ void Texture::uncompress(){
 	const uint components = img.components;
 	const Image::Compression compression = img.compressedFormat;
 	// We need to cheat and uncompress all mip levels that are stored in the raw BC data blob stored in images[0].
-	const size_t ddsSize = img.pixels.size();
+	const int ddsSize = (int)img.pixels.size();
 
 	// Copy raw data.
 	std::vector<char> compressedPixels(ddsSize);
@@ -42,11 +42,15 @@ void Texture::uncompress(){
 	width = tc.width;
 	height = tc.height;
 	levels = tc.num_mips;
-	depth = 1;
-	shape = TextureShape::D2;
+	depth = tc.num_layers * tc.depth;
 
-	assert((tc.depth == 1) && (tc.num_layers == 1));
-	assert((tc.flags & (DDSKTX_TEXTURE_FLAG_VOLUME | DDSKTX_TEXTURE_FLAG_CUBEMAP)) == 0);
+	bool isArray = tc.num_layers > 1;
+	bool isCube = tc.flags & DDSKTX_TEXTURE_FLAG_CUBEMAP;
+	bool is3D = tc.flags & DDSKTX_TEXTURE_FLAG_VOLUME;
+	shape = isCube ? TextureShape::Cube : (is3D ? TextureShape::D3 : TextureShape::D2);
+	if( isArray ){
+		shape = shape | TextureShape::Array;
+	}
 
 	images.resize(levels * depth);
 
@@ -55,16 +59,18 @@ void Texture::uncompress(){
 		const uint w = std::max(width >> mid, 1u);
 		const uint h = std::max(height >> mid, 1u);
 
-		for(uint lid = 0; lid < depth; ++lid){
-			Image& slice = images[mid * depth + lid];
-			slice = Image(w, h, components);
-			slice.compressedFormat = compression;
+		for(uint lid = 0; lid < (uint)tc.num_layers; ++lid){
 
-			ddsktx_sub_data subData;
-			ddsktx_get_sub(&tc, &subData, compressedPixels.data(), ddsSize, lid, 0, mid);
-			assert(((int)w == subData.width) && ((int)h == subData.height));
-			slice.pixels.resize(subData.size_bytes);
-			std::memcpy(slice.pixels.data(), subData.buff, subData.size_bytes);
+			for( uint did = 0; did < (uint)tc.depth; ++did ){
+				Image& slice = images[ mid * depth + lid * tc.depth + did ];
+				slice = Image( w, h, components );
+				slice.compressedFormat = compression;
+				ddsktx_sub_data subData;
+				ddsktx_get_sub( &tc, &subData, compressedPixels.data(), ddsSize, lid, did, mid );
+				assert( ( ( int )w == subData.width ) && ( ( int )h == subData.height ) );
+				slice.pixels.resize( subData.size_bytes );
+				std::memcpy( slice.pixels.data(), subData.buff, subData.size_bytes );
+			}
 		}
 	}
 }

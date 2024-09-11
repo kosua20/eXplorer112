@@ -32,7 +32,7 @@ public:
 	 \param path the path to the image
 	 \return a success/error flag
 	 */
-	bool load(const fs::path & path);
+	bool load(const fs::path & path, uint layer = 0);
 
 	bool uncompress();
 
