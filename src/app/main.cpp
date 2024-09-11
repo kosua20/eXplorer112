@@ -120,26 +120,30 @@ struct FrameData {
 	glm::vec4 ambientColor{0.0f};
 	glm::vec4 fogColor{0.0f};
 	glm::vec4 fogParams{0.0f};
-	float fogDensity = 0.0f;
 
+	float fogDensity = 0.0f;
 	// Shading settings.
 	uint shadingMode = 0;
 	uint albedoMode = 0;
 	uint postprocessMode = 0;
+
 	float randomX;
 	float randomY;
 	float randomZ;
-
 	// Clustering
 	uint lightsCount;
+
 	glm::uvec4 clustersSize{1u}; // tile size in w
 	glm::vec4 clustersParams{0.0f};
+
 	// Selection data.
 	int selectedMesh = -1;
 	int selectedInstance= -1;
 	int selectedTextureArray= -1;
 	int selectedTextureLayer= -1;
+
 	int skipCulling = 0;
+	uint frameIndex = 0;
 };
 
 struct SelectionState {
@@ -449,7 +453,7 @@ void loadTextureFromImage(const fs::path& path, Texture& dstTexture){
 	dstTexture.upload(Layout::RGBA8, false);
 }
 
-void loadEngineTextures(const GameFiles& gameFiles, Texture& fogXYTexture, Texture& fogZTexture, Texture& noiseTexture, std::array<Texture, 3>& noisePulseTexture, Texture& bgTexture, Texture& heatTexture){
+void loadEngineTextures(const GameFiles& gameFiles, Texture& fogXYTexture, Texture& fogZTexture, Texture& noiseTexture, Texture& noisePulseTexture, Texture& bgTexture, Texture& heatTexture){
 	if(gameFiles.texturesPath.empty()){
 		return;
 	}
@@ -457,11 +461,24 @@ void loadEngineTextures(const GameFiles& gameFiles, Texture& fogXYTexture, Textu
 	loadTextureFromImage(gameFiles.texturesPath / "commons" / "fog_xy.png", fogXYTexture);
 	loadTextureFromImage(gameFiles.texturesPath / "commons" / "fog_z.png", fogZTexture);
 	loadTextureFromImage(gameFiles.texturesPath / "commons" / "noise.tga", noiseTexture);
-	loadTextureFromImage(gameFiles.texturesPath / "caustics" / "pulsenoise_0.tga", noisePulseTexture[0]);
-	loadTextureFromImage(gameFiles.texturesPath / "caustics" / "pulsenoise_1.tga", noisePulseTexture[1]);
-	loadTextureFromImage(gameFiles.texturesPath / "caustics" / "pulsenoise_2.tga", noisePulseTexture[2]);
 	loadTextureFromImage(gameFiles.texturesPath / "ui" / "background.tga", bgTexture);
 	loadTextureFromImage(gameFiles.texturesPath / "commons" / "heat.png", heatTexture);
+	// Texture array
+	{
+		noisePulseTexture.clean();
+		for( uint i = 0; i < 3; ++i )
+		{
+			const std::string name = "pulsenoise_" + std::to_string( i ) + ".tga";
+			Image& img = noisePulseTexture.images.emplace_back();
+			img.load( gameFiles.texturesPath / "caustics" / name );
+		}
+		noisePulseTexture.width = noisePulseTexture.images[0].width;
+		noisePulseTexture.height = noisePulseTexture.images[ 0 ].height;
+		noisePulseTexture.levels = 1;
+		noisePulseTexture.depth = noisePulseTexture.images.size();
+		noisePulseTexture.shape = TextureShape::Array2D;
+		noisePulseTexture.upload( Layout::RGBA8, false );
+	}
 }
 
 
@@ -691,13 +708,13 @@ int main(int argc, char ** argv) {
 		blackTexture.upload(Layout::RGBA8, false);
 	}
 
-	std::array<Texture, 3> noisePulseTextures = { Texture{"noisePulseMap0"}, Texture{"noisePulseMap1"}, Texture{"noisePulseMap2"}};
+	Texture noisePulseTexture( "noisePulseMap" );
 	Texture fogXYTexture("fogXYMap");
 	Texture fogZTexture("fogZMap");
 	Texture noiseTexture("noiseMap");
 	Texture bgTexture("backgroundMap");
 	Texture heatTexture("heatLookup");
-	loadEngineTextures(gameFiles, fogXYTexture, fogZTexture, noiseTexture, noisePulseTextures, bgTexture, heatTexture);
+	loadEngineTextures(gameFiles, fogXYTexture, fogZTexture, noiseTexture, noisePulseTexture, bgTexture, heatTexture);
 
 	deselect( frameInfos[ 0 ], selected, SelectionFilter::ALL );
 
@@ -863,7 +880,7 @@ int main(int argc, char ** argv) {
 					fs::path newInstallPath;
 					if(Window::showDirectoryPicker(fs::path(""), newInstallPath)){
 						gameFiles = GameFiles( newInstallPath);
-						loadEngineTextures(gameFiles, fogXYTexture, fogZTexture, noiseTexture, noisePulseTextures, bgTexture, heatTexture);
+						loadEngineTextures(gameFiles, fogXYTexture, fogZTexture, noiseTexture, noisePulseTexture, bgTexture, heatTexture);
 						scene = Scene();
 						deselect(frameInfos[0], selected, SelectionFilter::ALL);
 					}
@@ -1607,14 +1624,15 @@ int main(int argc, char ** argv) {
 		frameInfos[0].shadingMode = shadingMode;
 		frameInfos[0].postprocessMode = showPostprocess;
 
-		frameInfos[ 0 ].randomX = glm::linearRand( 0.f, 1.0f );
-		frameInfos[ 0 ].randomY = glm::linearRand( 0.f, 1.0f );
-		frameInfos[ 0 ].randomZ = glm::linearRand( 0.f, 1.0f );
+		frameInfos[0].randomX = glm::linearRand( 0.f, 1.0f );
+		frameInfos[0].randomY = glm::linearRand( 0.f, 1.0f );
+		frameInfos[0].randomZ = glm::linearRand( 0.f, 1.0f );
 
 		frameInfos[0].lightsCount = uint(scene.world.lights().size());
 		frameInfos[0].clustersSize = glm::uvec4(lightClusters.width, lightClusters.height, lightClusters.depth, clusterDims.x);
 		const float logRatio = float(clusterDims.y) / std::log(nearFar.y / nearFar.x);
 		frameInfos[0].clustersParams = glm::vec4(logRatio, std::log(nearFar.x) * logRatio, 0.0f, 0.0f);
+		frameInfos[0].frameIndex = frameIndex;
 
 		frameInfos.upload();
 
@@ -1927,10 +1945,6 @@ int main(int argc, char ** argv) {
 
 					// Postprocesses
 					{
-						// Avoid updating it when not using the mode.
-						uint noisePulseIndex = (showPostprocess & MODE_POSTPROCESS_NIGHT) ? (frameIndex % 3u) : 0u;
-						Texture& noisePulse = noisePulseTextures[noisePulseIndex];
-
 						GPU::bind(sceneLit, LoadOperation::DONTCARE);
 						GPU::setViewport(sceneLit);
 						GPU::setDepthState(false);
@@ -1941,7 +1955,7 @@ int main(int argc, char ** argv) {
 						noiseGrainQuad->texture(sceneFog, 0);
 						noiseGrainQuad->texture(bloom0, 1);
 						noiseGrainQuad->texture(noiseTexture, 2);
-						noiseGrainQuad->texture(noisePulse, 3);
+						noiseGrainQuad->texture(noisePulseTexture, 3);
 						noiseGrainQuad->texture(sceneHeat, 4);
 						noiseGrainQuad->texture(heatTexture, 5);
 						noiseGrainQuad->buffer(frameInfos, 0);

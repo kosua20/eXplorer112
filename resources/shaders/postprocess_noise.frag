@@ -9,7 +9,7 @@ layout(location = 0) in INTERFACE {
 layout(set = 2, binding = 0) uniform texture2D screenTexture;
 layout(set = 2, binding = 1) uniform texture2D bloomTexture;
 layout(set = 2, binding = 2) uniform texture2D grainNoiseTexture;
-layout(set = 2, binding = 3) uniform texture2D nightNoisePulseTexture;
+layout(set = 2, binding = 3) uniform texture2DArray nightNoisePulseTexture;
 layout(set = 2, binding = 4) uniform texture2D heatMapTexture;
 layout(set = 2, binding = 5) uniform texture2D heatLookupTexture;
 
@@ -75,7 +75,7 @@ void main(){
 		vec2 uv1 = vec2(gl_FragCoord.xy) / vec2(textureSize(nightNoisePulseTexture, 0).xy);
 
 		vec3 nightColor = vec3(dot(baseColor, fcol1));
-		vec3 noisePulse = textureLod(sampler2D(nightNoisePulseTexture, sRepeatLinear), uv1, 0.0).rgb;
+		vec3 noisePulse = textureLod(sampler2DArray(nightNoisePulseTexture, sRepeatLinear), vec3(uv1, (engine.frameIndex/4) % 3u), 0.0).rgb;
 
 		baseColor = 4.0 * (nightColor + fcol2);
 		baseColor *= noisePulse;

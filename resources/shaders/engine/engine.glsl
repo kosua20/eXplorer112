@@ -36,6 +36,8 @@ layout(set = 0, binding = 0) uniform EngineData {
 	int selectedTextureArray;
 	int selectedTextureLayer;
 	int skipCulling;
+
+	uint frameIndex;
 } engine;
 
 #define MATERIAL_OPAQUE 0
