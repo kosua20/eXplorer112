@@ -30,6 +30,7 @@ struct Material {
 	std::string diffuseName;
 	std::string normalName;
 	glm::vec3 ambSpecDiff;
+	bool alpha;
 };
 
 struct Geometry {
@@ -522,6 +523,7 @@ bool parseClump(FILE* file, Model& model){
 					Material& material = geometry.materials[j];
 
 					material.ambSpecDiff = ambSpecDiff;
+					material.alpha = color.a < 1.0f;
 
 					if(textured != 0u){
 						if(!parseTexture(file, material.diffuseName)){
@@ -568,9 +570,10 @@ bool parseClump(FILE* file, Model& model){
 			fread(values, sizeof(uint32_t), 4, file);
 			uint32_t frameIndex = values[0];
 			uint32_t geometryIndex = values[1];
-			// uint32_t flags = values[2]; // Unused
+			
 
 #ifdef LOG_DFF_CONTENT
+			uint32_t flags = values[ 2 ]; // Unused
 			Log::info("[dffparser] Atomic %d: frame %u, geometry %u, flags %u", i, frameIndex, geometryIndex, flags);
 #endif
 			model.pairings[i] = {geometryIndex, frameIndex};
@@ -725,7 +728,7 @@ void convertToObj(Model& model, Object& outObject){
 					std::string textureName = TextUtilities::lowercase(material.normalName);
 					newMaterial.normal = !textureName.empty() ? textureName : DEFAULT_NORMAL_TEXTURE;
 				}
-
+				newMaterial.type = material.alpha ? Object::Material::TRANSPARENT : Object::Material::OPAQUE;
 				Object::Set& faceSet = outObject.faceSets.emplace_back();
 				faceSet.faces.reserve(256);
 				faceSet.material = (uint32_t)outObject.materials.size()-1;

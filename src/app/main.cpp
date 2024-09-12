@@ -530,9 +530,6 @@ int main(int argc, char ** argv) {
 	//		allocate an indirect arg buffer for the worst (total instance count) case.
 	//		But with the MoltenVk limitation, this means one drawcall per instance per
 	//		mesh, far from an indirect approach (excepts if this ends up being fixed)?
-	//  * Some opaque objects are alpha blended on top of the others? are they sorted?
-	//		Are they just depth tested and blended in which case we could move them to
-	//		the end of the list and change the blending mode (similarly to billboards)
 	//	* Bug in the clustered lighting at least on MoltenVK, either a bug or a hidden
 	//		limitation somewhere? I am getting no issue on an Nvidia driver.
 	//  * Fog parameters should be applied based on each object location, not based on
