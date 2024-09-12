@@ -79,6 +79,14 @@ public:
 		uint pad1, pad2;
 	};
 
+	struct ZoneInfos {
+		glm::vec4 bboxMin;
+		glm::vec4 bboxMax;
+		glm::vec4 ambientColor;
+		glm::vec4 fogColorAndDensity;
+		glm::vec4 fogParams;
+	};
+
 	// CPU data.
 	struct MeshCPUInfos {
 		std::string name;
@@ -142,6 +150,7 @@ public:
 	std::unique_ptr<StructuredBuffer<MeshInstanceInfos>> instanceInfos;
 	std::unique_ptr<StructuredBuffer<MaterialInfos>> materialInfos;
 	std::unique_ptr<StructuredBuffer<LightInfos>> lightInfos;
+	std::unique_ptr<StructuredBuffer<ZoneInfos>> zoneInfos;
 
 	std::vector<MeshCPUInfos> meshDebugInfos;
 	std::vector<InstanceCPUInfos> instanceDebugInfos;

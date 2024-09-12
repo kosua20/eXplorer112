@@ -5,12 +5,17 @@
 
 layout(local_size_x=8, local_size_y=8, local_size_z=1) in;
 
+layout(std140, set = 0, binding = 1) readonly buffer ZoneInfosBuffer {
+	ZoneInfos zoneInfos[];
+};
+
 layout(set = 2, binding = 0) uniform texture2D sceneDepth;
 layout(set = 2, binding = 1) uniform texture2D fogXYMap;
 layout(set = 2, binding = 2) uniform texture2D fogZMap;
+layout(set = 2, binding = 3, r16ui) uniform readonly uimage3D fogClusters;
 
-layout(set = 2, binding = 3, rgba16f) uniform readonly image2D sceneLit;
-layout(set = 2, binding = 4, rgba16f) uniform writeonly image2D sceneFog;
+layout(set = 2, binding = 4, rgba16f) uniform readonly image2D sceneLit;
+layout(set = 2, binding = 5, rgba16f) uniform writeonly image2D sceneFog;
 
 #include "engine/fog.glsl"
 
@@ -22,13 +27,15 @@ void main(){
 	ivec2 pixelCoord = ivec2(gl_GlobalInvocationID.xy);
 
 	float depth = texelFetch(sampler2D(sceneDepth, sClampNear), pixelCoord, 0).r;
+	vec3 screenPos = vec3(pixelCoord, depth);
+
 	vec3 worldPos = worldPositionFromDepth(depth, pixelCoord);
 
 	vec4 finalColor = imageLoad(sceneLit, pixelCoord);
 	vec3 camToPos = worldPos - engine.camPos.xyz;
 
-	float fogFactor = applyFog(worldPos.y, camToPos);
-	finalColor.rgb = mix(finalColor.rgb, engine.fogColor.rgb, fogFactor);
+	vec4 fogFactor = applyFog(screenPos, worldPos, camToPos);
+	finalColor.rgb = mix(finalColor.rgb, fogFactor.rgb, fogFactor.a);
 
 	imageStore(sceneFog, pixelCoord, finalColor);
 }

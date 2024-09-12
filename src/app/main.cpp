@@ -126,10 +126,8 @@ struct FrameData {
 	glm::vec4 camPlanes{0.0f};
 
 	glm::vec4 ambientColor{0.0f};
-	glm::vec4 fogColor{0.0f};
-	glm::vec4 fogParams{0.0f};
 
-	float fogDensity = 0.0f;
+	uint showFog = 0;
 	// Shading settings.
 	uint shadingMode = 0;
 	uint albedoMode = 0;
@@ -138,8 +136,13 @@ struct FrameData {
 	float randomX;
 	float randomY;
 	float randomZ;
+	float randomW;
+
 	// Clustering
+	uint frameIndex = 0;
+	uint skipCulling = 0;
 	uint lightsCount;
+	uint zonesCount;
 
 	glm::uvec4 clustersSize{1u}; // tile size in w
 	glm::vec4 clustersParams{0.0f};
@@ -150,8 +153,6 @@ struct FrameData {
 	int selectedTextureArray= -1;
 	int selectedTextureLayer= -1;
 
-	int skipCulling = 0;
-	uint frameIndex = 0;
 };
 
 struct SelectionState {
@@ -675,6 +676,14 @@ int main(int argc, char ** argv) {
 	lightClusters.levels = 1;
 	GPU::setupTexture(lightClusters, Layout::RGBA32UI, false);
 
+	Texture fogClusters("fogClusters");
+	fogClusters.width = lightClusters.width;
+	fogClusters.height = lightClusters.height;
+	fogClusters.depth = lightClusters.depth;
+	fogClusters.shape = TextureShape::D3;
+	fogClusters.levels = 1;
+	GPU::setupTexture(fogClusters, Layout::R16UI, false);
+
 	std::unique_ptr<Buffer> drawCommands = nullptr;
 	std::unique_ptr<Buffer> drawInstances = nullptr;
 
@@ -771,9 +780,11 @@ int main(int argc, char ** argv) {
 		currentShadowcastingLight = 0u;
 		currentShadowMapLayer = 0u;
 		currentShadowcastingLightFace = 0u;
+		uint shadowcasterCount = 0u;
 		for( const World::Light& light : scene.world.lights() ){
 			if( light.shadow ){
 				shadowCount += ( light.type == World::Light::POINT ? 6u : 1u );
+				++shadowcasterCount;
 			}
 		}
 		shadowCount = std::max( shadowCount, 1u );
@@ -809,7 +820,7 @@ int main(int argc, char ** argv) {
 			}
 			debugLights.upload();
 		}
-		if( !scene.world.particles().empty() ){
+		if( !scene.world.particles().empty() || !scene.world.billboards().empty() ){
 			for( const World::Emitter& fx : scene.world.particles() ){
 				addEmitterGizmo( debugFxs, fx );
 			}
@@ -836,6 +847,24 @@ int main(int argc, char ** argv) {
 			}
 			debugZones.upload();
 		}
+
+		size_t opaqueCount = 0;
+		size_t transparentCount = 0;
+		size_t decalsCount = 0;
+		for(size_t mid = 0; mid < meshCount; ++mid){
+			const Scene::MeshInfos& mesh = (*scene.meshInfos)[mid];
+			const Scene::MaterialInfos& material = (*scene.materialInfos)[mesh.materialIndex];
+			size_t& count = material.type == Object::Material::DECAL ? decalsCount :
+							(material.type == Object::Material::TRANSPARENT ? transparentCount : opaqueCount);
+			count += mesh.instanceCount;
+		}
+
+		Log::info("Loaded world %s with %u meshes, %u materials, %u instances (%u opaque, %u transparent, %u decals), %u lights (%u shadow casting), %u cameras, %u zones, %u emitters, %u billboards",
+				  scene.world.name().c_str(),
+				  scene.meshInfos->size(), scene.materialInfos->size(), scene.instanceInfos->size(),
+				  opaqueCount, transparentCount, decalsCount,
+				  scene.lightInfos->size(), shadowcasterCount, scene.world.cameras().size(), scene.world.zones().size(),
+				  scene.world.particles().size(), scene.world.billboards().size());
 	};
 
 #define FORCE_LOAD_TUTO_ECO
@@ -1447,10 +1476,12 @@ int main(int argc, char ** argv) {
 				bloom0.resize(glm::uvec2(renderRes)/2u );
 				bloom1.resize(glm::uvec2(renderRes)/2u );
 				lightClusters.resize(roundUp(renderRes[0], clusterDims.x), roundUp(renderRes[1], clusterDims.x), clusterDims.y);
+				fogClusters.resize(lightClusters.width, lightClusters.height, lightClusters.depth);
 				camera.ratio(renderRes[0]/renderRes[1]);
 			}
 			if(ImGui::SliderInt2("Cluster params", &clusterDims[0], 2, 128)){
 				lightClusters.resize(roundUp(sceneLit.width, clusterDims.x), roundUp(sceneLit.height, clusterDims.x), clusterDims.y);
+				fogClusters.resize(lightClusters.width, lightClusters.height, lightClusters.depth);
 			}
 
 			ImGui::Text("Shading"); ImGui::SameLine();
@@ -1565,6 +1596,7 @@ int main(int argc, char ** argv) {
 				bloom0.resize(glm::uvec2(renderRes)/2u);
 				bloom1.resize(glm::uvec2(renderRes)/2u);
 				lightClusters.resize(roundUp(renderRes[0], clusterDims.x), roundUp(renderRes[1], clusterDims.x), clusterDims.y);
+				fogClusters.resize(lightClusters.width, lightClusters.height, lightClusters.depth);
 				camera.ratio(renderRes[0]/renderRes[1]);
 			}
 		}
@@ -1641,9 +1673,7 @@ int main(int argc, char ** argv) {
 		frameInfos[0].resolution = glm::vec4(sceneLit.width, sceneLit.height, 0u, 0u);
 
 		frameInfos[0].ambientColor = effects.color;
-		frameInfos[0].fogParams = effects.fogParams;
-		frameInfos[0].fogColor = effects.fogColor;
-		frameInfos[0].fogDensity = effects.fogDensity;
+		frameInfos[0].showFog = showFog ? 1u : 0u;
 
 		frameInfos[0].color = glm::vec4(1.0f);
 		frameInfos[0].camPos = glm::vec4(camera.position(), 1.0f);
@@ -1659,8 +1689,10 @@ int main(int argc, char ** argv) {
 		frameInfos[0].randomX = glm::linearRand( 0.f, 1.0f );
 		frameInfos[0].randomY = glm::linearRand( 0.f, 1.0f );
 		frameInfos[0].randomZ = glm::linearRand( 0.f, 1.0f );
+		frameInfos[0].randomW = glm::linearRand( 0.f, 1.0f );
 
 		frameInfos[0].lightsCount = uint(scene.world.lights().size());
+		frameInfos[0].zonesCount = uint(scene.world.zones().size());
 		frameInfos[0].clustersSize = glm::uvec4(lightClusters.width, lightClusters.height, lightClusters.depth, clusterDims.x);
 		const float logRatio = float(clusterDims.y) / std::log(nearFar.y / nearFar.x);
 		frameInfos[0].clustersParams = glm::vec4(logRatio, std::log(nearFar.x) * logRatio, 0.0f, 0.0f);
@@ -1781,7 +1813,9 @@ int main(int argc, char ** argv) {
 				clustersCompute->use();
 				clustersCompute->buffer(frameInfos, 0);
 				clustersCompute->buffer(*scene.lightInfos, 1);
+				clustersCompute->buffer(*scene.zoneInfos, 2);
 				clustersCompute->texture(lightClusters, 0);
+				clustersCompute->texture(fogClusters, 1);
 				// We need one thread per cluster cell.
 				GPU::dispatch( lightClusters.width, lightClusters.height, lightClusters.depth );
 			}
@@ -1901,11 +1935,14 @@ int main(int argc, char ** argv) {
 			{
 				fogCompute->use();
 				fogCompute->buffer(frameInfos, 0);
+				fogCompute->buffer(*scene.zoneInfos, 1);
+				
 				fogCompute->texture(sceneDepth, 0);
 				fogCompute->texture(fogXYTexture, 1);
 				fogCompute->texture(fogZTexture, 2);
-				fogCompute->texture(sceneLit, 3);
-				fogCompute->texture(sceneFog, 4);
+				fogCompute->texture(fogClusters, 3);
+				fogCompute->texture(sceneLit, 4);
+				fogCompute->texture(sceneFog, 5);
 
 				GPU::dispatch( sceneFog.width, sceneFog.height, 1u);
 			}
@@ -1964,10 +2001,12 @@ int main(int argc, char ** argv) {
 				forwardInstancedObject->buffer(*scene.materialInfos, 3);
 				forwardInstancedObject->buffer(*drawInstances, 4);
 				forwardInstancedObject->buffer(*scene.lightInfos, 5);
+				forwardInstancedObject->buffer(*scene.zoneInfos, 6);
 				forwardInstancedObject->texture(fogXYTexture, 0);
 				forwardInstancedObject->texture(fogZTexture, 1);
 				forwardInstancedObject->texture(lightClusters, 2);
 				forwardInstancedObject->texture(shadowMaps, 3);
+				forwardInstancedObject->texture(fogClusters, 4);
 
 
 				for(uint mid = 0; mid < scene.meshInfos->size(); ++mid){

@@ -50,6 +50,7 @@ void Scene::clean(){
 	instanceInfos.reset();
 	materialInfos.reset();
 	lightInfos.reset();
+	zoneInfos.reset();
 
 	for(Texture& tex : textures ){
 		tex.clean();
@@ -409,6 +410,23 @@ void Scene::upload(const World& world, const GameFiles& files){
 			info.materialIndex = light.material;
 		}
 	}
+	
+	// Zones
+	{
+		const uint zonesCount = ( uint )world.zones().size();
+		zoneInfos = std::make_unique<StructuredBuffer<ZoneInfos>>(zonesCount, BufferType::STORAGE, "ZoneInfos");
+
+		for(uint i = 0; i < zonesCount; ++i){
+			const World::Zone& zone = world.zones()[i];
+			ZoneInfos& info = (*zoneInfos)[i];
+			info.ambientColor = zone.ambientColor;
+			info.fogColorAndDensity = glm::vec4(glm::vec3(zone.fogColor), zone.fogDensity);
+			info.fogParams = zone.fogParams;
+			info.bboxMin = glm::vec4(zone.bbox.minis, 0.f);
+			info.bboxMax = glm::vec4(zone.bbox.maxis, 0.f);
+		}
+	}
+
 	// FXs
 	{
 		const std::array<glm::vec2, 4> uvs = {
@@ -560,6 +578,7 @@ void Scene::upload(const World& world, const GameFiles& files){
 	meshInfos->upload();
 	materialInfos->upload();
 	lightInfos->upload();
+	zoneInfos->upload();
 
 	GPU::registerTextures( textures );
 }

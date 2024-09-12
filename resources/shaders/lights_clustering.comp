@@ -7,7 +7,12 @@ layout(std140, set = 0, binding = 1) readonly buffer LightInfosBuffer {
 	LightInfos lightInfos[];
 };
 
+layout(std140, set = 0, binding = 2) readonly buffer ZoneInfosBuffer {
+	ZoneInfos zoneInfos[];
+};
+
 layout(set = 2, binding = 0, rgba32ui) uniform writeonly uimage3D outClusters;
+layout(set = 2, binding = 1, r16ui) uniform writeonly uimage3D outZones;
 
 vec3 pixelToView(vec2 pix){
 	vec2 ndc = pix / engine.resolution.xy * 2.0 - 1.0;
@@ -55,7 +60,7 @@ void main(){
 	vec3 minBox = min(min(minNear, minFar), min(maxNear, maxFar));
 	vec3 maxBox = max(max(minNear, minFar), max(maxNear, maxFar));
 
-	// Cull all lights against the bounding box.
+	// Cull all lights bounding spheres against the bounding box.
 	uvec4 lightFlags = uvec4(0u);
 
 	for(uint i = 0; i < 4; ++i){
@@ -80,6 +85,29 @@ void main(){
 	}
 
 	imageStore(outClusters, ivec3(gl_GlobalInvocationID), lightFlags);
+
+	// Cull all zones bounding boxes against the bounding sphere.
+	vec3 froxelPos = 0.5 * (minBox + maxBox);
+	vec3 froxelDiag = maxBox - minBox;
+	float froxelRad = 0.5 * max(froxelDiag.x, max(froxelDiag.y, froxelDiag.z));
+
+	uint zoneFlags = 0u;
+	if(engine.showFog != 0u){
+		for(uint j = 0; j < 32; ++j){
+			uint zoneIndex = j;
+			if(zoneIndex >= engine.zonesCount){
+				break;
+			}
+			// Test the frustum sphere against the bounding box.
+			vec3 zoneMinBox = zoneInfos[zoneIndex].bboxMin.xyz;
+			vec3 zoneMaxBox = zoneInfos[zoneIndex].bboxMax.xyz;
+
+			if(sphereIntersectsBox(froxelPos, froxelRad, zoneMinBox, zoneMaxBox)){
+				zoneFlags |= (1u << j);
+			}
+		}
+	}
+	imageStore(outZones, ivec3(gl_GlobalInvocationID), uvec4(zoneFlags));
 
 	// Later on: use local storage to load in threads
 	// Even later: write to a list of indices with offset if space is an issue.

@@ -26,10 +26,15 @@ layout(std140, set = 0, binding = 5) readonly buffer LightsInfos {
 	LightInfos lightInfos[];
 };
 
+layout(std140, set = 0, binding = 6) readonly buffer ZoneInfosBuffer {
+	ZoneInfos zoneInfos[];
+};
+
 layout(set = 2, binding = 0) uniform texture2D fogXYMap;
 layout(set = 2, binding = 1) uniform texture2D fogZMap;
 layout(set = 2, binding = 2, rgba32ui) uniform readonly uimage3D lightClusters;
 layout(set = 2, binding = 3) uniform texture2DArray shadowMaps;
+layout(set = 2, binding = 4, r16ui) uniform readonly uimage3D fogClusters;
 layout(set = 3, binding = 0) uniform texture2DArray textures[]; ///< Color textures.
 
 layout(location = 0) out vec4 fragColor; ///< Color.
@@ -78,9 +83,8 @@ void main(){
 
 	vec3 finalColor = (diffuse + ambient) * color.rgb + specular;
 
-	// No fog on some transparent objects ? 
-	float fogFactor = applyFog(In.worldPos.y, -In.viewDir.xyz);
-	finalColor = mix(finalColor, engine.fogColor.rgb, fogFactor);
+	vec4 fogFactor = applyFog(gl_FragCoord.xyz, In.worldPos.xyz, -In.viewDir.xyz);
+	finalColor.rgb = mix(finalColor.rgb, fogFactor.rgb, fogFactor.a);
 
 	fragColor = vec4(finalColor, color.a);
 

@@ -13,20 +13,23 @@ layout(set = 0, binding = 0) uniform EngineData {
 	vec4 camPlanes; // n, f/n, (f-n)/(f*n), 1/f
 
 	vec4 ambientColor;
-	vec4 fogColor;
-	vec4 fogParams;
-	float fogDensity;
-
+	uint showFog;
 	// Shading settings.
 	uint shadingMode;
 	uint albedoMode;
 	uint postprocessMode;
+
 	float randomX;
 	float randomY;
 	float randomZ;
+	float randomW;
 
+	uint  frameIndex;
+	uint skipCulling;
 	// Clustering
 	uint  lightsCount;
+	uint  zonesCount;
+	
 	uvec4 clustersSize; // w, h, d, tile size in w
 	vec4  clustersParams;
 
@@ -35,9 +38,7 @@ layout(set = 0, binding = 0) uniform EngineData {
 	int selectedInstance;
 	int selectedTextureArray;
 	int selectedTextureLayer;
-	int skipCulling;
 
-	uint frameIndex;
 } engine;
 
 #define MATERIAL_OPAQUE 0
@@ -110,6 +111,14 @@ struct LightInfos {
 	uint materialIndex;
 	uint shadow;
 	uint pad1, pad2;
+};
+
+struct ZoneInfos {
+	vec4 bboxMin;
+	vec4 bboxMax;
+	vec4 ambientColor; // TODO: needed?
+	vec4 fogColorAndDensity;
+	vec4 fogParams;
 };
 
 struct DrawCommand {
