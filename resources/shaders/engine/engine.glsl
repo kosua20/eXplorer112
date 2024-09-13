@@ -67,6 +67,8 @@ layout(set = 0, binding = 0) uniform EngineData {
 #define BILLBOARD_SCREEN 2
 #define BILLBOARD_AROUND_Y 3
 
+#define ZONE_INFLUENCE_MARGIN 20.0
+
 const uint NO_MATERIAL = 0xFFFF;
 const uint NO_SHADOW = 0xFFFF;
 
@@ -116,7 +118,7 @@ struct LightInfos {
 struct ZoneInfos {
 	vec4 bboxMin;
 	vec4 bboxMax;
-	vec4 ambientColor; // TODO: needed?
+	vec4 ambientColor;
 	vec4 fogColorAndDensity;
 	vec4 fogParams;
 };
