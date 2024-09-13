@@ -125,8 +125,6 @@ struct FrameData {
 	glm::vec4 camPos{1.0f};
 	glm::vec4 camPlanes{0.0f};
 
-	glm::vec4 ambientColor{0.0f};
-
 	uint showFog = 0;
 	// Shading settings.
 	uint shadingMode = 0;
@@ -162,21 +160,6 @@ struct SelectionState {
    int texture = -1;
 };
 
-struct AmbientEffects {
-	glm::vec4 color = glm::vec4(0.1f, 0.1f, 0.1f, 1.0f);
-	glm::vec4 fogColor = glm::vec4(0.2f, 0.2f, 0.2f, 1.0f);
-	glm::vec4 fogParams = glm::vec4(0.0f, 1.0f, 0.0f, 0.0f);
-	float fogDensity = 0.0f;
-
-	static AmbientEffects mix(const AmbientEffects& a, const AmbientEffects& b, float t){
-		AmbientEffects c;
-		c.color = glm::mix(a.color, b.color, t);
-		c.fogColor = glm::mix(a.fogColor, b.fogColor, t);
-		c.fogParams = glm::mix(a.fogParams, b.fogParams, t);
-		c.fogDensity = glm::mix(a.fogDensity, b.fogDensity, t);
-		return c;
-	}
-};
 
 struct ProgramInfos {
 	Program* program;
@@ -722,7 +705,6 @@ int main(int argc, char ** argv) {
 	bool showDebugZones = false;
 	bool renderingShadow = false;
 
-	AmbientEffects effects;
 	uint currentShadowcastingLight = 0u;
 	uint currentShadowMapLayer = 0u;
 	uint currentShadowcastingLightFace = 0u;
@@ -812,7 +794,6 @@ int main(int argc, char ** argv) {
 		debugZones.clean();
 		debugFxs.clean();
 
-		effects = AmbientEffects();
 		// Build light debug visualisation.
 		if( !scene.world.lights().empty() ){
 			for( const World::Light& light : scene.world.lights() ){
@@ -1638,25 +1619,6 @@ int main(int argc, char ** argv) {
 		}
 #endif
 		/// Rendering
-		// Update ambient effects.
-		AmbientEffects newEffects = effects;
-		float minDist = FLT_MAX;
-		for(const World::Zone& zone : scene.world.zones()){
-			float dist = zone.bbox.distance(camera.position());
-			if(dist < minDist){
-				minDist = dist;
-				newEffects.color = zone.ambientColor;
-				newEffects.fogParams = zone.fogParams;
-				newEffects.fogColor = zone.fogColor;
-				newEffects.fogDensity = zone.fogDensity;
-			}
-		}
-		if(!showFog){
-			newEffects.fogDensity = 0.0f;
-			newEffects.fogParams = glm::vec4(0.0f, 1.0f, 0.0f, 0.0f);
-		}
-		// Interpolate between current and new
-		effects = AmbientEffects::mix(effects, newEffects, 0.1f);
 
 		// Camera.
 		const glm::mat4 vp		   = camera.projection() * camera.view();
@@ -1672,7 +1634,6 @@ int main(int argc, char ** argv) {
 		frameInfos[0].nvp = glm::transpose(glm::inverse(frameInfos[0].vp));
 		frameInfos[0].resolution = glm::vec4(sceneLit.width, sceneLit.height, 0u, 0u);
 
-		frameInfos[0].ambientColor = effects.color;
 		frameInfos[0].showFog = showFog ? 1u : 0u;
 
 		frameInfos[0].color = glm::vec4(1.0f);
@@ -1821,13 +1782,8 @@ int main(int argc, char ** argv) {
 			}
 
 			{
-				// Determine clearing color by finding the closest area. Use alpha to skip lighting.
-				glm::vec4 clearColor = glm::vec4(glm::vec3(effects.fogColor), 0.0f);
-				// Don't want heat emissive background.
-				if(showPostprocess & MODE_POSTPROCESS_HEAT){
-					clearColor = glm::vec4(0.0f);
-				}
-
+				// Use alpha to skip lighting.
+				const glm::vec4 clearColor = glm::vec4(0.0f, 0.0f, 0.0f, 0.0f);
 				GPU::bind(sceneColor, sceneNormal, sceneHeat, sceneDepth, clearColor, 0.0f, LoadOperation::DONTCARE);
 				GPU::setViewport(sceneColor);
 

@@ -12,7 +12,6 @@ layout(set = 0, binding = 0) uniform EngineData {
 	vec4 camPos;
 	vec4 camPlanes; // n, f/n, (f-n)/(f*n), 1/f
 
-	vec4 ambientColor;
 	uint showFog;
 	// Shading settings.
 	uint shadingMode;

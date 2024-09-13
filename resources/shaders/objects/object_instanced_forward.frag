@@ -73,8 +73,6 @@ void main(){
 	vec3 specular = vec3(0.0);
 
 	if(engine.shadingMode == MODE_SHADING_LIGHT){
-		// Ambient.
-		ambient  = engine.ambientColor.rgb;
 		diffuse  = vec3(0.0);
 		specular = vec3(0.0);
 
