@@ -52,10 +52,12 @@ void main(){
 	float near = -engine.camPlanes.x * pow(engine.camPlanes.y, float(gl_GlobalInvocationID.z) / sliceCount);
 	float far  = -engine.camPlanes.x * pow(engine.camPlanes.y, float(gl_GlobalInvocationID.z + 1u) / sliceCount);
 	// Intersect the lines going through the two corners with the local near and far planes
+
 	vec3 minNear = intersectZPlane(minCorner, near);
 	vec3 minFar  = intersectZPlane(minCorner, far);
 	vec3 maxNear = intersectZPlane(maxCorner, near);
 	vec3 maxFar  = intersectZPlane(maxCorner, far);
+
 	// Bounding box
 	vec3 minBox = min(min(minNear, minFar), min(maxNear, maxFar));
 	vec3 maxBox = max(max(minNear, minFar), max(maxNear, maxFar));
@@ -91,29 +93,28 @@ void main(){
 	float froxelRad = length(maxBox - froxelPos) + ZONE_INFLUENCE_MARGIN;
 
 	uint zoneFlags = 0u;
-	if(engine.showFog != 0u){
-		for(uint j = 0; j < 16; ++j){
-			uint zoneIndex = j;
-			if(zoneIndex >= engine.zonesCount){
-				break;
-			}
-			// Test the frustum sphere against the bounding box.
-			vec3 c000 = zoneInfos[zoneIndex].bboxMin.xyz - ZONE_INFLUENCE_MARGIN;
-			vec3 c111 = zoneInfos[zoneIndex].bboxMax.xyz + ZONE_INFLUENCE_MARGIN;
 
-			vec3 c001 = vec3(engine.v * vec4(c000.x, c000.y, c111.z, 1.0));
-			vec3 c010 = vec3(engine.v * vec4(c000.x, c111.y, c000.z, 1.0));
-			vec3 c011 = vec3(engine.v * vec4(c000.x, c111.y, c111.z, 1.0));
-			vec3 c100 = vec3(engine.v * vec4(c111.x, c000.y, c000.z, 1.0));
-			vec3 c101 = vec3(engine.v * vec4(c111.x, c000.y, c111.z, 1.0));
-			vec3 c110 = vec3(engine.v * vec4(c111.x, c111.y, c000.z, 1.0));
+	for(uint j = 0; j < 16; ++j){
+		uint zoneIndex = j;
+		if(zoneIndex >= engine.zonesCount){
+			break;
+		}
+		// Test the frustum sphere against the bounding box.
+		vec3 c000 = zoneInfos[zoneIndex].bboxMin.xyz - ZONE_INFLUENCE_MARGIN;
+		vec3 c111 = zoneInfos[zoneIndex].bboxMax.xyz + ZONE_INFLUENCE_MARGIN;
 
-			vec3 finalMinBox = min(min(min(c000, c001), min(c010, c011)), min(min(c100, c101), min(c110, c111)));
-			vec3 finalMaxBox = max(max(max(c000, c001), max(c010, c011)), max(max(c100, c101), max(c110, c111)));
+		vec3 c001 = vec3(engine.v * vec4(c000.x, c000.y, c111.z, 1.0));
+		vec3 c010 = vec3(engine.v * vec4(c000.x, c111.y, c000.z, 1.0));
+		vec3 c011 = vec3(engine.v * vec4(c000.x, c111.y, c111.z, 1.0));
+		vec3 c100 = vec3(engine.v * vec4(c111.x, c000.y, c000.z, 1.0));
+		vec3 c101 = vec3(engine.v * vec4(c111.x, c000.y, c111.z, 1.0));
+		vec3 c110 = vec3(engine.v * vec4(c111.x, c111.y, c000.z, 1.0));
 
-			if(sphereIntersectsBox(froxelPos, froxelRad, finalMinBox, finalMaxBox)){
-				zoneFlags |= (1u << j);
-			}
+		vec3 finalMinBox = min(min(min(c000, c001), min(c010, c011)), min(min(c100, c101), min(c110, c111)));
+		vec3 finalMaxBox = max(max(max(c000, c001), max(c010, c011)), max(max(c100, c101), max(c110, c111)));
+
+		if(sphereIntersectsBox(froxelPos, froxelRad, finalMinBox, finalMaxBox)){
+			zoneFlags |= (1u << j);
 		}
 	}
 	imageStore(outZones, ivec3(gl_GlobalInvocationID), uvec4(zoneFlags));
