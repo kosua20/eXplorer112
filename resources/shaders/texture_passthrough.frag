@@ -11,6 +11,5 @@ layout(location = 0) out vec4 fragColor; ///< Color.
 /** Just pass the input image as-is, potentially performing up/down scaling. */
 void main(){
 	
-	fragColor.rgb = textureLod(sampler2D(screenTexture, sClampLinear), In.uv, 0.0).rgb;
-	fragColor.a = 1.0f;
+	fragColor = textureLod(sampler2D(screenTexture, sClampLinear), In.uv, 0.0);
 }

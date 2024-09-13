@@ -71,18 +71,25 @@ void main(){
 	vec3 ambient = vec3(0.0);
 	vec3 diffuse = vec3(1.0);
 	vec3 specular = vec3(0.0);
+	vec4 fog = vec4(0.0);
+
+	evaluateFogAndAmbient(gl_FragCoord.xyz, In.worldPos.xyz, -In.viewDir.xyz, ambient, fog);
 
 	if(engine.shadingMode == MODE_SHADING_LIGHT){
 		diffuse  = vec3(0.0);
 		specular = vec3(0.0);
 
 		applyLighting(gl_FragCoord.xyz, In.worldPos.xyz, In.viewDir.xyz, n, normalAndR.a, false, diffuse, specular);
+	} else {
+		ambient = vec3(0.0);
+	}
+	if(engine.showFog == 0){
+		fog = vec4(0.0);
 	}
 
 	vec3 finalColor = (diffuse + ambient) * color.rgb + specular;
 
-	vec4 fogFactor = applyFog(gl_FragCoord.xyz, In.worldPos.xyz, -In.viewDir.xyz);
-	finalColor.rgb = mix(finalColor.rgb, fogFactor.rgb, fogFactor.a);
+	finalColor.rgb = mix(finalColor.rgb, fog.rgb, fog.a);
 
 	fragColor = vec4(finalColor, color.a);
 

@@ -606,9 +606,6 @@ int main(int argc, char ** argv) {
 	programPool.push_back(loadProgram("lighting_gbuffer"));
 	Program* lightingCompute = programPool.back().program;
 
-	programPool.push_back(loadProgram("fog_gbuffer"));
-	Program* fogCompute = programPool.back().program;
-
 	UniformBuffer<FrameData> frameInfos(1, 64, "FrameInfos");
 	UniformBuffer<FrameData> shadowInfos(1, 2, "ShadowInfos");
 	UniformBuffer<glm::vec2> blurInfosV(1, 2, "BlurInfosV");
@@ -693,7 +690,7 @@ int main(int argc, char ** argv) {
 	bool showDecals = true;
 	bool showBillboards = true;
 	bool showParticles = true;
-	bool showFog = false;
+	bool showFog = true;
 
 	uint showPostprocess = 0u;
 
@@ -1556,7 +1553,7 @@ int main(int argc, char ** argv) {
 			mainViewport.z = winSize.x;
 			mainViewport.w = winSize.y;
 
-			ImGui::ImageButton(sceneLit, 0,0, ImVec2(winSize.x, winSize.y), ImVec2(0.0,0.0), ImVec2(1.0,1.0), 0);
+			ImGui::ImageButton(sceneFog, 0,0, ImVec2(winSize.x, winSize.y), ImVec2(0.0,0.0), ImVec2(1.0,1.0), 0);
 			if(ImGui::IsItemHovered()) {
 				ImGui::SetNextFrameWantCaptureMouse(false);
 				ImGui::SetNextFrameWantCaptureKeyboard(false);
@@ -1817,13 +1814,18 @@ int main(int argc, char ** argv) {
 				lightingCompute->buffer(frameInfos, 0);
 				lightingCompute->buffer(*scene.lightInfos, 1);
 				lightingCompute->buffer(*scene.materialInfos, 2);
+				lightingCompute->buffer(*scene.zoneInfos, 3);
 
 				lightingCompute->texture(sceneColor, 0);
 				lightingCompute->texture(sceneNormal, 1);
 				lightingCompute->texture(sceneDepth, 2);
 				lightingCompute->texture(sceneLit, 3);
-				lightingCompute->texture(lightClusters, 4);
-				lightingCompute->texture(shadowMaps, 5);
+				lightingCompute->texture(sceneFog, 4);
+				lightingCompute->texture(lightClusters, 5);
+				lightingCompute->texture(shadowMaps, 6);
+				lightingCompute->texture(fogClusters, 7);
+				lightingCompute->texture(fogXYTexture, 8);
+				lightingCompute->texture(fogZTexture, 9);
 
 				GPU::dispatch( sceneLit.width, sceneLit.height, 1u);
 			}
@@ -1888,25 +1890,25 @@ int main(int argc, char ** argv) {
 				}
 			}
 			// Fog
-			{
-				fogCompute->use();
-				fogCompute->buffer(frameInfos, 0);
-				fogCompute->buffer(*scene.zoneInfos, 1);
-				
-				fogCompute->texture(sceneDepth, 0);
-				fogCompute->texture(fogXYTexture, 1);
-				fogCompute->texture(fogZTexture, 2);
-				fogCompute->texture(fogClusters, 3);
-				fogCompute->texture(sceneLit, 4);
-				fogCompute->texture(sceneFog, 5);
+			if(showFog){
+				GPU::bind(sceneLit, LoadOperation::LOAD);
+				GPU::setViewport(sceneLit);
+				GPU::setDepthState(false);
+				GPU::setCullState(true, Faces::BACK );
+				GPU::setColorState(true, true, true, true);
+				GPU::setBlendState( true, BlendEquation::ADD, BlendFunction::ONE, BlendFunction::ONE_MINUS_SRC_ALPHA);
+				GPU::setPolygonState(PolygonMode::FILL);
 
-				GPU::dispatch( sceneFog.width, sceneFog.height, 1u);
+				passthrough->use();
+				passthrough->texture(sceneFog, 0);
+				GPU::drawQuad();
+
 			}
 
 			// Then render post fog emissive billboards
 			if(showBillboards || showParticles){
-				GPU::bind(sceneFog, sceneDepth, LoadOperation::LOAD, LoadOperation::LOAD, LoadOperation::DONTCARE);
-				GPU::setViewport(sceneFog);
+				GPU::bind(sceneLit, sceneDepth, LoadOperation::LOAD, LoadOperation::LOAD, LoadOperation::DONTCARE);
+				GPU::setViewport(sceneLit);
 				GPU::setPolygonState(PolygonMode::FILL);
 				GPU::setCullState(false);
 				GPU::setDepthState(true, TestFunction::GEQUAL, false);
@@ -1941,8 +1943,8 @@ int main(int argc, char ** argv) {
 			}
 
 			if(showTransparents){
-				GPU::bind(sceneFog, sceneDepth, LoadOperation::LOAD, LoadOperation::LOAD, LoadOperation::DONTCARE);
-				GPU::setViewport(sceneFog);
+				GPU::bind(sceneLit, sceneDepth, LoadOperation::LOAD, LoadOperation::LOAD, LoadOperation::DONTCARE);
+				GPU::setViewport(sceneLit);
 
 				GPU::setDepthState( true, TestFunction::GEQUAL, false );
 				GPU::setCullState( true, Faces::BACK );
@@ -1985,7 +1987,7 @@ int main(int argc, char ** argv) {
 					// Bloom
 					if(showPostprocess & MODE_POSTPROCESS_BLOOM){
 
-						GPU::blit(sceneFog, bloom0, 0, 0, Filter::LINEAR);
+						GPU::blit(sceneLit, bloom0, 0, 0, Filter::LINEAR);
 						GPU::setViewport(0, 0, bloom0.width, bloom0.height);
 
 						for(uint blurStep = 0; blurStep < bloomBlurSteps; ++blurStep){
@@ -2005,14 +2007,14 @@ int main(int argc, char ** argv) {
 
 					// Postprocesses
 					{
-						GPU::bind(sceneLit, LoadOperation::DONTCARE);
-						GPU::setViewport(sceneLit);
+						GPU::bind(sceneFog, LoadOperation::DONTCARE);
+						GPU::setViewport(sceneFog);
 						GPU::setDepthState(false);
 						GPU::setCullState(true, Faces::BACK );
 						GPU::setColorState(true, true, true, true);
 						GPU::setPolygonState(PolygonMode::FILL);
 						noiseGrainQuad->use();
-						noiseGrainQuad->texture(sceneFog, 0);
+						noiseGrainQuad->texture(sceneLit, 0);
 						noiseGrainQuad->texture(bloom0, 1);
 						noiseGrainQuad->texture(noiseTexture, 2);
 						noiseGrainQuad->texture(noisePulseTexture, 3);
@@ -2027,8 +2029,8 @@ int main(int argc, char ** argv) {
 				// Debug view.
 				{
 
-					GPU::bind( sceneLit, sceneDepth, LoadOperation::LOAD, LoadOperation::LOAD, LoadOperation::DONTCARE );
-					GPU::setViewport( sceneLit );
+					GPU::bind( sceneFog, sceneDepth, LoadOperation::LOAD, LoadOperation::LOAD, LoadOperation::DONTCARE );
+					GPU::setViewport( sceneFog );
 
 					GPU::setPolygonState( PolygonMode::LINE );
 					GPU::setCullState( false, Faces::BACK );
@@ -2125,7 +2127,7 @@ int main(int argc, char ** argv) {
 
 
 		} else {
-			GPU::clearTexture(sceneLit, glm::vec4(0.2f, 0.2f, 0.2f, 1.0f));
+			GPU::clearTexture(sceneFog, glm::vec4(0.2f, 0.2f, 0.2f, 1.0f));
 		}
 
 		if(selected.texture >= 0){
