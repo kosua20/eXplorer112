@@ -1668,6 +1668,7 @@ int main(int argc, char ** argv) {
 		blurInfosV.upload();
 
 		if(selected.item >= 0){
+
 			// Bruteforce shadow map once per frame.
 			const uint lightsCount = ( uint )scene.world.lights().size();
 
@@ -1759,8 +1760,9 @@ int main(int argc, char ** argv) {
 				
 			}
 
-			// Populate drawCommands and drawInstancesby using a compute shader that performs culling.
+			// Culling and clustering.
 			{
+				// Populate drawCommands and drawInstancesby using a compute shader that performs culling.
 				drawArgsCompute->use();
 				drawArgsCompute->buffer(frameInfos, 0);
 				drawArgsCompute->buffer(*scene.meshInfos, 1);
@@ -1779,33 +1781,31 @@ int main(int argc, char ** argv) {
 				GPU::dispatch( lightClusters.width, lightClusters.height, lightClusters.depth );
 			}
 
-			{
-				// Use alpha to skip lighting.
-				const glm::vec4 clearColor = glm::vec4(0.0f, 0.0f, 0.0f, 0.0f);
-				GPU::bind(sceneColor, sceneNormal, sceneHeat, sceneDepth, clearColor, 0.0f, LoadOperation::DONTCARE);
-				GPU::setViewport(sceneColor);
+			// Use alpha to skip lighting.
+			const glm::vec4 clearColor = glm::vec4(0.0f, 0.0f, 0.0f, 0.0f);
+			GPU::bind(sceneColor, sceneNormal, sceneHeat, sceneDepth, clearColor, 0.0f, LoadOperation::DONTCARE);
+			GPU::setViewport(sceneColor);
 
-				if(showOpaques){
-					GPU::setPolygonState(PolygonMode::FILL);
-					GPU::setCullState(true, Faces::BACK );
-					GPU::setDepthState(true, TestFunction::GEQUAL, true);
-					GPU::setBlendState(false);
-					GPU::setColorState(true, true, true, true);
+			if(showOpaques){
+				GPU::setPolygonState(PolygonMode::FILL);
+				GPU::setCullState(true, Faces::BACK );
+				GPU::setDepthState(true, TestFunction::GEQUAL, true);
+				GPU::setBlendState(false);
+				GPU::setColorState(true, true, true, true);
 
-					gbufferInstancedObject->use();
-					gbufferInstancedObject->buffer(frameInfos, 0);
-					gbufferInstancedObject->buffer(*scene.meshInfos, 1);
-					gbufferInstancedObject->buffer(*scene.instanceInfos, 2);
-					gbufferInstancedObject->buffer(*scene.materialInfos, 3);
-					gbufferInstancedObject->buffer(*drawInstances, 4);
+				gbufferInstancedObject->use();
+				gbufferInstancedObject->buffer(frameInfos, 0);
+				gbufferInstancedObject->buffer(*scene.meshInfos, 1);
+				gbufferInstancedObject->buffer(*scene.instanceInfos, 2);
+				gbufferInstancedObject->buffer(*scene.materialInfos, 3);
+				gbufferInstancedObject->buffer(*drawInstances, 4);
 
-					for(uint mid = 0; mid < scene.meshInfos->size(); ++mid){
-						const uint materialIndex = (*scene.meshInfos)[mid].materialIndex;
-						if((*scene.materialInfos)[materialIndex].type != Object::Material::OPAQUE){
-							continue;
-						}
-						GPU::drawIndirectMesh(scene.globalMesh, *drawCommands, mid);
+				for(uint mid = 0; mid < scene.meshInfos->size(); ++mid){
+					const uint materialIndex = (*scene.meshInfos)[mid].materialIndex;
+					if((*scene.materialInfos)[materialIndex].type != Object::Material::OPAQUE){
+						continue;
 					}
+					GPU::drawIndirectMesh(scene.globalMesh, *drawCommands, mid);
 				}
 			}
 
@@ -1856,6 +1856,7 @@ int main(int argc, char ** argv) {
 					GPU::drawIndirectMesh(scene.globalMesh, *drawCommands, mid);
 				}
 			}
+
 			// First billboard and particle passes
 			if(showBillboards || showParticles){
 				GPU::bind(sceneLit, sceneDepth, LoadOperation::LOAD, LoadOperation::LOAD, LoadOperation::DONTCARE);
@@ -1890,6 +1891,7 @@ int main(int argc, char ** argv) {
 					}
 				}
 			}
+
 			// Fog
 			if(showFog){
 				GPU::bind(sceneLit, LoadOperation::LOAD);
@@ -1980,104 +1982,104 @@ int main(int argc, char ** argv) {
 					GPU::drawIndirectMesh(scene.globalMesh, *drawCommands, mid);
 				}
 			}
+
+			// Postprocess stack
 			{
-				// Postprocess stack
+				GPU::setDepthState(false);
+				GPU::setCullState(true, Faces::BACK );
+				GPU::setColorState(true, true, true, true);
+				GPU::setBlendState( false );
+				GPU::setPolygonState(PolygonMode::FILL);
+
+				// Bloom
+				if(showPostprocess & MODE_POSTPROCESS_BLOOM){
+
+					GPU::blit(sceneLit, bloom0, 0, 0, Filter::LINEAR);
+					GPU::setViewport(0, 0, bloom0.width, bloom0.height);
+
+					for(uint blurStep = 0; blurStep < bloomBlurSteps; ++blurStep){
+						GPU::bind(bloom1, LoadOperation::DONTCARE);
+						bloomBlur->use();
+						bloomBlur->texture(bloom0, 0);
+						bloomBlur->buffer(blurInfosH, 0);
+						GPU::drawQuad();
+						GPU::bind(bloom0, LoadOperation::DONTCARE);
+						bloomBlur->use();
+						bloomBlur->texture(bloom1, 0);
+						bloomBlur->buffer(blurInfosV, 0);
+						GPU::drawQuad();
+					}
+
+				}
+
+				// Postprocesses
 				{
+					GPU::bind(sceneFog, LoadOperation::DONTCARE);
+					GPU::setViewport(sceneFog);
 					GPU::setDepthState(false);
 					GPU::setCullState(true, Faces::BACK );
 					GPU::setColorState(true, true, true, true);
-					GPU::setBlendState( false );
 					GPU::setPolygonState(PolygonMode::FILL);
+					noiseGrainQuad->use();
+					noiseGrainQuad->texture(sceneLit, 0);
+					noiseGrainQuad->texture(bloom0, 1);
+					noiseGrainQuad->texture(noiseTexture, 2);
+					noiseGrainQuad->texture(noisePulseTexture, 3);
+					noiseGrainQuad->texture(sceneHeat, 4);
+					noiseGrainQuad->texture(heatTexture, 5);
+					noiseGrainQuad->texture(waterTexture, 6);
+					noiseGrainQuad->buffer(frameInfos, 0);
+					GPU::drawQuad();
+				}
+			}
 
-					// Bloom
-					if(showPostprocess & MODE_POSTPROCESS_BLOOM){
+			// Debug view.
+			{
 
-						GPU::blit(sceneLit, bloom0, 0, 0, Filter::LINEAR);
-						GPU::setViewport(0, 0, bloom0.width, bloom0.height);
+				GPU::bind( sceneFog, sceneDepth, LoadOperation::LOAD, LoadOperation::LOAD, LoadOperation::DONTCARE );
+				GPU::setViewport( sceneFog );
 
-						for(uint blurStep = 0; blurStep < bloomBlurSteps; ++blurStep){
-							GPU::bind(bloom1, LoadOperation::DONTCARE);
-							bloomBlur->use();
-							bloomBlur->texture(bloom0, 0);
-							bloomBlur->buffer(blurInfosH, 0);
-							GPU::drawQuad();
-							GPU::bind(bloom0, LoadOperation::DONTCARE);
-							bloomBlur->use();
-							bloomBlur->texture(bloom1, 0);
-							bloomBlur->buffer(blurInfosV, 0);
-							GPU::drawQuad();
-						}
+				GPU::setPolygonState( PolygonMode::LINE );
+				GPU::setCullState( false, Faces::BACK );
+				GPU::setDepthState( true, TestFunction::GEQUAL, false );
+				GPU::setBlendState( false );
+				GPU::setColorState( true, true, true, true );
 
-					}
+				if(showDebugWireframe){
+					debugInstancedObject->use();
+					debugInstancedObject->buffer(frameInfos, 0);
+					debugInstancedObject->buffer(*scene.meshInfos, 1);
+					debugInstancedObject->buffer(*scene.instanceInfos, 2);
+					debugInstancedObject->buffer(*scene.materialInfos, 3);
+					debugInstancedObject->buffer(*drawInstances, 4);
 
-					// Postprocesses
-					{
-						GPU::bind(sceneFog, LoadOperation::DONTCARE);
-						GPU::setViewport(sceneFog);
-						GPU::setDepthState(false);
-						GPU::setCullState(true, Faces::BACK );
-						GPU::setColorState(true, true, true, true);
-						GPU::setPolygonState(PolygonMode::FILL);
-						noiseGrainQuad->use();
-						noiseGrainQuad->texture(sceneLit, 0);
-						noiseGrainQuad->texture(bloom0, 1);
-						noiseGrainQuad->texture(noiseTexture, 2);
-						noiseGrainQuad->texture(noisePulseTexture, 3);
-						noiseGrainQuad->texture(sceneHeat, 4);
-						noiseGrainQuad->texture(heatTexture, 5);
-						noiseGrainQuad->texture(waterTexture, 6);
-						noiseGrainQuad->buffer(frameInfos, 0);
-						GPU::drawQuad();
+					for(uint mid = 0; mid < scene.meshInfos->size(); ++mid){
+						GPU::drawIndirectMesh(scene.globalMesh, *drawCommands, mid);
 					}
 				}
 
-				// Debug view.
 				{
-
-					GPU::bind( sceneFog, sceneDepth, LoadOperation::LOAD, LoadOperation::LOAD, LoadOperation::DONTCARE );
-					GPU::setViewport( sceneFog );
-
-					GPU::setPolygonState( PolygonMode::LINE );
-					GPU::setCullState( false, Faces::BACK );
-					GPU::setDepthState( true, TestFunction::GEQUAL, false );
-					GPU::setBlendState( false );
-					GPU::setColorState( true, true, true, true );
-
-					if(showDebugWireframe){
-						debugInstancedObject->use();
-						debugInstancedObject->buffer(frameInfos, 0);
-						debugInstancedObject->buffer(*scene.meshInfos, 1);
-						debugInstancedObject->buffer(*scene.instanceInfos, 2);
-						debugInstancedObject->buffer(*scene.materialInfos, 3);
-						debugInstancedObject->buffer(*drawInstances, 4);
-
-						for(uint mid = 0; mid < scene.meshInfos->size(); ++mid){
-							GPU::drawIndirectMesh(scene.globalMesh, *drawCommands, mid);
-						}
-					}
-
+					coloredDebugDraw->use();
+					coloredDebugDraw->buffer( frameInfos, 0 );
+					if( ( selected.mesh >= 0 || selected.instance >= 0 ) && !boundingBox.indices.empty() )
 					{
-						coloredDebugDraw->use();
-						coloredDebugDraw->buffer( frameInfos, 0 );
-						if( ( selected.mesh >= 0 || selected.instance >= 0 ) && !boundingBox.indices.empty() )
-						{
-							GPU::drawMesh( boundingBox );
-						}
-						if( showDebugLights && !debugLights.indices.empty() )
-						{
-							GPU::drawMesh( debugLights );
-						}
-						if( showDebugZones && !debugZones.indices.empty() )
-						{
-							GPU::drawMesh( debugZones );
-						}
-						if( showDebugFxs && !debugFxs.indices.empty() )
-						{
-							GPU::drawMesh( debugFxs );
-						}
+						GPU::drawMesh( boundingBox );
+					}
+					if( showDebugLights && !debugLights.indices.empty() )
+					{
+						GPU::drawMesh( debugLights );
+					}
+					if( showDebugZones && !debugZones.indices.empty() )
+					{
+						GPU::drawMesh( debugZones );
+					}
+					if( showDebugFxs && !debugFxs.indices.empty() )
+					{
+						GPU::drawMesh( debugFxs );
 					}
 				}
 			}
+
 
 			if(Input::manager().released(Input::Mouse::Right)){
 
