@@ -514,11 +514,9 @@ int main(int argc, char ** argv) {
 	//		allocate an indirect arg buffer for the worst (total instance count) case.
 	//		But with the MoltenVk limitation, this means one drawcall per instance per
 	//		mesh, far from an indirect approach (excepts if this ends up being fixed)?
-	//	* Bug in the clustered lighting at least on MoltenVK, either a bug or a hidden
-	//		limitation somewhere? I am getting no issue on an Nvidia driver.
-	//  * Fog parameters should be applied based on each object location, not based on
-	//		the viewer location. Either cluster cull the zones, or preassign a zone ID
-	//		to each instance and store it in the gbuffer. Zones list used in fog pass.
+	//	* Bug in the light/zone clustering, for some camera angles froxels are missing
+	//      some lights/zones. Especially visible on MoltenVK, but could be compounded
+	//      with another bug or driver issue.
 
 	// First, init/parse/load configuration.
 	ViewerConfig config(std::vector<std::string>(argv, argv + argc));
@@ -572,6 +570,9 @@ int main(int argc, char ** argv) {
 
 	programPool.push_back(loadProgram("texture_passthrough", "texture_passthrough"));
 	Program* passthrough = programPool.back().program;
+
+	programPool.push_back(loadProgram("texture_passthrough", "image_passthrough"));
+	Program* passthroughImage = programPool.back().program;
 
 	programPool.push_back(loadProgram("debug/object_color", "debug/object_color"));
 	Program* coloredDebugDraw = programPool.back().program;
@@ -1898,9 +1899,13 @@ int main(int argc, char ** argv) {
 				GPU::setColorState(true, true, true, true);
 				GPU::setBlendState( true, BlendEquation::ADD, BlendFunction::ONE, BlendFunction::ONE_MINUS_SRC_ALPHA);
 				GPU::setPolygonState(PolygonMode::FILL);
-
-				passthrough->use();
-				passthrough->texture(sceneFog, 0);
+				// Can't use passthrough because its input is a texture, and the internal layout system can't reconcile
+				// a storage image used in a sampled image slot (even if creation flags are OK).
+				// This stems from handling all transitions around compute shader executions, which restores storage image to general layout
+				// and does not handle transitions just before a draw call (at the time it wasn't possible to issue a transition during
+				// a render pass, but dynamic rendering might have relaxed the constraint?).
+				passthroughImage->use();
+				passthroughImage->texture(sceneFog, 0);
 				GPU::drawQuad();
 
 			}
