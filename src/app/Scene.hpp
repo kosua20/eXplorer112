@@ -140,6 +140,8 @@ public:
 	World world;
 
 	Mesh globalMesh{"None"};
+	std::array<std::pair<uint, uint>, Object::Material::COUNT> globalMeshMaterialRanges;
+
 	Mesh billboardsMesh{"Billboards"};
 	BlendingInfos billboardRanges;
 	BlendingInfos particleRanges;

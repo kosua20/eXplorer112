@@ -45,7 +45,8 @@ struct Object {
 		static const uint NO_MATERIAL = 0xFFFF;
 		
 		enum Type : uint {
-			OPAQUE = 0u, DECAL = 1u, TRANSPARENT = 2u, LIGHT = 3u, BILLBOARD = 4u, PARTICLE = 5u
+			OPAQUE = 0u, DECAL = 1u, TRANSPARENT = 2u,
+			LIGHT = 3u, BILLBOARD = 4u, PARTICLE = 5u, COUNT = 6u
 		};
 
 		std::string color;

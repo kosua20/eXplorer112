@@ -148,20 +148,42 @@ void Scene::upload(const World& world, const GameFiles& files){
 		const size_t objectCount = world.objects().size();
 		globalMesh = Mesh(world.name());
 
-		// Estimate the number of meshes ahead, and per-object mesh range in the list.
-		size_t meshCount = 0;
-		std::vector<std::pair<size_t, size_t>> objectMeshIndicesRange;
-		objectMeshIndicesRange.reserve(objectCount);
+		// Estimate the number of meshes ahead, and per-object submeshes indices in the mesh list.
+		std::vector<std::vector<uint>> objectMeshIndicesRange;
+		objectMeshIndicesRange.resize(objectCount);
+
+		uint meshCount = 0;
+		// Find per material type count, to ensure meshes of the same type are consecutive in the list.
+		const std::vector<Object::Material>& materials = world.materials();
+		std::array<uint, Object::Material::COUNT> meshCountPerMaterial;
+		meshCountPerMaterial.fill(0u);
 
 		for(const Object& obj : world.objects()){
-			const size_t oldMeshCount = meshCount;
-			meshCount += obj.faceSets.size();
-			objectMeshIndicesRange.emplace_back(oldMeshCount, meshCount);
+			meshCount += (uint)obj.faceSets.size();
+			for(const Object::Set& set : obj.faceSets){
+				assert(set.material != Object::Material::NO_MATERIAL);
+				++meshCountPerMaterial[materials[set.material].type];
+			}
 		}
+		if(meshCount != (meshCountPerMaterial[Object::Material::OPAQUE]
+		   + meshCountPerMaterial[Object::Material::DECAL]
+		   + meshCountPerMaterial[Object::Material::TRANSPARENT])){
+			Log::warning("Unexpected material type for mesh!");
+		}
+		// Convert per type count to offsets in mesh list.
+		std::array<uint, Object::Material::COUNT> meshOffsetPerMaterial;
+		meshOffsetPerMaterial[0] = 0;
+		for(uint mid = 1; mid < (uint)Object::Material::COUNT; ++mid){
+			meshOffsetPerMaterial[mid] = meshOffsetPerMaterial[mid-1] + meshCountPerMaterial[mid-1];
+		}
+		// Save the original count and offsets for reference.
+		for(uint mid = 0; mid < (uint)Object::Material::COUNT; ++mid){
+			globalMeshMaterialRanges[mid] = { meshOffsetPerMaterial[mid], meshCountPerMaterial[mid]};
+		}
+
 		meshInfos = std::make_unique<StructuredBuffer<MeshInfos>>(meshCount, BufferType::STORAGE, "MeshInfos");
 		meshDebugInfos.resize(meshCount);
 
-		uint currentMeshId = 0;
 		for(uint oid = 0u; oid < objectCount; ++oid){
 			const uint vertexOffset = (uint)globalMesh.positions.size();
 			uint indexOffset = (uint)globalMesh.indices.size();
@@ -211,6 +233,7 @@ void Scene::upload(const World& world, const GameFiles& files){
 			uint currentSetId = 0u;
 			for(const Object::Set& set : obj.faceSets){
 
+				uint& currentMeshId = meshOffsetPerMaterial[materials[set.material].type];
 				// Populate mesh info.
 				MeshInfos& infos = (*meshInfos)[currentMeshId];
 				infos.vertexOffset = vertexOffset;
@@ -229,8 +252,10 @@ void Scene::upload(const World& world, const GameFiles& files){
 				infos.bboxMin = glm::vec4(debugInfos.bbox.minis, 1.0f);
 				infos.bboxMax = glm::vec4(debugInfos.bbox.maxis, 1.0f);
 				indexOffset += infos.indexCount;
-				++currentMeshId;
+
+				objectMeshIndicesRange[oid].push_back(currentMeshId);
 				++currentSetId;
+				++currentMeshId;
 			}
 		}
 
@@ -241,9 +266,8 @@ void Scene::upload(const World& world, const GameFiles& files){
 		for(uint iid = 0; iid < instanceCount; ++iid){
 			// From an object instance, create a set of meshes instances.
 			const World::Instance& instance = world.instances()[iid];
-			const auto meshIndicesRange = objectMeshIndicesRange[instance.object];
-
-			for(uint mid = (uint)meshIndicesRange.first; mid < ( uint )meshIndicesRange.second; ++mid){
+			const auto& meshIndicesRange = objectMeshIndicesRange[instance.object];
+			for(const size_t mid : meshIndicesRange){
 				perMeshInstanceIndices[mid].push_back(iid);
 				++totalInstancesCount;
 			}
@@ -254,7 +278,7 @@ void Scene::upload(const World& world, const GameFiles& files){
 		instanceDebugInfos.resize(totalInstancesCount);
 
 		uint currentInstanceId = 0u;
-		currentMeshId = 0u;
+		uint currentMeshId = 0u;
 		for(const auto& instanceIndices : perMeshInstanceIndices){
 			// Update the corresponding mesh infos
 			MeshInfos& infos = (*meshInfos)[currentMeshId];
@@ -263,7 +287,7 @@ void Scene::upload(const World& world, const GameFiles& files){
 
 			const MeshCPUInfos& parentDebugInfos = meshDebugInfos[currentMeshId];
 
-			// And pouplate the instance data.
+			// And populate the instance data.
 			for(const auto& iid : instanceIndices){
 				const World::Instance& instance = world.instances()[iid];
 				// Populate rendering info.
