@@ -1742,15 +1742,9 @@ int main(int argc, char ** argv) {
 						shadowInstancedObject->buffer( *scene.materialInfos, 3 );
 						shadowInstancedObject->buffer( *drawInstances, 4 );
 
-						for( uint mid = 0; mid < scene.meshInfos->size(); ++mid )
-						{
-							const uint materialIndex = ( *scene.meshInfos )[ mid ].materialIndex;
-							if( ( *scene.materialInfos )[ materialIndex ].type != Object::Material::OPAQUE )
-							{
-								continue;
-							}
-							GPU::drawIndirectMesh( scene.globalMesh, *drawCommands, mid );
-						}
+						// Render opaques, skip decals and transparent.
+						const auto& range = scene.globalMeshMaterialRanges[Object::Material::OPAQUE];
+						GPU::drawIndirectMesh(scene.globalMesh, *drawCommands, range.first, range.second);
 
 					}
 					++currentShadowMapLayer;
@@ -1800,13 +1794,8 @@ int main(int argc, char ** argv) {
 				gbufferInstancedObject->buffer(*scene.materialInfos, 3);
 				gbufferInstancedObject->buffer(*drawInstances, 4);
 
-				for(uint mid = 0; mid < scene.meshInfos->size(); ++mid){
-					const uint materialIndex = (*scene.meshInfos)[mid].materialIndex;
-					if((*scene.materialInfos)[materialIndex].type != Object::Material::OPAQUE){
-						continue;
-					}
-					GPU::drawIndirectMesh(scene.globalMesh, *drawCommands, mid);
-				}
+				const auto& range = scene.globalMeshMaterialRanges[Object::Material::OPAQUE];
+				GPU::drawIndirectMesh(scene.globalMesh, *drawCommands, range.first, range.second);
 			}
 
 			// Lighting
@@ -1848,13 +1837,9 @@ int main(int argc, char ** argv) {
 				decalInstancedObject->buffer(*scene.materialInfos, 3);
 				decalInstancedObject->buffer(*drawInstances, 4);
 
-				for(uint mid = 0; mid < scene.meshInfos->size(); ++mid){
-					const uint materialIndex = (*scene.meshInfos)[mid].materialIndex;
-					if((*scene.materialInfos)[materialIndex].type != Object::Material::DECAL){
-						continue;
-					}
-					GPU::drawIndirectMesh(scene.globalMesh, *drawCommands, mid);
-				}
+				const auto& range = scene.globalMeshMaterialRanges[Object::Material::DECAL];
+				GPU::drawIndirectMesh(scene.globalMesh, *drawCommands, range.first, range.second);
+
 			}
 
 			// First billboard and particle passes
@@ -1973,14 +1958,8 @@ int main(int argc, char ** argv) {
 				forwardInstancedObject->texture(shadowMaps, 3);
 				forwardInstancedObject->texture(fogClusters, 4);
 
-
-				for(uint mid = 0; mid < scene.meshInfos->size(); ++mid){
-					const uint materialIndex = (*scene.meshInfos)[mid].materialIndex;
-					if((*scene.materialInfos)[materialIndex].type != Object::Material::TRANSPARENT){
-						continue;
-					}
-					GPU::drawIndirectMesh(scene.globalMesh, *drawCommands, mid);
-				}
+				const auto& range = scene.globalMeshMaterialRanges[Object::Material::TRANSPARENT];
+				GPU::drawIndirectMesh(scene.globalMesh, *drawCommands, range.first, range.second);
 			}
 
 			// Postprocess stack
@@ -2052,10 +2031,8 @@ int main(int argc, char ** argv) {
 					debugInstancedObject->buffer(*scene.instanceInfos, 2);
 					debugInstancedObject->buffer(*scene.materialInfos, 3);
 					debugInstancedObject->buffer(*drawInstances, 4);
-
-					for(uint mid = 0; mid < scene.meshInfos->size(); ++mid){
-						GPU::drawIndirectMesh(scene.globalMesh, *drawCommands, mid);
-					}
+					// Always draw all meshes.
+					GPU::drawIndirectMesh(scene.globalMesh, *drawCommands, 0, scene.meshInfos->size());
 				}
 
 				{
@@ -2110,10 +2087,8 @@ int main(int argc, char ** argv) {
 						selectionObject->buffer(*scene.instanceInfos, 2);
 						selectionObject->buffer(*scene.materialInfos, 3);
 						selectionObject->buffer(*drawInstances, 4);
-
-						for(uint mid = 0; mid < scene.meshInfos->size(); ++mid){
-							GPU::drawIndirectMesh(scene.globalMesh, *drawCommands, mid);
-						}
+						// Draw all meshes.
+						GPU::drawIndirectMesh(scene.globalMesh, *drawCommands, 0, scene.meshInfos->size());
 					}
 
 					const glm::vec2 texSize(selectionColor.width, selectionColor.height);
