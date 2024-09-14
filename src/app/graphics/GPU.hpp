@@ -229,7 +229,9 @@ public:
 		uint32_t firstInstance = 0;
 	};
 
-	static void drawIndirectMesh(const Mesh& mesh, const Buffer& args, uint argIndex);
+	static void drawIndirectMesh(const Mesh & mesh, const Buffer& args, uint first, uint count);
+
+	static void drawIndirectMesh(const Mesh& mesh, const Buffer& args, uint index);
 
 	/** Draw tessellated geometry.
 	 \param mesh the mesh to tessellate and render
