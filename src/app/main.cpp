@@ -145,6 +145,7 @@ struct FrameData {
 	glm::uvec4 clustersSize{1u}; // tile size in w
 	glm::vec4 clustersParams{0.0f};
 
+	uint meshCount = 0;
 	// Selection data.
 	int selectedMesh = -1;
 	int selectedInstance= -1;
@@ -1643,6 +1644,7 @@ int main(int argc, char ** argv) {
 
 		frameInfos[0].lightsCount = uint(scene.world.lights().size());
 		frameInfos[0].zonesCount = uint(scene.world.zones().size());
+		frameInfos[0].meshCount = uint(scene.meshInfos->size());
 		frameInfos[0].clustersSize = glm::uvec4(lightClusters.width, lightClusters.height, lightClusters.depth, clusterDims.x);
 		const float logRatio = float(clusterDims.y) / std::log(nearFar.y / nearFar.x);
 		frameInfos[0].clustersParams = glm::vec4(logRatio, std::log(nearFar.x) * logRatio, 0.0f, 0.0f);

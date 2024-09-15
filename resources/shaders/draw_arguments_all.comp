@@ -1,7 +1,7 @@
 
 #include "engine/engine.glsl"
 
-layout(local_size_x=1, local_size_y=1, local_size_z=1) in;
+layout(local_size_x=32, local_size_y=1, local_size_z=1) in;
 
 layout(std140, set = 0, binding = 1) readonly buffer MeshesInfos {
 	MeshInfos meshInfos[];
@@ -49,6 +49,8 @@ bool intersects(vec4 corners[8], vec4 planes[6]){
 void main(){
 
 	uint mid = gl_GlobalInvocationID.x;
+	if(mid >= engine.meshCount)
+		return;
 
 	MeshInfos infos = meshInfos[mid];
 	vec4 corners[8];

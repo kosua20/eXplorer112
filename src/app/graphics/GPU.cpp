@@ -1446,7 +1446,7 @@ void GPU::drawIndirectMesh(const Mesh & mesh, const Buffer& args, uint first, ui
 	}
 
 	const Program::State& progState = _state.graphicsProgram->getState();
-	assert(argIndex < args.sizeInBytes() / sizeof(DrawCommand));
+	assert(first + count <= args.sizeInBytes() / sizeof(DrawCommand));
 
 	// MoltenVK doesn't support gl_DrawID but we want to use it to index in a global mesh infos array.
 	// To solve this, we execute each draw command separately and we expose our own draw index using push constants.

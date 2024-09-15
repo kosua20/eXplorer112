@@ -32,6 +32,7 @@ layout(set = 0, binding = 0) uniform EngineData {
 	uvec4 clustersSize; // w, h, d, tile size in w
 	vec4  clustersParams;
 
+	uint meshCount;
 	// Selection data.
 	int selectedMesh;
 	int selectedInstance;
