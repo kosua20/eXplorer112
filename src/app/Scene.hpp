@@ -133,7 +133,9 @@ private:
 		std::vector<uint> textures;
 	};
 
-	void upload(const World& world, const GameFiles& files);
+	void generate(const World& world, const GameFiles& files);
+	
+	void upload();
 
 	uint retrieveTexture(const std::string& textureName, const GameFiles& files, std::vector<Texture>& textures2D) const;
 	

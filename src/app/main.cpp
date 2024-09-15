@@ -217,194 +217,6 @@ void reload(ProgramInfos& infos){
 
 }
 
-void addLightGizmo(Mesh& mesh, const World::Light& light){
-	static const uint circeSubdivs = 64;
-	static const float arrowScale = 80.0f;
-
-	// Generate angles if not already done.
-	static std::vector<glm::vec2> coordinates;
-	if(coordinates.size() != circeSubdivs){
-		coordinates.resize(circeSubdivs);
-		for(uint a = 0u; a < circeSubdivs; ++a){
-			const float angle = (float)a / (float)(circeSubdivs-1) * 360.0f / 180.0f * glm::pi<float>();
-			coordinates[a][0] = std::cos(angle);
-			coordinates[a][1] = std::sin(angle);
-		}
-	}
-
-	const uint firstVertexIndex = ( uint )mesh.positions.size();
-
-	// Always generate a small cross.
-	for(uint i = 0; i < 3; ++i){
-		const uint iIndex = ( uint )mesh.positions.size();
-		glm::vec3 offset(0.0f);
-		offset[i] = 10.0f;
-		mesh.positions.push_back(-offset);
-		mesh.positions.push_back( offset);
-		mesh.indices.push_back(iIndex );
-		mesh.indices.push_back(iIndex + 1);
-		mesh.indices.push_back(iIndex );
-	}
-
-	switch(light.type){
-		case World::Light::DIRECTIONAL:
-		{
-			// Arrow.
-			const uint iIndex = ( uint )mesh.positions.size();
-			const float arrowEdgesLength = 0.8f * arrowScale;
-			const float arrowEdgesSpread = 0.2f * arrowScale;
-			mesh.positions.emplace_back(0.0f, 0.0f, arrowScale);
-			mesh.positions.emplace_back(0.0f, 0.0f, 0.0f);
-			mesh.positions.emplace_back( arrowEdgesSpread, 0.0f, arrowEdgesLength);
-			mesh.positions.emplace_back(-arrowEdgesSpread, 0.0f, arrowEdgesLength);
-			mesh.positions.emplace_back(0.0f,  arrowEdgesSpread, arrowEdgesLength);
-			mesh.positions.emplace_back(0.0f, -arrowEdgesSpread, arrowEdgesLength);
-			for(uint i = 1; i < 6; ++i){
-				mesh.indices.push_back(iIndex);
-				mesh.indices.push_back(iIndex + i);
-				mesh.indices.push_back(iIndex);
-			}
-			break;
-		}
-		case World::Light::SPOT:
-		{
-			// Cone
-			const uint iIndex = ( uint )mesh.positions.size();
-			mesh.positions.emplace_back(0.0f, 0.0f, 0.0f);
-			mesh.positions.emplace_back(-light.radius.x, -light.radius.y, light.radius.z);
-			mesh.positions.emplace_back( light.radius.x, -light.radius.y, light.radius.z);
-			mesh.positions.emplace_back( light.radius.x,  light.radius.y, light.radius.z);
-			mesh.positions.emplace_back(-light.radius.x,  light.radius.y, light.radius.z);
-
-			for(uint i = 1; i < 5; ++i){
-				mesh.indices.push_back(iIndex);
-				mesh.indices.push_back(iIndex + i);
-				mesh.indices.push_back(iIndex);
-			}
-			for(uint i = 1; i < 5; ++i){
-				const uint iNext = i == 4 ? 1 : (i+1);
-				mesh.indices.push_back(iIndex + i);
-				mesh.indices.push_back(iIndex + iNext);
-				mesh.indices.push_back(iIndex + i);
-			}
-			break;
-		}
-		case World::Light::POINT:
-		{
-			// Three circles of radius 1, along the three axis.
-			const uint totalVertCount = 3 * circeSubdivs;
-			mesh.positions.reserve(mesh.positions.size() + (size_t)totalVertCount);
-			mesh.indices.reserve(mesh.indices.size() + 3 * (size_t)totalVertCount);
-
-			for(int i = 0; i < 3; ++i){
-				const uint xIndex = (i + 1) % 3;
-				const uint yIndex = (i + 2) % 3;
-				const uint iIndex = (uint)mesh.positions.size();
-				for(uint a = 0u; a < circeSubdivs; ++a){
-					glm::vec3& p = mesh.positions.emplace_back(0.0f);
-					p[xIndex] = coordinates[a][0] * light.radius[xIndex];
-					p[yIndex] = coordinates[a][1] * light.radius[yIndex];
-
-					// Degenerate triangle for line rendering.
-					if(a != 0){
-						mesh.indices.push_back(iIndex + a);
-						mesh.indices.push_back(iIndex + a - 1);
-						mesh.indices.push_back(iIndex + a);
-					}
-				}
-			}
-			break;
-		}
-		default:
-			break;
-	}
-
-	// Fill colors.
-	const uint vertexFinalCount = ( uint )mesh.positions.size() - firstVertexIndex;
-	mesh.colors.insert(mesh.colors.end(), vertexFinalCount, light.color);
-	// Apply light frame.
-	for(uint i = 0; i < vertexFinalCount; ++i){
-		glm::vec3& p = mesh.positions[firstVertexIndex + i];
-		p = glm::vec3(light.frame * glm::vec4(p, 1.0f));
-	}
-}
-
-void addEmitterGizmo(Mesh& mesh, const World::Emitter& fx){
-
-	const uint firstVertexIndex = ( uint )mesh.positions.size();
-	// Always generate a small cross.
-	for(uint i = 0; i < 3; ++i){
-		const uint iIndex = ( uint )mesh.positions.size();
-		glm::vec3 offset(0.0f);
-		offset[(i+1)%3] = 10.0f;
-		offset[(i+2)%3] = 10.0f;
-		mesh.positions.push_back(-offset);
-		mesh.positions.push_back( offset);
-		mesh.indices.push_back(iIndex );
-		mesh.indices.push_back(iIndex + 1);
-		mesh.indices.push_back(iIndex );
-	}
-
-	// Add box.
-	const auto& corners = fx.bbox.getCorners();
-	const uint indexShift = ( uint )mesh.positions.size();
-	mesh.positions.insert( mesh.positions.end(), corners.begin(), corners .end());
-	for( const uint ind : boxIndices ){
-		mesh.indices.push_back( indexShift + ind );
-	}
-
-	// Fill colors.
-	const uint vertexFinalCount = ( uint )mesh.positions.size() - firstVertexIndex;
-	const glm::vec3 color = 0.5f * (fx.colorMin + fx.colorMax);
-	mesh.colors.insert(mesh.colors.end(), vertexFinalCount, glm::vec3(color));
-	// Apply frame.
-	for(uint i = 0; i < vertexFinalCount; ++i){
-		glm::vec3& p = mesh.positions[firstVertexIndex + i];
-		p = glm::vec3(fx.frame * glm::vec4(p, 1.0f));
-	}
-}
-void addBillboardGizmo( Mesh& mesh, const World::Billboard& fx )
-{
-
-	const uint firstVertexIndex = (uint)mesh.positions.size();
-	// Generate a quad.
-	const glm::vec3 c00 = glm::vec3( -0.5f * fx.size, 0.f);
-	const glm::vec3 c11 = glm::vec3(  0.5f * fx.size, 0.f);
-	const glm::vec3 c01 = glm::vec3( c00.x, c11.y, 0.f );
-	const glm::vec3 c10 = glm::vec3( c11.x, c00.y, 0.f );
-
-	mesh.positions.push_back( c00 );
-	mesh.positions.push_back( c01 );
-	mesh.positions.push_back( c11 );
-	mesh.positions.push_back( c10 );
-	
-	mesh.indices.push_back( firstVertexIndex + 0 );
-	mesh.indices.push_back( firstVertexIndex + 1 );
-	mesh.indices.push_back( firstVertexIndex + 0 );
-
-	mesh.indices.push_back( firstVertexIndex + 1 );
-	mesh.indices.push_back( firstVertexIndex + 2 );
-	mesh.indices.push_back( firstVertexIndex + 1 );
-
-	mesh.indices.push_back( firstVertexIndex + 2 );
-	mesh.indices.push_back( firstVertexIndex + 3 );
-	mesh.indices.push_back( firstVertexIndex + 2 );
-
-	mesh.indices.push_back( firstVertexIndex + 3 );
-	mesh.indices.push_back( firstVertexIndex + 0 );
-	mesh.indices.push_back( firstVertexIndex + 3 );
-
-	// Fill colors.
-	const uint vertexFinalCount = ( uint )mesh.positions.size() - firstVertexIndex;
-	mesh.colors.insert( mesh.colors.end(), vertexFinalCount, fx.color );
-	// Apply frame.
-	for( uint i = 0; i < vertexFinalCount; ++i )
-	{
-		glm::vec3& p = mesh.positions[ firstVertexIndex + i ];
-		p = glm::vec3( fx.frame * glm::vec4( p, 1.0f ) );
-	}
-}
-
 
 void adjustCameraToBoundingBox(ControllableCamera& camera, const BoundingBox& bbox){
 	// Center the camera.
@@ -446,6 +258,18 @@ void deselect(FrameData& _frame, SelectionState& _state, SelectionFilter _filter
 
 }
 
+struct EngineTextures {
+	Texture white{"whiteMap"};
+	Texture black{"blackMap"};
+	Texture noisePulse{ "noisePulseMap"};
+	Texture fogXY{"fogXYMap"};
+	Texture fogZ{"fogZMap"};
+	Texture noise{ "noiseMap" };
+	Texture water{ "waterMap" };
+	Texture bg{ "backgroundMap" };
+	Texture heat{"heatLookup"};
+};
+
 void loadTextureFromImage(const fs::path& path, Texture& dstTexture){
 	dstTexture.clean();
 	Image& img = dstTexture.images.emplace_back();
@@ -458,58 +282,476 @@ void loadTextureFromImage(const fs::path& path, Texture& dstTexture){
 	dstTexture.upload(Layout::RGBA8, false);
 }
 
-void loadEngineTextures(const GameFiles& gameFiles, Texture& fogXYTexture, Texture& fogZTexture, Texture& noiseTexture, Texture& noisePulseTexture, Texture& waterTexture, Texture& bgTexture, Texture& heatTexture){
+void loadEngineTextures(const GameFiles& gameFiles, EngineTextures& textures){
 	if(gameFiles.texturesPath.empty()){
 		return;
 	}
 
-	loadTextureFromImage(gameFiles.texturesPath / "commons" / "fog_xy.png", fogXYTexture);
-	loadTextureFromImage(gameFiles.texturesPath / "commons" / "fog_z.png", fogZTexture);
-	loadTextureFromImage(gameFiles.texturesPath / "commons" / "noise.tga", noiseTexture);
-	loadTextureFromImage(gameFiles.texturesPath / "ui" / "background.tga", bgTexture);
-	loadTextureFromImage( gameFiles.texturesPath / "commons" / "heat.png", heatTexture );
+	loadTextureFromImage(gameFiles.texturesPath / "commons" / "fog_xy.png", textures.fogXY);
+	loadTextureFromImage(gameFiles.texturesPath / "commons" / "fog_z.png", textures.fogZ);
+	loadTextureFromImage(gameFiles.texturesPath / "commons" / "noise.tga", textures.noise);
+	loadTextureFromImage(gameFiles.texturesPath / "ui" / "background.tga", textures.bg);
+	loadTextureFromImage( gameFiles.texturesPath / "commons" / "heat.png", textures.heat);
 	// Texture array
 	{
-		noisePulseTexture.clean();
+		textures.noisePulse.clean();
 		for( uint i = 0; i < 3; ++i )
 		{
 			const std::string name = "pulsenoise_" + std::to_string( i ) + ".tga";
-			Image& img = noisePulseTexture.images.emplace_back();
+			Image& img = textures.noisePulse.images.emplace_back();
 			img.load( gameFiles.texturesPath / "caustics" / name );
 		}
-		noisePulseTexture.width = noisePulseTexture.images[0].width;
-		noisePulseTexture.height = noisePulseTexture.images[ 0 ].height;
-		noisePulseTexture.levels = 1;
-		noisePulseTexture.depth = ( uint )noisePulseTexture.images.size();
-		noisePulseTexture.shape = TextureShape::Array2D;
-		noisePulseTexture.upload( Layout::RGBA8, false );
+		textures.noisePulse.width = textures.noisePulse.images[0].width;
+		textures.noisePulse.height = textures.noisePulse.images[ 0 ].height;
+		textures.noisePulse.levels = 1;
+		textures.noisePulse.depth = ( uint )textures.noisePulse.images.size();
+		textures.noisePulse.shape = TextureShape::Array2D;
+		textures.noisePulse.upload( Layout::RGBA8, false );
 	}
 	// 3D texture (hack)
 	{
 		const fs::path path = gameFiles.texturesPath / "commons" / "noisevolume.dds";
-		waterTexture.clean();
+		textures.water.clean();
 		uint layer = 0;
 		while( true )
 		{
-			Image& img = waterTexture.images.emplace_back();
+			Image& img = textures.water.images.emplace_back();
 			if( !img.load( path, layer ) )
 			{
 				// We reached the last slice.
-				waterTexture.images.pop_back();
+				textures.water.images.pop_back();
 				break;
 			}
 			++layer;
 		}
 		
-		waterTexture.width = waterTexture.images[ 0 ].width;
-		waterTexture.height = waterTexture.images[ 0 ].height;
-		waterTexture.levels = 1;
-		waterTexture.depth = ( uint )waterTexture.images.size();
-		waterTexture.shape = TextureShape::D3;
-		waterTexture.upload( Layout::R8, false );
+		textures.water.width = textures.water.images[ 0 ].width;
+		textures.water.height = textures.water.images[ 0 ].height;
+		textures.water.levels = 1;
+		textures.water.depth = ( uint )textures.water.images.size();
+		textures.water.shape = TextureShape::D3;
+		textures.water.upload( Layout::R8, false );
+	}
+
+	{
+		Image& imgWhite = textures.white.images.emplace_back(4, 4, 4, 255);
+		textures.white.width = imgWhite.width;
+		textures.white.height = imgWhite.height;
+		textures.white.shape = TextureShape::D2;
+		textures.white.depth = 1;
+		textures.white.levels = 1;
+		textures.white.upload(Layout::RGBA8, false);
+
+		Image& imgBlack = textures.black.images.emplace_back(4, 4, 4, 0);
+		textures.black.width = imgBlack.width;
+		textures.black.height = imgBlack.height;
+		textures.black.shape = TextureShape::D2;
+		textures.black.depth = 1;
+		textures.black.levels = 1;
+		textures.black.upload(Layout::RGBA8, false);
 	}
 }
 
+
+struct DebugVisualisation {
+
+   Mesh boundingBox{"bbox"};
+   Mesh lights{"lights"};
+   Mesh zones{"zones"};
+   Mesh fxs{"fxs"};
+
+   bool showWireframe = false;
+   bool showLights = false;
+   bool showFxs = false;
+   bool showZones = false;
+
+   int shadingMode = MODE_SHADING_LIGHT;
+   int albedoMode = MODE_ALBEDO_TEXTURE;
+
+   bool freezeCulling = false;
+
+#ifdef DEBUG_UI
+	int textureLayerIndex = 0;
+	int textureMipIndex = 0;
+#endif
+
+	bool anyActive() const {
+		return showWireframe || showLights || showFxs || showZones;
+	}
+
+	void addLightGizmo(Mesh& mesh, const World::Light& light){
+		 static const uint circeSubdivs = 64;
+		 static const float arrowScale = 80.0f;
+
+		 // Generate angles if not already done.
+		 static std::vector<glm::vec2> coordinates;
+		 if(coordinates.size() != circeSubdivs){
+			 coordinates.resize(circeSubdivs);
+			 for(uint a = 0u; a < circeSubdivs; ++a){
+				 const float angle = (float)a / (float)(circeSubdivs-1) * 360.0f / 180.0f * glm::pi<float>();
+				 coordinates[a][0] = std::cos(angle);
+				 coordinates[a][1] = std::sin(angle);
+			 }
+		 }
+
+		 const uint firstVertexIndex = ( uint )mesh.positions.size();
+
+		 // Always generate a small cross.
+		 for(uint i = 0; i < 3; ++i){
+			 const uint iIndex = ( uint )mesh.positions.size();
+			 glm::vec3 offset(0.0f);
+			 offset[i] = 10.0f;
+			 mesh.positions.push_back(-offset);
+			 mesh.positions.push_back( offset);
+			 mesh.indices.push_back(iIndex );
+			 mesh.indices.push_back(iIndex + 1);
+			 mesh.indices.push_back(iIndex );
+		 }
+
+		 switch(light.type){
+			 case World::Light::DIRECTIONAL:
+			 {
+				 // Arrow.
+				 const uint iIndex = ( uint )mesh.positions.size();
+				 const float arrowEdgesLength = 0.8f * arrowScale;
+				 const float arrowEdgesSpread = 0.2f * arrowScale;
+				 mesh.positions.emplace_back(0.0f, 0.0f, arrowScale);
+				 mesh.positions.emplace_back(0.0f, 0.0f, 0.0f);
+				 mesh.positions.emplace_back( arrowEdgesSpread, 0.0f, arrowEdgesLength);
+				 mesh.positions.emplace_back(-arrowEdgesSpread, 0.0f, arrowEdgesLength);
+				 mesh.positions.emplace_back(0.0f,  arrowEdgesSpread, arrowEdgesLength);
+				 mesh.positions.emplace_back(0.0f, -arrowEdgesSpread, arrowEdgesLength);
+				 for(uint i = 1; i < 6; ++i){
+					 mesh.indices.push_back(iIndex);
+					 mesh.indices.push_back(iIndex + i);
+					 mesh.indices.push_back(iIndex);
+				 }
+				 break;
+			 }
+			 case World::Light::SPOT:
+			 {
+				 // Cone
+				 const uint iIndex = ( uint )mesh.positions.size();
+				 mesh.positions.emplace_back(0.0f, 0.0f, 0.0f);
+				 mesh.positions.emplace_back(-light.radius.x, -light.radius.y, light.radius.z);
+				 mesh.positions.emplace_back( light.radius.x, -light.radius.y, light.radius.z);
+				 mesh.positions.emplace_back( light.radius.x,  light.radius.y, light.radius.z);
+				 mesh.positions.emplace_back(-light.radius.x,  light.radius.y, light.radius.z);
+
+				 for(uint i = 1; i < 5; ++i){
+					 mesh.indices.push_back(iIndex);
+					 mesh.indices.push_back(iIndex + i);
+					 mesh.indices.push_back(iIndex);
+				 }
+				 for(uint i = 1; i < 5; ++i){
+					 const uint iNext = i == 4 ? 1 : (i+1);
+					 mesh.indices.push_back(iIndex + i);
+					 mesh.indices.push_back(iIndex + iNext);
+					 mesh.indices.push_back(iIndex + i);
+				 }
+				 break;
+			 }
+			 case World::Light::POINT:
+			 {
+				 // Three circles of radius 1, along the three axis.
+				 const uint totalVertCount = 3 * circeSubdivs;
+				 mesh.positions.reserve(mesh.positions.size() + (size_t)totalVertCount);
+				 mesh.indices.reserve(mesh.indices.size() + 3 * (size_t)totalVertCount);
+
+				 for(int i = 0; i < 3; ++i){
+					 const uint xIndex = (i + 1) % 3;
+					 const uint yIndex = (i + 2) % 3;
+					 const uint iIndex = (uint)mesh.positions.size();
+					 for(uint a = 0u; a < circeSubdivs; ++a){
+						 glm::vec3& p = mesh.positions.emplace_back(0.0f);
+						 p[xIndex] = coordinates[a][0] * light.radius[xIndex];
+						 p[yIndex] = coordinates[a][1] * light.radius[yIndex];
+
+						 // Degenerate triangle for line rendering.
+						 if(a != 0){
+							 mesh.indices.push_back(iIndex + a);
+							 mesh.indices.push_back(iIndex + a - 1);
+							 mesh.indices.push_back(iIndex + a);
+						 }
+					 }
+				 }
+				 break;
+			 }
+			 default:
+				 break;
+		 }
+
+		 // Fill colors.
+		 const uint vertexFinalCount = ( uint )mesh.positions.size() - firstVertexIndex;
+		 mesh.colors.insert(mesh.colors.end(), vertexFinalCount, light.color);
+		 // Apply light frame.
+		 for(uint i = 0; i < vertexFinalCount; ++i){
+			 glm::vec3& p = mesh.positions[firstVertexIndex + i];
+			 p = glm::vec3(light.frame * glm::vec4(p, 1.0f));
+		 }
+	}
+
+	void addEmitterGizmo(Mesh& mesh, const World::Emitter& fx){
+
+		 const uint firstVertexIndex = ( uint )mesh.positions.size();
+		 // Always generate a small cross.
+		 for(uint i = 0; i < 3; ++i){
+			 const uint iIndex = ( uint )mesh.positions.size();
+			 glm::vec3 offset(0.0f);
+			 offset[(i+1)%3] = 10.0f;
+			 offset[(i+2)%3] = 10.0f;
+			 mesh.positions.push_back(-offset);
+			 mesh.positions.push_back( offset);
+			 mesh.indices.push_back(iIndex );
+			 mesh.indices.push_back(iIndex + 1);
+			 mesh.indices.push_back(iIndex );
+		 }
+
+		 // Add box.
+		 const auto& corners = fx.bbox.getCorners();
+		 const uint indexShift = ( uint )mesh.positions.size();
+		 mesh.positions.insert( mesh.positions.end(), corners.begin(), corners .end());
+		 for( const uint ind : boxIndices ){
+			 mesh.indices.push_back( indexShift + ind );
+		 }
+
+		 // Fill colors.
+		 const uint vertexFinalCount = ( uint )mesh.positions.size() - firstVertexIndex;
+		 const glm::vec3 color = 0.5f * (fx.colorMin + fx.colorMax);
+		 mesh.colors.insert(mesh.colors.end(), vertexFinalCount, glm::vec3(color));
+		 // Apply frame.
+		 for(uint i = 0; i < vertexFinalCount; ++i){
+			 glm::vec3& p = mesh.positions[firstVertexIndex + i];
+			 p = glm::vec3(fx.frame * glm::vec4(p, 1.0f));
+		 }
+	}
+
+	void addBillboardGizmo( Mesh& mesh, const World::Billboard& fx )
+	{
+		 const uint firstVertexIndex = (uint)mesh.positions.size();
+		 // Generate a quad.
+		 const glm::vec3 c00 = glm::vec3( -0.5f * fx.size, 0.f);
+		 const glm::vec3 c11 = glm::vec3(  0.5f * fx.size, 0.f);
+		 const glm::vec3 c01 = glm::vec3( c00.x, c11.y, 0.f );
+		 const glm::vec3 c10 = glm::vec3( c11.x, c00.y, 0.f );
+
+		 mesh.positions.push_back( c00 );
+		 mesh.positions.push_back( c01 );
+		 mesh.positions.push_back( c11 );
+		 mesh.positions.push_back( c10 );
+
+		 mesh.indices.push_back( firstVertexIndex + 0 );
+		 mesh.indices.push_back( firstVertexIndex + 1 );
+		 mesh.indices.push_back( firstVertexIndex + 0 );
+
+		 mesh.indices.push_back( firstVertexIndex + 1 );
+		 mesh.indices.push_back( firstVertexIndex + 2 );
+		 mesh.indices.push_back( firstVertexIndex + 1 );
+
+		 mesh.indices.push_back( firstVertexIndex + 2 );
+		 mesh.indices.push_back( firstVertexIndex + 3 );
+		 mesh.indices.push_back( firstVertexIndex + 2 );
+
+		 mesh.indices.push_back( firstVertexIndex + 3 );
+		 mesh.indices.push_back( firstVertexIndex + 0 );
+		 mesh.indices.push_back( firstVertexIndex + 3 );
+
+		 // Fill colors.
+		 const uint vertexFinalCount = ( uint )mesh.positions.size() - firstVertexIndex;
+		 mesh.colors.insert( mesh.colors.end(), vertexFinalCount, fx.color );
+		 // Apply frame.
+		 for( uint i = 0; i < vertexFinalCount; ++i )
+		 {
+			 glm::vec3& p = mesh.positions[ firstVertexIndex + i ];
+			 p = glm::vec3( fx.frame * glm::vec4( p, 1.0f ) );
+		 }
+	}
+
+	void addZoneGizmo( Mesh& mesh, const World::Zone& zone )
+	{
+		const uint indexShift = ( uint )mesh.positions.size();
+		// Build box.
+		const auto corners = zone.bbox.getCorners();
+		const std::vector<glm::vec3> colors( corners.size(), 3.0f * zone.ambientColor );
+		mesh.positions.insert( mesh.positions.end(), corners.begin(), corners.end() );
+		mesh.colors.insert( mesh.colors.end(), colors.begin(), colors.end() );
+		// Setup degenerate triangles for each line of a octahedron.
+		for( const uint ind : boxIndices )
+		{
+			mesh.indices.push_back( indexShift + ind );
+		}
+	}
+
+	void buildGizmos(const Scene& scene){
+		lights.clean();
+		zones.clean();
+		fxs.clean();
+
+		// Build light debug visualisation.
+		if( !scene.world.lights().empty() ){
+			for( const World::Light& light : scene.world.lights() ){
+				addLightGizmo( lights, light );
+			}
+			lights.upload();
+		}
+		if( !scene.world.particles().empty() || !scene.world.billboards().empty() ){
+			for( const World::Emitter& fx : scene.world.particles() ){
+				addEmitterGizmo( fxs, fx );
+			}
+			for( const World::Billboard& fx : scene.world.billboards() ){
+				addBillboardGizmo( fxs, fx );
+			}
+			fxs.upload();
+		}
+		// Build zones debug visualisation.
+		if( !scene.world.zones().empty() )	{
+			for( const World::Zone& zone : scene.world.zones() ){
+				addZoneGizmo(zones, zone);
+			}
+			zones.upload();
+		}
+	}
+
+	void buildBoundingBoxes(const std::vector<BoundingBox>& bboxes){
+		boundingBox.clean();
+		// Generate a mesh with bounding boxes of all instances.
+		for(const BoundingBox& bbox : bboxes){
+			const uint indexShift = (uint)boundingBox.positions.size();
+			const auto corners = bbox.getCorners();
+			boundingBox.positions.insert(boundingBox.positions.end(), corners.begin(), corners.end());
+			// Setup degenerate triangles for each line of a cube.
+			for(const uint ind : boxIndices){
+				boundingBox.indices.push_back(indexShift + ind);
+			}
+		}
+		boundingBox.colors.resize(boundingBox.positions.size(), glm::vec3(1.0f, 0.0f, 0.0f));
+		boundingBox.upload();
+	}
+};
+
+struct ShadowGeneration {
+
+	Texture maps{"ShadowMaps"};
+	UniformBuffer<FrameData> shadowInfos{1, 2, "ShadowInfos"};
+
+	std::unique_ptr<Buffer> drawCommands = nullptr;
+	std::unique_ptr<Buffer> drawInstances = nullptr;
+
+    uint currentLight = 0u;
+    uint currentLightFace = 0u;
+    uint currentMapLayer = 0u;
+    bool rendering = false;
+
+	Program* drawArgsCompute = nullptr;
+	Program* shadowInstancedObject = nullptr;
+
+	void setup(const Scene& scene){
+		uint shadowCount = 0u;
+		uint shadowcasterCount = 0u;
+		for( const World::Light& light : scene.world.lights() ){
+			if( light.shadow ){
+				shadowCount += ( light.type == World::Light::POINT ? 6u : 1u );
+				++shadowcasterCount;
+			}
+		}
+		shadowCount = std::max( shadowCount, 1u );
+		maps.resize( maps.width, maps.height, shadowCount );
+
+		currentLight = 0u;
+		currentMapLayer = 0u;
+		currentLightFace = 0u;
+
+		const Scene::MeshRange& opaqueRange = scene.globalMeshMaterialRanges[Object::Material::OPAQUE];
+		drawCommands = std::make_unique<Buffer>( opaqueRange.count * sizeof( GPU::DrawCommand ), BufferType::INDIRECT, "ShadowDrawCommands" );
+		drawInstances = std::make_unique<Buffer>( opaqueRange.instanceCount * sizeof( uint ), BufferType::STORAGE, "ShadowDrawInstances" );
+	}
+
+	void renderMapIfNeeded(const Scene& scene){
+		rendering = false;
+		uint lightsCount = (uint)scene.world.lights().size();
+		if(currentLight >= lightsCount || currentMapLayer >= maps.depth){
+			return;
+		}
+
+		// As long as we have a light left to process and enough room in the texture array.
+		const glm::mat4 pointViews[6] = {
+			glm::lookAt(glm::vec3(0.0f), glm::vec3(-1.0f,0.0f,0.0f), glm::vec3(0.0f, 1.0f, 0.0f)),
+			glm::lookAt(glm::vec3(0.0f), glm::vec3( 1.0f,0.0f,0.0f), glm::vec3(0.0f, 1.0f, 0.0f)),
+			glm::lookAt(glm::vec3(0.0f), glm::vec3(0.0f,-1.0f,0.0f), glm::vec3(0.0f, 0.0f, 1.0f)),
+			glm::lookAt(glm::vec3(0.0f), glm::vec3(0.0f, 1.0f,0.0f), glm::vec3(0.0f, 0.0f, 1.0f)),
+			glm::lookAt(glm::vec3(0.0f), glm::vec3(0.0f,0.0f,-1.0f), glm::vec3(0.0f, 1.0f, 0.0f)),
+			glm::lookAt(glm::vec3(0.0f), glm::vec3(0.0f,0.0f, 1.0f), glm::vec3(0.0f, 1.0f, 0.0f)),
+		};
+
+		// Find the next light and face to render.
+		uint currentLightFaceCount = scene.world.lights()[currentLight].type == World::Light::POINT ? 6u : 1u;
+		if(currentLightFace >= currentLightFaceCount){
+			// Look at following lights
+			++currentLight;
+			currentLightFace = 0u;
+			// Until we find a shadow casting one.
+			for(; currentLight < lightsCount; ++currentLight){
+				if(scene.world.lights()[currentLight].shadow){
+					break;
+				}
+			}
+		}
+		// None.
+		if(currentLight >= lightsCount){
+			return;
+		}
+
+		const Scene::LightInfos& infos = ( *scene.lightInfos )[ currentLight ];
+		const bool isPointLight = scene.world.lights()[ currentLight ].type == World::Light::POINT;
+		uint layerId = currentLightFace;
+
+		// Shadow map projection
+		glm::mat4 vp = infos.vp;
+		if( isPointLight ){
+			vp = infos.vp * glm::translate(pointViews[layerId], -glm::vec3(infos.positionAndMaxRadius));
+		}
+
+		// Render opaques, skip decals and transparent.
+		const auto& range = scene.globalMeshMaterialRanges[Object::Material::OPAQUE];
+		shadowInfos[ 0 ].vp = vp;
+		shadowInfos[ 0 ].vpCulling = vp;
+		shadowInfos[ 0 ].skipCulling = 0;
+		shadowInfos[ 0 ].meshCount = range.count;
+		shadowInfos.upload();
+
+		// Draw commands for the shadow maps.
+		drawArgsCompute->use();
+		drawArgsCompute->buffer( shadowInfos, 0 );
+		drawArgsCompute->buffer( *scene.meshInfos, 1 );
+		drawArgsCompute->buffer( *scene.instanceInfos, 2 );
+		drawArgsCompute->buffer( *drawCommands, 3 );
+		drawArgsCompute->buffer( *drawInstances, 4 );
+
+		GPU::dispatch( range.count, 1, 1 );
+
+		GPU::bindFramebuffer( currentMapLayer, 0, 0.0f, LoadOperation::DONTCARE, LoadOperation::DONTCARE, &maps, nullptr, nullptr, nullptr, nullptr );
+		GPU::setViewport( maps );
+
+		GPU::setPolygonState( PolygonMode::FILL );
+		GPU::setCullState( false );
+		GPU::setDepthState( true, TestFunction::GEQUAL, true );
+		GPU::setBlendState( false );
+		GPU::setColorState( false, false, false, false );
+
+		shadowInstancedObject->use();
+		shadowInstancedObject->buffer( shadowInfos, 0 );
+		shadowInstancedObject->buffer( *scene.meshInfos, 1 );
+		shadowInstancedObject->buffer( *scene.instanceInfos, 2 );
+		shadowInstancedObject->buffer( *scene.materialInfos, 3 );
+		shadowInstancedObject->buffer( *drawInstances, 4 );
+
+		GPU::drawIndirectMesh(scene.globalMesh, *drawCommands, range.firstIndex, range.count);
+
+		++currentMapLayer;
+		++currentLightFace;
+		rendering = true;
+	}
+};
 
 uint roundUp(float a, uint step){
 	return (int)std::floor(a - 1.f) / int(step) + 1;
@@ -630,7 +872,6 @@ int main(int argc, char ** argv) {
 	Program* lightingCompute = programPool.back().program;
 
 	UniformBuffer<FrameData> frameInfos(1, 64, "FrameInfos");
-	UniformBuffer<FrameData> shadowInfos(1, 2, "ShadowInfos");
 	UniformBuffer<TransparentFrameData> transparentInfos(1, 2, "TransparentInfos");
 	UniformBuffer<glm::vec2> blurInfosV(1, 2, "BlurInfosV");
 	UniformBuffer<glm::vec2> blurInfosH(1, 2, "BlurInfosH");
@@ -667,9 +908,6 @@ int main(int argc, char ** argv) {
 	Texture selectionColor("selection");
 	Texture::setupRendertarget(selectionColor, Layout::RG8, renderRes[0], renderRes[1]);
 
-	Texture shadowMaps("shadowMaps");
-	Texture::setupRendertarget(shadowMaps, Layout::DEPTH_COMPONENT32F, 512, 512, 1, TextureShape::Array2D, 16);
-
 	glm::ivec2 clusterDims(CLUSTER_XY_SIZE, CLUSTER_Z_COUNT);
 
 	Texture lightClusters("lightClusters");
@@ -690,29 +928,45 @@ int main(int argc, char ** argv) {
 
 	std::unique_ptr<Buffer> drawCommands = nullptr;
 	std::unique_ptr<Buffer> drawInstances = nullptr;
-
 	std::unique_ptr<Buffer> transparentDrawInstances = nullptr;
 	std::unique_ptr<Buffer> transparentDrawCommands = nullptr;
 
 	Buffer transparentCounter(sizeof(uint32_t), BufferType::STORAGE, "TransparentCounter");
 
+
+	auto resizeRenderTargets = [&](const glm::vec2& renderRes){
+		sceneColor.resize(renderRes);
+		sceneNormal.resize(renderRes);
+		sceneDepth.resize(renderRes);
+		sceneHeat.resize(renderRes);
+		sceneLit.resize(renderRes);
+		sceneFog.resize(renderRes);
+		bloom0.resize(glm::uvec2(renderRes)/2u);
+		bloom1.resize(glm::uvec2(renderRes)/2u);
+		lightClusters.resize(roundUp(renderRes[0], clusterDims.x), roundUp(renderRes[1], clusterDims.x), clusterDims.y);
+		fogClusters.resize(lightClusters.width, lightClusters.height, lightClusters.depth);
+		camera.ratio(renderRes[0]/renderRes[1]);
+	};
+
+
+	SelectionState selected;
+	DebugVisualisation debug;
+
+	ShadowGeneration shadow;
+	Texture::setupRendertarget(shadow.maps, Layout::DEPTH_COMPONENT32F, 512, 512, 1, TextureShape::Array2D, 16);
+	shadow.drawArgsCompute = drawArgsCompute;
+	shadow.shadowInstancedObject = shadowInstancedObject;
+
 	// Data storage.
 	Scene scene;
 
 	// GUi state
-	Mesh boundingBox("bbox");
-	Mesh debugLights("lights");
-	Mesh debugZones("zones");
-	Mesh debugFxs("fxs");
 	enum class ViewerMode {
 		MODEL, AREA, WORLD
 	};
 	ViewerMode viewMode = ViewerMode::MODEL;
 	float zoomPct = 100.f;
 	glm::vec2 centerPct(50.f, 50.0f);
-	int shadingMode = MODE_SHADING_LIGHT;
-	int albedoMode = MODE_ALBEDO_TEXTURE;
-	SelectionState selected;
 
 	bool showOpaques = true;
 	bool showTransparents = false;
@@ -720,59 +974,14 @@ int main(int argc, char ** argv) {
 	bool showBillboards = true;
 	bool showParticles = true;
 	bool showFog = true;
-
 	uint showPostprocess = 0u;
 
-	bool freezeCulling = false;
-
-	bool showDebugWireframe = false;
-	bool showDebugLights = false;
-	bool showDebugFxs = false;
-	bool showDebugZones = false;
-	bool renderingShadow = false;
-
-	uint currentShadowcastingLight = 0u;
-	uint currentShadowMapLayer = 0u;
-	uint currentShadowcastingLightFace = 0u;
-
-
-	Texture whiteTexture("whiteMap");
-	Texture blackTexture("blackMap");
-	{
-		Image& imgWhite = whiteTexture.images.emplace_back(4, 4, 4, 255);
-		whiteTexture.width = imgWhite.width;
-		whiteTexture.height = imgWhite.height;
-		whiteTexture.shape = TextureShape::D2;
-		whiteTexture.depth = 1;
-		whiteTexture.levels = 1;
-		whiteTexture.upload(Layout::RGBA8, false);
-
-		Image& imgBlack = blackTexture.images.emplace_back(4, 4, 4, 0);
-		blackTexture.width = imgBlack.width;
-		blackTexture.height = imgBlack.height;
-		blackTexture.shape = TextureShape::D2;
-		blackTexture.depth = 1;
-		blackTexture.levels = 1;
-		blackTexture.upload(Layout::RGBA8, false);
-	}
-
-	Texture noisePulseTexture( "noisePulseMap" );
-	Texture fogXYTexture("fogXYMap");
-	Texture fogZTexture("fogZMap");
-	Texture noiseTexture( "noiseMap" );
-	Texture waterTexture( "waterMap" );
-	Texture bgTexture( "backgroundMap" );
-	Texture heatTexture("heatLookup");
-	loadEngineTextures(gameFiles, fogXYTexture, fogZTexture, noiseTexture, noisePulseTexture, waterTexture, bgTexture, heatTexture);
+	EngineTextures textures;
+	loadEngineTextures(gameFiles, textures);
 
 	deselect( frameInfos[ 0 ], selected, SelectionFilter::ALL );
 
 	uint64_t frameIndex = 0;
-#ifdef DEBUG_UI
-	bool showDemoWindow = false;
-	int debugTextureLayerIndex = 0;
-	int debugTextureMipIndex = 0;
-#endif
 	bool updateInstanceBoundingBox = false;
 	bool scrollToItem = false;
 
@@ -788,19 +997,7 @@ int main(int argc, char ** argv) {
 		transparentDrawInstances = std::make_unique<Buffer>( transparentRange.instanceCount * sizeof( TransparentInstanceInfos ), BufferType::STORAGE, "DrawTransparentInstances" );
 		transparentDrawCommands = std::make_unique<Buffer>( transparentRange.instanceCount * sizeof( GPU::DrawCommand ), BufferType::INDIRECT, "DrawTransparentCommands" );
 
-		uint shadowCount = 0u;
-		currentShadowcastingLight = 0u;
-		currentShadowMapLayer = 0u;
-		currentShadowcastingLightFace = 0u;
-		uint shadowcasterCount = 0u;
-		for( const World::Light& light : scene.world.lights() ){
-			if( light.shadow ){
-				shadowCount += ( light.type == World::Light::POINT ? 6u : 1u );
-				++shadowcasterCount;
-			}
-		}
-		shadowCount = std::max( shadowCount, 1u );
-		shadowMaps.resize( shadowMaps.width, shadowMaps.height, shadowCount );
+		shadow.setup(scene);
 
 		// Center camera
 		if( scene.world.cameras().empty() )
@@ -820,52 +1017,15 @@ int main(int argc, char ** argv) {
 		}
 		deselect( frameInfos[ 0 ], selected, ( SelectionFilter )( OBJECT | TEXTURE ) );
 
-		debugLights.clean();
-		debugZones.clean();
-		debugFxs.clean();
+		debug.buildGizmos(scene);
 
-		// Build light debug visualisation.
-		if( !scene.world.lights().empty() ){
-			for( const World::Light& light : scene.world.lights() ){
-				addLightGizmo( debugLights, light );
-			}
-			debugLights.upload();
-		}
-		if( !scene.world.particles().empty() || !scene.world.billboards().empty() ){
-			for( const World::Emitter& fx : scene.world.particles() ){
-				addEmitterGizmo( debugFxs, fx );
-			}
-			for( const World::Billboard& fx : scene.world.billboards() ){
-				addBillboardGizmo( debugFxs, fx );
-			}
-			debugFxs.upload();
-		}
-		// Build zones debug visualisation.
-		if( !scene.world.zones().empty() )	{
-			for( const World::Zone& zone : scene.world.zones() ){
-				const uint indexShift = ( uint )debugZones.positions.size();
-				// Build box.
-				const auto corners = zone.bbox.getCorners();
-				const std::vector<glm::vec3> colors( corners.size(), 3.0f * zone.ambientColor );
-				debugZones.positions.insert( debugZones.positions.end(), corners.begin(), corners.end() );
-				debugZones.colors.insert( debugZones.colors.end(), colors.begin(), colors.end() );
-				// Setup degenerate triangles for each line of a octahedron.
-				for( const uint ind : boxIndices )
-				{
-					debugZones.indices.push_back( indexShift + ind );
-				}
-
-			}
-			debugZones.upload();
-		}
-
-		Log::info("Loaded world %s with %u meshes, %u materials, %u instances (%u opaque, %u transparent, %u decals), %u lights (%u shadow casting), %u cameras, %u zones, %u emitters, %u billboards",
+		Log::info("Loaded world %s with %u meshes, %u materials, %u instances (%u opaque, %u transparent, %u decals), %u lights, %u cameras, %u zones, %u emitters, %u billboards",
 				  scene.world.name().c_str(),
 				  scene.meshInfos->size(), scene.materialInfos->size(), scene.instanceInfos->size(),
 				  scene.globalMeshMaterialRanges[Object::Material::OPAQUE].instanceCount,
 				  scene.globalMeshMaterialRanges[Object::Material::TRANSPARENT].instanceCount,
 				  scene.globalMeshMaterialRanges[Object::Material::DECAL].instanceCount,
-				  scene.lightInfos->size(), shadowcasterCount, scene.world.cameras().size(), scene.world.zones().size(),
+				  scene.lightInfos->size(), scene.world.cameras().size(), scene.world.zones().size(),
 				  scene.world.particles().size(), scene.world.billboards().size());
 	};
 
@@ -929,7 +1089,6 @@ int main(int argc, char ** argv) {
 			remainingTime -= deltaTime;
 		}
 
-
 		ImGui::DockSpaceOverViewport(nullptr, ImGuiDockNodeFlags_PassthruCentralNode);
 
 		const ImGuiTableFlags tableFlags = ImGuiTableFlags_ScrollY | ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersOuter | ImGuiTableFlags_BordersV | ImGuiTableFlags_Resizable;
@@ -943,7 +1102,7 @@ int main(int argc, char ** argv) {
 					fs::path newInstallPath;
 					if(Window::showDirectoryPicker(fs::path(""), newInstallPath)){
 						gameFiles = GameFiles( newInstallPath);
-						loadEngineTextures(gameFiles, fogXYTexture, fogZTexture, noiseTexture, noisePulseTexture, waterTexture, bgTexture, heatTexture);
+						loadEngineTextures(gameFiles, textures);
 						scene = Scene();
 						deselect(frameInfos[0], selected, SelectionFilter::ALL);
 					}
@@ -963,9 +1122,6 @@ int main(int argc, char ** argv) {
 				if(ImGui::MenuItem("Vsync", nullptr, config.vsync)){
 					window.perform(Window::Action::Vsync);
 				}
-#ifdef DEBUG
-				ImGui::MenuItem("Show ImGui demo", nullptr, &showDemoWindow);
-#endif
 
 				ImGui::EndMenu();
 			}
@@ -1063,7 +1219,7 @@ int main(int argc, char ** argv) {
 				ImGui::SameLine();
 				if(ImGui::SmallButton("Deselect")){
 					deselect(frameInfos[0], selected, OBJECT);
-					boundingBox.clean();
+					debug.boundingBox.clean();
 				}
 
 				ImVec2 winSize = ImGui::GetContentRegionAvail();
@@ -1109,24 +1265,14 @@ int main(int argc, char ** argv) {
 										selected.mesh = row;
 										frameInfos[0].selectedMesh = row;
 
-										boundingBox.clean();
-
-										// Generate a mesh with bounding boxes of all instances.
+										std::vector<BoundingBox> bboxes(meshInfos.instanceCount);
 										for(uint iid = 0u; iid < meshInfos.instanceCount; ++iid){
 											const Scene::InstanceCPUInfos& debugInfos = scene.instanceDebugInfos[meshInfos.firstInstanceIndex + iid];
-											const auto corners = debugInfos.bbox.getCorners();
-											const uint indexShift = (uint)boundingBox.positions.size();
-											boundingBox.positions.insert(boundingBox.positions.end(), corners.begin(), corners.end());
-											// Setup degenerate triangles for each line of a cube.
-											for(const uint ind : boxIndices){
-												boundingBox.indices.push_back(indexShift + ind);
-											}
-
+											bboxes[iid] = debugInfos.bbox;
 										}
-										boundingBox.colors.resize(boundingBox.positions.size(), glm::vec3(1.0f, 0.0f, 0.0f));
-										boundingBox.upload();
+										debug.buildBoundingBoxes(bboxes);
 										deselect(frameInfos[0], selected, INSTANCE);
-										adjustCameraToBoundingBox(camera, boundingBox.computeBoundingBox());
+										adjustCameraToBoundingBox(camera, debug.boundingBox.computeBoundingBox());
 									}
 								}
 								if(scrollToItem && (selected.mesh == row)){
@@ -1469,17 +1615,8 @@ int main(int argc, char ** argv) {
 				glm::vec2 renderRes = (glm::vec2(w, h) / config.resolutionRatio) * newRatio;
 
 				config.resolutionRatio = newRatio;
-				sceneColor.resize(renderRes);
-				sceneNormal.resize(renderRes);
-				sceneDepth.resize(renderRes);
-				sceneHeat.resize(renderRes);
-				sceneLit.resize(renderRes);
-				sceneFog.resize(renderRes);
-				bloom0.resize(glm::uvec2(renderRes)/2u );
-				bloom1.resize(glm::uvec2(renderRes)/2u );
-				lightClusters.resize(roundUp(renderRes[0], clusterDims.x), roundUp(renderRes[1], clusterDims.x), clusterDims.y);
-				fogClusters.resize(lightClusters.width, lightClusters.height, lightClusters.depth);
-				camera.ratio(renderRes[0]/renderRes[1]);
+				resizeRenderTargets(renderRes);
+
 			}
 			if(ImGui::SliderInt2("Cluster params", &clusterDims[0], 2, 128)){
 				lightClusters.resize(roundUp(sceneLit.width, clusterDims.x), roundUp(sceneLit.height, clusterDims.x), clusterDims.y);
@@ -1487,13 +1624,13 @@ int main(int argc, char ** argv) {
 			}
 
 			ImGui::Text("Shading"); ImGui::SameLine();
-			ImGui::RadioButton("None", &shadingMode, MODE_SHADING_NONE); ImGui::SameLine();
-			ImGui::RadioButton("Light", &shadingMode, MODE_SHADING_LIGHT);
+			ImGui::RadioButton("None", &debug.shadingMode, MODE_SHADING_NONE); ImGui::SameLine();
+			ImGui::RadioButton("Light", &debug.shadingMode, MODE_SHADING_LIGHT);
 
 			ImGui::Text("Albedo"); ImGui::SameLine();
-			ImGui::RadioButton("Color", &albedoMode, MODE_ALBEDO_UNIFORM); ImGui::SameLine();
-			ImGui::RadioButton("Normal", &albedoMode, MODE_ALBEDO_NORMAL); ImGui::SameLine();
-			ImGui::RadioButton("Texture", &albedoMode, MODE_ALBEDO_TEXTURE);
+			ImGui::RadioButton("Color", &debug.albedoMode, MODE_ALBEDO_UNIFORM); ImGui::SameLine();
+			ImGui::RadioButton("Normal", &debug.albedoMode, MODE_ALBEDO_NORMAL); ImGui::SameLine();
+			ImGui::RadioButton("Texture", &debug.albedoMode, MODE_ALBEDO_TEXTURE);
 
 			if(ImGui::ArrowButton("VisibilityArrow", ImGuiDir_Down)){
 				ImGui::OpenPopup("visibilityPopup");
@@ -1534,16 +1671,16 @@ int main(int argc, char ** argv) {
 			}
 			if( ImGui::BeginPopup( "DebugPopup" ) )
 			{
-				ImGui::Checkbox( "Objects", &showDebugWireframe );
-				ImGui::Checkbox( "Lights", &showDebugLights );
-				ImGui::Checkbox( "Zones", &showDebugZones );
-				ImGui::Checkbox( "FXs", &showDebugFxs );
+				ImGui::Checkbox( "Objects", &debug.showWireframe );
+				ImGui::Checkbox( "Lights", &debug.showLights );
+				ImGui::Checkbox( "Zones", &debug.showZones );
+				ImGui::Checkbox( "FXs", &debug.showFxs );
 				ImGui::EndPopup();
 			}
 			ImGui::SameLine();
 			ImGui::Text( "Debug" );
 
-			ImGui::Checkbox("Freeze culling", &freezeCulling);
+			ImGui::Checkbox("Freeze culling", &debug.freezeCulling);
 			ImGui::SameLine();
 			if(ImGui::Button("Reset camera")){
 				camera.reset();
@@ -1589,27 +1726,17 @@ int main(int argc, char ** argv) {
 			// \todo Derive a more robust threshold.
 			if(std::abs(ratioWin - ratioCurr) > 0.01f){
 				const glm::vec2 renderRes = config.resolutionRatio * glm::vec2(winSize.x, winSize.y);
-				sceneColor.resize(renderRes);
-				sceneNormal.resize(renderRes);
-				sceneDepth.resize(renderRes);
-				sceneHeat.resize(renderRes);
-				sceneLit.resize(renderRes);
-				sceneFog.resize(renderRes);
-				bloom0.resize(glm::uvec2(renderRes)/2u);
-				bloom1.resize(glm::uvec2(renderRes)/2u);
-				lightClusters.resize(roundUp(renderRes[0], clusterDims.x), roundUp(renderRes[1], clusterDims.x), clusterDims.y);
-				fogClusters.resize(lightClusters.width, lightClusters.height, lightClusters.depth);
-				camera.ratio(renderRes[0]/renderRes[1]);
+				resizeRenderTargets(renderRes);
 			}
 		}
 		ImGui::End();
 		ImGui::PopStyleColor(6);
 
-		if(renderingShadow ){
+		if(shadow.rendering ){
 			if( ImGui::Begin( "Work in progress", nullptr, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse ) ) {
 				ImGui::Text( "Generating shadows..." );
-				std::string currProg = std::to_string( currentShadowMapLayer + 1 ) + "/" + std::to_string( shadowMaps.depth );
-				ImGui::ProgressBar( ( float )( currentShadowMapLayer + 1 ) / ( float )shadowMaps.depth, ImVec2( -1.0f, 0.0f ), currProg.c_str() );
+				std::string currProg = std::to_string( shadow.currentMapLayer + 1 ) + "/" + std::to_string( shadow.maps.depth );
+				ImGui::ProgressBar( ( float )( shadow.currentMapLayer + 1 ) / ( float )shadow.maps.depth, ImVec2( -1.0f, 0.0f ), currProg.c_str() );
 			}
 			ImGui::End();
 		}
@@ -1619,171 +1746,81 @@ int main(int argc, char ** argv) {
 
 			Texture& tex = sceneHeat;
 			ImGui::PushItemWidth(220);
-			if(ImGui::SliderInt("Layer", &debugTextureLayerIndex, 0, tex.depth-1)){
-				debugTextureLayerIndex = glm::clamp(debugTextureLayerIndex, 0, (int)tex.depth-1);
+			if(ImGui::SliderInt("Layer", &debug.textureLayerIndex, 0, tex.depth-1)){
+				debug.textureLayerIndex = glm::clamp(debug.textureLayerIndex, 0, (int)tex.depth-1);
 			}
 			ImGui::SameLine();
-			if(ImGui::SliderInt("Mip", &debugTextureMipIndex, 0, tex.levels-1)){
-				debugTextureMipIndex = glm::clamp(debugTextureMipIndex, 0, (int)tex.levels-1);
+			if(ImGui::SliderInt("Mip", &debug.textureMipIndex, 0, tex.levels-1)){
+				debug.textureMipIndex = glm::clamp(debug.textureMipIndex, 0, (int)tex.levels-1);
 			}
 			ImGui::PopItemWidth();
 			// Adjust the texture display to the window size.
 			ImVec2 winSize = ImGui::GetContentRegionAvail();
 			winSize.x = std::max(winSize.x, 2.f);
 			winSize.y = std::max(winSize.y, 2.f);
-			ImGui::ImageButton(tex, debugTextureMipIndex, debugTextureLayerIndex, ImVec2(winSize.x, winSize.y), ImVec2(0.0,0.0), ImVec2(1.0,1.0), 0);
+			ImGui::ImageButton(tex, debug.textureMipIndex, debug.textureLayerIndex, ImVec2(winSize.x, winSize.y), ImVec2(0.0,0.0), ImVec2(1.0,1.0), 0);
 		}
 		ImGui::End();
-		
-		if(showDemoWindow){
-			ImGui::ShowDemoWindow();
-		}
 #endif
 		/// Rendering
 
-		// Camera.
-		const glm::mat4 vp		   = camera.projection() * camera.view();
-		frameInfos[0].v = camera.view();
-		frameInfos[0].p = camera.projection();
-		frameInfos[0].vp = vp;
-		// Only update the culling VP if needed.
-		if(!freezeCulling){
-			frameInfos[0].vpCulling = vp;
+		// Fill frame infos
+		{
+			// Camera.
+			const glm::mat4 vp = camera.projection() * camera.view();
+			frameInfos[0].v = camera.view();
+			frameInfos[0].p = camera.projection();
+			frameInfos[0].vp = vp;
+			// Only update the culling VP if needed.
+			if(!debug.freezeCulling){
+				frameInfos[0].vpCulling = vp;
+			}
+			frameInfos[0].iv = glm::inverse(frameInfos[0].v);
+			frameInfos[0].ip = glm::inverse(frameInfos[0].p);
+			frameInfos[0].nvp = glm::transpose(glm::inverse(frameInfos[0].vp));
+			frameInfos[0].resolution = glm::vec4(sceneLit.width, sceneLit.height, 0u, 0u);
+
+			frameInfos[0].showFog = showFog ? 1u : 0u;
+
+			frameInfos[0].color = glm::vec4(1.0f);
+			frameInfos[0].camPos = glm::vec4(camera.position(), 1.0f);
+			const glm::vec2 nearFar = camera.clippingPlanes();
+			frameInfos[0].camPlanes = glm::vec4(nearFar.x, nearFar.y / nearFar.x,
+												(nearFar.y - nearFar.x)/(nearFar.x*nearFar.y),
+												1.0f/nearFar.y );
+
+			frameInfos[0].albedoMode = debug.albedoMode;
+			frameInfos[0].shadingMode = debug.shadingMode;
+			frameInfos[0].postprocessMode = showPostprocess;
+
+			frameInfos[0].randomX = glm::linearRand( 0.f, 1.0f );
+			frameInfos[0].randomY = glm::linearRand( 0.f, 1.0f );
+			frameInfos[0].randomZ = glm::linearRand( 0.f, 1.0f );
+			frameInfos[0].randomW = glm::linearRand( 0.f, 1.0f );
+
+			frameInfos[0].lightsCount = uint(scene.world.lights().size());
+			frameInfos[0].zonesCount = uint(scene.world.zones().size());
+			frameInfos[0].meshCount = uint(scene.meshInfos->size());
+			frameInfos[0].clustersSize = glm::uvec4(lightClusters.width, lightClusters.height, lightClusters.depth, clusterDims.x);
+			const float logRatio = float(clusterDims.y) / std::log(nearFar.y / nearFar.x);
+			frameInfos[0].clustersParams = glm::vec4(logRatio, std::log(nearFar.x) * logRatio, 0.0f, 0.0f);
+			frameInfos[0].frameIndex = (uint)(frameIndex % UINT32_MAX);
+
+			frameInfos.upload();
+
+			// Scale calibrated on existing frame.
+			const float scaling = 1.8f * sceneLit.width / 720.0f;
+			blurInfosH[0] = scaling * glm::vec2(1.0f/(float)bloom0.width, 0.0f);
+			blurInfosV[0] = scaling * glm::vec2(0.0f, 1.0f/(float)bloom0.height);
+
+			blurInfosH.upload();
+			blurInfosV.upload();
 		}
-		frameInfos[0].iv = glm::inverse(frameInfos[0].v);
-		frameInfos[0].ip = glm::inverse(frameInfos[0].p);
-		frameInfos[0].nvp = glm::transpose(glm::inverse(frameInfos[0].vp));
-		frameInfos[0].resolution = glm::vec4(sceneLit.width, sceneLit.height, 0u, 0u);
-
-		frameInfos[0].showFog = showFog ? 1u : 0u;
-
-		frameInfos[0].color = glm::vec4(1.0f);
-		frameInfos[0].camPos = glm::vec4(camera.position(), 1.0f);
-		const glm::vec2 nearFar = camera.clippingPlanes();
-		frameInfos[0].camPlanes = glm::vec4(nearFar.x, nearFar.y / nearFar.x,
-											(nearFar.y - nearFar.x)/(nearFar.x*nearFar.y),
-											1.0f/nearFar.y );
-
-		frameInfos[0].albedoMode = albedoMode;
-		frameInfos[0].shadingMode = shadingMode;
-		frameInfos[0].postprocessMode = showPostprocess;
-
-		frameInfos[0].randomX = glm::linearRand( 0.f, 1.0f );
-		frameInfos[0].randomY = glm::linearRand( 0.f, 1.0f );
-		frameInfos[0].randomZ = glm::linearRand( 0.f, 1.0f );
-		frameInfos[0].randomW = glm::linearRand( 0.f, 1.0f );
-
-		frameInfos[0].lightsCount = uint(scene.world.lights().size());
-		frameInfos[0].zonesCount = uint(scene.world.zones().size());
-		frameInfos[0].meshCount = uint(scene.meshInfos->size());
-		frameInfos[0].clustersSize = glm::uvec4(lightClusters.width, lightClusters.height, lightClusters.depth, clusterDims.x);
-		const float logRatio = float(clusterDims.y) / std::log(nearFar.y / nearFar.x);
-		frameInfos[0].clustersParams = glm::vec4(logRatio, std::log(nearFar.x) * logRatio, 0.0f, 0.0f);
-		frameInfos[0].frameIndex = (uint)(frameIndex % UINT32_MAX);
-
-		frameInfos.upload();
-
-		const auto& transparentRange = scene.globalMeshMaterialRanges[Object::Material::TRANSPARENT];
-		transparentInfos[0].firstMesh = transparentRange.firstIndex;
-		transparentInfos[0].meshCount = transparentRange.count;
-		transparentInfos[0].instanceCount = transparentRange.instanceCount;
-		transparentInfos.upload();
-
-		// Scale calibrated on existing frame.
-		const float scaling = 1.8f * sceneLit.width / 720.0f;
-		blurInfosH[0] = scaling * glm::vec2(1.0f/(float)bloom0.width, 0.0f);
-		blurInfosV[0] = scaling * glm::vec2(0.0f, 1.0f/(float)bloom0.height);
-
-		blurInfosH.upload();
-		blurInfosV.upload();
 
 		if(selected.item >= 0){
 
 			// Bruteforce shadow map once per frame.
-			const uint lightsCount = ( uint )scene.world.lights().size();
-
-			renderingShadow = false;
-			// As long as we have a light left to process and enough room in the texture array.
-			if(currentShadowcastingLight < lightsCount && currentShadowMapLayer < shadowMaps.depth){
-				
-				const glm::mat4 pointViews[6] = {
-					glm::lookAt(glm::vec3(0.0f), glm::vec3(-1.0f,0.0f,0.0f), glm::vec3(0.0f, 1.0f, 0.0f)),
-					glm::lookAt(glm::vec3(0.0f), glm::vec3( 1.0f,0.0f,0.0f), glm::vec3(0.0f, 1.0f, 0.0f)),
-					glm::lookAt(glm::vec3(0.0f), glm::vec3(0.0f,-1.0f,0.0f), glm::vec3(0.0f, 0.0f, 1.0f)),
-					glm::lookAt(glm::vec3(0.0f), glm::vec3(0.0f, 1.0f,0.0f), glm::vec3(0.0f, 0.0f, 1.0f)),
-					glm::lookAt(glm::vec3(0.0f), glm::vec3(0.0f,0.0f,-1.0f), glm::vec3(0.0f, 1.0f, 0.0f)),
-					glm::lookAt(glm::vec3(0.0f), glm::vec3(0.0f,0.0f, 1.0f), glm::vec3(0.0f, 1.0f, 0.0f)),
-				};
-
-				// Are we done with the current light?
-				uint currentLightFaceCount = scene.world.lights()[currentShadowcastingLight].type == World::Light::POINT ? 6u : 1u;
-				if(currentShadowcastingLightFace >= currentLightFaceCount){
-					// Look at following lights
-					++currentShadowcastingLight;
-					currentShadowcastingLightFace = 0u;
-					// Until we find a shadow casting one.
-					for(; currentShadowcastingLight < lightsCount; ++currentShadowcastingLight){
-						if(scene.world.lights()[currentShadowcastingLight].shadow){
-							break;
-						}
-					}
-				}
-
-				if( currentShadowcastingLight < lightsCount )
-				{
-					const Scene::LightInfos& infos = ( *scene.lightInfos )[ currentShadowcastingLight ];
-
-					const bool isPointLight = scene.world.lights()[ currentShadowcastingLight ].type == World::Light::POINT;
-					uint layerId = currentShadowcastingLightFace;
-
-					{
-						// Shadow map projection
-						glm::mat4 vp = infos.vp;
-						if( isPointLight ){
-							vp = infos.vp * glm::translate(pointViews[layerId], -glm::vec3(infos.positionAndMaxRadius));
-						}
-						shadowInfos[ 0 ].vp = vp;
-						shadowInfos[ 0 ].vpCulling = vp;
-						shadowInfos[ 0 ].skipCulling = 0;
-						shadowInfos.upload();
-
-						// Render opaques, skip decals and transparent.
-						const auto& range = scene.globalMeshMaterialRanges[Object::Material::OPAQUE];
-						// Draw commands for the shadow maps.
-						drawArgsCompute->use();
-						drawArgsCompute->buffer( shadowInfos, 0 );
-						drawArgsCompute->buffer( *scene.meshInfos, 1 );
-						drawArgsCompute->buffer( *scene.instanceInfos, 2 );
-						drawArgsCompute->buffer( *drawCommands, 3 );
-						drawArgsCompute->buffer( *drawInstances, 4 );
-
-						GPU::dispatch( range.count, 1, 1 );
-
-						GPU::bindFramebuffer( currentShadowMapLayer, 0, 0.0f, LoadOperation::DONTCARE, LoadOperation::DONTCARE, &shadowMaps, nullptr, nullptr, nullptr, nullptr );
-						GPU::setViewport( shadowMaps );
-
-						GPU::setPolygonState( PolygonMode::FILL );
-						GPU::setCullState( false );
-						GPU::setDepthState( true, TestFunction::GEQUAL, true );
-						GPU::setBlendState( false );
-						GPU::setColorState( false, false, false, false );
-
-						shadowInstancedObject->use();
-						shadowInstancedObject->buffer( shadowInfos, 0 );
-						shadowInstancedObject->buffer( *scene.meshInfos, 1 );
-						shadowInstancedObject->buffer( *scene.instanceInfos, 2 );
-						shadowInstancedObject->buffer( *scene.materialInfos, 3 );
-						shadowInstancedObject->buffer( *drawInstances, 4 );
-
-						GPU::drawIndirectMesh(scene.globalMesh, *drawCommands, range.firstIndex, range.count);
-
-					}
-					++currentShadowMapLayer;
-					++currentShadowcastingLightFace;
-					renderingShadow = true;
-				}
-				
-			}
+			shadow.renderMapIfNeeded(scene );
 
 			// Culling and clustering.
 			{
@@ -1799,6 +1836,13 @@ int main(int argc, char ** argv) {
 				// For transparent objects, we'll have to generate a draw call per instance.
 				// TODO: also sort them back to front.
 				if(showTransparents){
+
+					const auto& transparentRange = scene.globalMeshMaterialRanges[Object::Material::TRANSPARENT];
+					transparentInfos[0].firstMesh = transparentRange.firstIndex;
+					transparentInfos[0].meshCount = transparentRange.count;
+					transparentInfos[0].instanceCount = transparentRange.instanceCount;
+					transparentInfos.upload();
+
 					// Better safe than sorry for now.
 					clearBufferCompute->use();
 					clearBufferCompute->buffer(transparentCounter, 1);
@@ -1873,10 +1917,10 @@ int main(int argc, char ** argv) {
 				lightingCompute->texture(sceneLit, 3);
 				lightingCompute->texture(sceneFog, 4);
 				lightingCompute->texture(lightClusters, 5);
-				lightingCompute->texture(shadowMaps, 6);
+				lightingCompute->texture(shadow.maps, 6);
 				lightingCompute->texture(fogClusters, 7);
-				lightingCompute->texture(fogXYTexture, 8);
-				lightingCompute->texture(fogZTexture, 9);
+				lightingCompute->texture(textures.fogXY, 8);
+				lightingCompute->texture(textures.fogZ, 9);
 
 				GPU::dispatch( sceneLit.width, sceneLit.height, 1u);
 			}
@@ -2013,10 +2057,10 @@ int main(int argc, char ** argv) {
 				forwardInstancedObject->buffer(*transparentDrawInstances, 4);
 				forwardInstancedObject->buffer(*scene.lightInfos, 5);
 				forwardInstancedObject->buffer(*scene.zoneInfos, 6);
-				forwardInstancedObject->texture(fogXYTexture, 0);
-				forwardInstancedObject->texture(fogZTexture, 1);
+				forwardInstancedObject->texture(textures.fogXY, 0);
+				forwardInstancedObject->texture(textures.fogZ, 1);
 				forwardInstancedObject->texture(lightClusters, 2);
-				forwardInstancedObject->texture(shadowMaps, 3);
+				forwardInstancedObject->texture(shadow.maps, 3);
 				forwardInstancedObject->texture(fogClusters, 4);
 
 				const auto& range = scene.globalMeshMaterialRanges[Object::Material::TRANSPARENT];
@@ -2063,18 +2107,18 @@ int main(int argc, char ** argv) {
 					noiseGrainQuad->use();
 					noiseGrainQuad->texture(sceneLit, 0);
 					noiseGrainQuad->texture(bloom0, 1);
-					noiseGrainQuad->texture(noiseTexture, 2);
-					noiseGrainQuad->texture(noisePulseTexture, 3);
+					noiseGrainQuad->texture(textures.noise, 2);
+					noiseGrainQuad->texture(textures.noisePulse, 3);
 					noiseGrainQuad->texture(sceneHeat, 4);
-					noiseGrainQuad->texture(heatTexture, 5);
-					noiseGrainQuad->texture(waterTexture, 6);
+					noiseGrainQuad->texture(textures.heat, 5);
+					noiseGrainQuad->texture(textures.water, 6);
 					noiseGrainQuad->buffer(frameInfos, 0);
 					GPU::drawQuad();
 				}
 			}
 
 			// Debug view.
-			{
+			if(debug.anyActive()){
 
 				GPU::bind( sceneFog, sceneDepth, LoadOperation::LOAD, LoadOperation::LOAD, LoadOperation::DONTCARE );
 				GPU::setViewport( sceneFog );
@@ -2085,7 +2129,7 @@ int main(int argc, char ** argv) {
 				GPU::setBlendState( false );
 				GPU::setColorState( true, true, true, true );
 
-				if(showDebugWireframe){
+				if(debug.showWireframe){
 					debugInstancedObject->use();
 					debugInstancedObject->buffer(frameInfos, 0);
 					debugInstancedObject->buffer(*scene.meshInfos, 1);
@@ -2094,27 +2138,26 @@ int main(int argc, char ** argv) {
 					debugInstancedObject->buffer(*drawInstances, 4);
 					// Always draw all meshes.
 					GPU::drawIndirectMesh(scene.globalMesh, *drawCommands, 0, scene.meshInfos->size());
+					// FIXME: hides other debug draws when activated.
 				}
 
+				coloredDebugDraw->use();
+				coloredDebugDraw->buffer( frameInfos, 0 );
+				if( ( selected.mesh >= 0 || selected.instance >= 0 ) && !debug.boundingBox.indices.empty() )
 				{
-					coloredDebugDraw->use();
-					coloredDebugDraw->buffer( frameInfos, 0 );
-					if( ( selected.mesh >= 0 || selected.instance >= 0 ) && !boundingBox.indices.empty() )
-					{
-						GPU::drawMesh( boundingBox );
-					}
-					if( showDebugLights && !debugLights.indices.empty() )
-					{
-						GPU::drawMesh( debugLights );
-					}
-					if( showDebugZones && !debugZones.indices.empty() )
-					{
-						GPU::drawMesh( debugZones );
-					}
-					if( showDebugFxs && !debugFxs.indices.empty() )
-					{
-						GPU::drawMesh( debugFxs );
-					}
+					GPU::drawMesh( debug.boundingBox );
+				}
+				if(debug.showLights && !debug.lights.indices.empty() )
+				{
+					GPU::drawMesh( debug.lights );
+				}
+				if( debug.showZones && !debug.zones.indices.empty() )
+				{
+					GPU::drawMesh( debug.zones );
+				}
+				if( debug.showFxs && !debug.fxs.indices.empty() )
+				{
+					GPU::drawMesh( debug.fxs );
 				}
 			}
 
@@ -2189,28 +2232,21 @@ int main(int argc, char ** argv) {
 		if(updateInstanceBoundingBox){
 			frameInfos[0].selectedInstance = selected.instance;
 			frameInfos[0].selectedMesh = selected.mesh;
-			// Generate a mesh with bounding boxes of the instances.
-			boundingBox.clean();
-			const auto corners = scene.instanceDebugInfos[selected.instance].bbox.getCorners();
-			boundingBox.positions = corners;
-			// Setup degenerate triangles for each line of a cube.
-			boundingBox.indices = boxIndices;
-			boundingBox.colors.resize(boundingBox.positions.size(), glm::vec3(1.0f, 0.0f, 0.0f));
-			boundingBox.upload();
+			debug.buildBoundingBoxes({scene.instanceDebugInfos[selected.instance].bbox});
 			updateInstanceBoundingBox = false;
 			scrollToItem = true;
 		}
 
 		window.bind(glm::vec4(0.058f, 0.133f, 0.219f, 1.0f), LoadOperation::DONTCARE, LoadOperation::DONTCARE);
 
-		if(bgTexture.gpu){
+		if(textures.bg.gpu){
 			GPU::setViewport(window.color());
 			GPU::setDepthState(false);
 			GPU::setCullState(true, Faces::BACK );
 			GPU::setPolygonState(PolygonMode::FILL);
 			GPU::setBlendState(false);
 			passthrough->use();
-			passthrough->texture(bgTexture, 0);
+			passthrough->texture(textures.bg, 0);
 			GPU::drawQuad();
 		}
 		++frameIndex;

@@ -138,11 +138,12 @@ Scene::TextureInfos Scene::storeTexture(const Texture& tex, uint tid, std::vecto
 	return texInfos;
 }
 
-void Scene::upload(const World& world, const GameFiles& files){
+void Scene::generate(const World& world, const GameFiles& files){
 
 	clean();
 
 	/// Populate the mesh geometry and corresponding sub-mesh info.
+	Log::info("Generating meshes...");
 	{
 		const size_t instanceCount = world.instances().size();
 		const size_t objectCount = world.objects().size();
@@ -314,8 +315,10 @@ void Scene::upload(const World& world, const GameFiles& files){
 			}
 		}
 	}
+	Log::info("Done.");
 
 	/// Material and textures.
+	Log::info("Generating materials...");
 	{
 		const std::vector<Object::Material>& materials = world.materials();
 		materialInfos = std::make_unique<StructuredBuffer<MaterialInfos>>(materials.size(), BufferType::STORAGE, "MaterialInfos");
@@ -370,10 +373,6 @@ void Scene::upload(const World& world, const GameFiles& files){
 					textures2D[texId].images[mid].clone(tex.images[mid * tex.depth + lid]);
 				}
 			}
-			// Now we have a beautiful texture2D array with all images set.
-			// Do not apply gamma correction as there are normal maps in the array.
-			// Conversion for color will be done in the shaders.
-			tex.upload(Layout::RGBA8, false);
 		}
 
 		// Unroll the arrays to generate additional CPU infos on all textures.
@@ -390,8 +389,10 @@ void Scene::upload(const World& world, const GameFiles& files){
 			++currentArrayIndex;
 		}
 	}
+	Log::info("Done.");
 
 	// Lights
+	Log::info("Generating Lights...");
 	{
 		const float sceneRadius = computeBoundingBox().getSphere().radius;
 
@@ -445,8 +446,10 @@ void Scene::upload(const World& world, const GameFiles& files){
 			info.materialIndex = light.material;
 		}
 	}
+	Log::info("Done.");
 	
 	// Zones
+	Log::info("Generating Zones...");
 	{
 		const uint zonesCount = ( uint )world.zones().size();
 		zoneInfos = std::make_unique<StructuredBuffer<ZoneInfos>>(zonesCount, BufferType::STORAGE, "ZoneInfos");
@@ -461,8 +464,10 @@ void Scene::upload(const World& world, const GameFiles& files){
 			info.bboxMax = glm::vec4(zone.bbox.maxis, 0.f);
 		}
 	}
+	Log::info("Done.");
 
 	// FXs
+	Log::info("Generating FXs...");
 	{
 		const std::array<glm::vec2, 4> uvs = {
 			glm::vec2(0.f, 1.f),
@@ -605,8 +610,17 @@ void Scene::upload(const World& world, const GameFiles& files){
 		}
 
 	}
+}
 
+void Scene::upload(){
+	Log::info("Uploading...");
 	// Send data to the GPU.
+	for(auto& tex : textures){
+		// Now we have a beautiful texture2D array with all images set.
+		// Do not apply gamma correction as there are normal maps in the array.
+		// Conversion for color will be done in the shaders.
+		tex.upload(Layout::RGBA8, false);
+	}
 	globalMesh.upload();
 	billboardsMesh.upload();
 	instanceInfos->upload();
@@ -616,13 +630,15 @@ void Scene::upload(const World& world, const GameFiles& files){
 	zoneInfos->upload();
 
 	GPU::registerTextures( textures );
+	Log::info("Done.");
 }
 
 void Scene::load(const fs::path& worldPath, const GameFiles& files){
 	
 	world = World();
 	world.load(worldPath, files.resourcesPath);
-	upload(world, files);
+	generate(world, files);
+	upload();
 
 }
 
@@ -644,8 +660,8 @@ void Scene::loadFile(const fs::path& filePath, const GameFiles& files){
 	}
 
 	world = World(obj);
-	upload(world, files);
-
+	generate(world, files);
+	upload();
 }
 
 BoundingBox Scene::computeBoundingBox() const {
