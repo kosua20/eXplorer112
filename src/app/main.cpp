@@ -827,21 +827,12 @@ int main(int argc, char ** argv) {
 			debugZones.upload();
 		}
 
-		size_t opaqueCount = 0;
-		size_t transparentCount = 0;
-		size_t decalsCount = 0;
-		for(size_t mid = 0; mid < meshCount; ++mid){
-			const Scene::MeshInfos& mesh = (*scene.meshInfos)[mid];
-			const Scene::MaterialInfos& material = (*scene.materialInfos)[mesh.materialIndex];
-			size_t& count = material.type == Object::Material::DECAL ? decalsCount :
-							(material.type == Object::Material::TRANSPARENT ? transparentCount : opaqueCount);
-			count += mesh.instanceCount;
-		}
-
 		Log::info("Loaded world %s with %u meshes, %u materials, %u instances (%u opaque, %u transparent, %u decals), %u lights (%u shadow casting), %u cameras, %u zones, %u emitters, %u billboards",
 				  scene.world.name().c_str(),
 				  scene.meshInfos->size(), scene.materialInfos->size(), scene.instanceInfos->size(),
-				  opaqueCount, transparentCount, decalsCount,
+				  scene.globalMeshMaterialRanges[Object::Material::OPAQUE].instanceCount,
+				  scene.globalMeshMaterialRanges[Object::Material::TRANSPARENT].instanceCount,
+				  scene.globalMeshMaterialRanges[Object::Material::DECAL].instanceCount,
 				  scene.lightInfos->size(), shadowcasterCount, scene.world.cameras().size(), scene.world.zones().size(),
 				  scene.world.particles().size(), scene.world.billboards().size());
 	};
@@ -1717,6 +1708,8 @@ int main(int argc, char ** argv) {
 						shadowInfos[ 0 ].skipCulling = 0;
 						shadowInfos.upload();
 
+						// Render opaques, skip decals and transparent.
+						const auto& range = scene.globalMeshMaterialRanges[Object::Material::OPAQUE];
 						// Draw commands for the shadow maps.
 						drawArgsCompute->use();
 						drawArgsCompute->buffer( shadowInfos, 0 );
@@ -1724,7 +1717,8 @@ int main(int argc, char ** argv) {
 						drawArgsCompute->buffer( *scene.instanceInfos, 2 );
 						drawArgsCompute->buffer( *drawCommands, 3 );
 						drawArgsCompute->buffer( *drawInstances, 4 );
-						GPU::dispatch( ( uint )scene.meshInfos->size(), 1, 1 );
+
+						GPU::dispatch( range.count, 1, 1 );
 
 						GPU::bindFramebuffer( currentShadowMapLayer, 0, 0.0f, LoadOperation::DONTCARE, LoadOperation::DONTCARE, &shadowMaps, nullptr, nullptr, nullptr, nullptr );
 						GPU::setViewport( shadowMaps );
@@ -1742,9 +1736,7 @@ int main(int argc, char ** argv) {
 						shadowInstancedObject->buffer( *scene.materialInfos, 3 );
 						shadowInstancedObject->buffer( *drawInstances, 4 );
 
-						// Render opaques, skip decals and transparent.
-						const auto& range = scene.globalMeshMaterialRanges[Object::Material::OPAQUE];
-						GPU::drawIndirectMesh(scene.globalMesh, *drawCommands, range.first, range.second);
+						GPU::drawIndirectMesh(scene.globalMesh, *drawCommands, range.firstIndex, range.count);
 
 					}
 					++currentShadowMapLayer;
@@ -1756,7 +1748,7 @@ int main(int argc, char ** argv) {
 
 			// Culling and clustering.
 			{
-				// Populate drawCommands and drawInstancesby using a compute shader that performs culling.
+				// Populate drawCommands and drawInstances by using a compute shader that performs culling.
 				drawArgsCompute->use();
 				drawArgsCompute->buffer(frameInfos, 0);
 				drawArgsCompute->buffer(*scene.meshInfos, 1);
@@ -1795,7 +1787,7 @@ int main(int argc, char ** argv) {
 				gbufferInstancedObject->buffer(*drawInstances, 4);
 
 				const auto& range = scene.globalMeshMaterialRanges[Object::Material::OPAQUE];
-				GPU::drawIndirectMesh(scene.globalMesh, *drawCommands, range.first, range.second);
+				GPU::drawIndirectMesh(scene.globalMesh, *drawCommands, range.firstIndex, range.count);
 			}
 
 			// Lighting
@@ -1838,7 +1830,7 @@ int main(int argc, char ** argv) {
 				decalInstancedObject->buffer(*drawInstances, 4);
 
 				const auto& range = scene.globalMeshMaterialRanges[Object::Material::DECAL];
-				GPU::drawIndirectMesh(scene.globalMesh, *drawCommands, range.first, range.second);
+				GPU::drawIndirectMesh(scene.globalMesh, *drawCommands, range.firstIndex, range.count);
 
 			}
 
@@ -1856,11 +1848,11 @@ int main(int argc, char ** argv) {
 				if(showBillboards){
 					for(World::Blending blend : blendsPreFog){
 						const Scene::Range & range = scene.billboardRanges[blend];
-						if(range.indexCount <= 0){
+						if(range.count <= 0){
 							continue;
 						}
 						GPU::setBlendState(true, BlendEquation::ADD, srcFuncs[blend], dstFuncs[blend]);
-						GPU::drawMesh(scene.billboardsMesh, range.firstIndex, range.indexCount);
+						GPU::drawMesh(scene.billboardsMesh, range.firstIndex, range.count);
 					}
 				}
 
@@ -1868,11 +1860,11 @@ int main(int argc, char ** argv) {
 				if(showParticles){
 					for(World::Blending blend : blendsPreFog){
 						const Scene::Range & range = scene.particleRanges[blend];
-						if(range.indexCount <= 0){
+						if(range.count <= 0){
 							continue;
 						}
 						GPU::setBlendState(true, BlendEquation::ADD, srcFuncs[blend], dstFuncs[blend]);
-						GPU::drawMesh(scene.billboardsMesh, range.firstIndex, range.indexCount);
+						GPU::drawMesh(scene.billboardsMesh, range.firstIndex, range.count);
 					}
 				}
 			}
@@ -1912,11 +1904,11 @@ int main(int argc, char ** argv) {
 				if(showBillboards){
 					for(World::Blending blend : blendsPostFog){
 						const Scene::Range & range = scene.billboardRanges[blend];
-						if(range.indexCount <= 0){
+						if(range.count <= 0){
 							continue;
 						}
 						GPU::setBlendState(true, BlendEquation::ADD, srcFuncs[blend], dstFuncs[blend]);
-						GPU::drawMesh(scene.billboardsMesh, range.firstIndex, range.indexCount);
+						GPU::drawMesh(scene.billboardsMesh, range.firstIndex, range.count);
 					}
 				}
 
@@ -1924,11 +1916,11 @@ int main(int argc, char ** argv) {
 				if(showParticles){
 					for(World::Blending blend : blendsPostFog){
 						const Scene::Range & range = scene.particleRanges[blend];
-						if(range.indexCount <= 0){
+						if(range.count <= 0){
 							continue;
 						}
 						GPU::setBlendState(true, BlendEquation::ADD, srcFuncs[blend], dstFuncs[blend]);
-						GPU::drawMesh(scene.billboardsMesh, range.firstIndex, range.indexCount);
+						GPU::drawMesh(scene.billboardsMesh, range.firstIndex, range.count);
 					}
 				}
 

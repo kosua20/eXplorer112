@@ -178,7 +178,8 @@ void Scene::upload(const World& world, const GameFiles& files){
 		}
 		// Save the original count and offsets for reference.
 		for(uint mid = 0; mid < (uint)Object::Material::COUNT; ++mid){
-			globalMeshMaterialRanges[mid] = { meshOffsetPerMaterial[mid], meshCountPerMaterial[mid]};
+			globalMeshMaterialRanges[mid].firstIndex = meshOffsetPerMaterial[mid];
+			globalMeshMaterialRanges[mid].count = meshCountPerMaterial[mid];
 		}
 
 		meshInfos = std::make_unique<StructuredBuffer<MeshInfos>>(meshCount, BufferType::STORAGE, "MeshInfos");
@@ -301,6 +302,16 @@ void Scene::upload(const World& world, const GameFiles& files){
 				++currentInstanceId;
 			}
 			++currentMeshId;
+		}
+
+		// Update per material type instance count
+		for(uint mid = 0; mid < Object::Material::COUNT; ++mid){
+			MeshRange& range = globalMeshMaterialRanges[mid];
+			range.instanceCount = 0u;
+			for(uint oid = range.firstIndex; oid < range.firstIndex + range.count; ++oid){
+				MeshInfos& infos = (*meshInfos)[oid];
+				range.instanceCount += infos.instanceCount;
+			}
 		}
 	}
 
@@ -494,7 +505,7 @@ void Scene::upload(const World& world, const GameFiles& files){
 				if(billboard.blending != currentBlend){
 					const uint firstIndex = ( uint )billboardsMesh.indices.size();
 					assert(billboard.blending < World::BLEND_COUNT);
-					billboardRanges[currentBlend].indexCount = firstIndex - billboardRanges[currentBlend].firstIndex;
+					billboardRanges[currentBlend].count = firstIndex - billboardRanges[currentBlend].firstIndex;
 					currentBlend = billboard.blending;
 					billboardRanges[currentBlend].firstIndex = firstIndex;
 				}
@@ -519,7 +530,7 @@ void Scene::upload(const World& world, const GameFiles& files){
 					billboardsMesh.indices.push_back(firstVertexIndex + ind);
 				}
 			}
-			billboardRanges[currentBlend].indexCount = ( uint )billboardsMesh.indices.size() - billboardRanges[currentBlend].firstIndex;
+			billboardRanges[currentBlend].count = ( uint )billboardsMesh.indices.size() - billboardRanges[currentBlend].firstIndex;
 
 		}
 		
@@ -533,7 +544,7 @@ void Scene::upload(const World& world, const GameFiles& files){
 				if(emitter.blending != currentBlend){
 					const uint firstIndex = ( uint )billboardsMesh.indices.size();
 					assert(emitter.blending < World::BLEND_COUNT);
-					particleRanges[currentBlend].indexCount = firstIndex - particleRanges[currentBlend].firstIndex;
+					particleRanges[currentBlend].count = firstIndex - particleRanges[currentBlend].firstIndex;
 					currentBlend = emitter.blending;
 					particleRanges[currentBlend].firstIndex = firstIndex;
 				}
@@ -589,7 +600,7 @@ void Scene::upload(const World& world, const GameFiles& files){
 				}
 
 			}
-			particleRanges[currentBlend].indexCount = ( uint )billboardsMesh.indices.size() - particleRanges[currentBlend].firstIndex;
+			particleRanges[currentBlend].count = ( uint )billboardsMesh.indices.size() - particleRanges[currentBlend].firstIndex;
 
 		}
 

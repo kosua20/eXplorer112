@@ -104,7 +104,11 @@ public:
 
 	struct Range {
 		uint firstIndex = 0;
-		uint indexCount = 0;
+		uint count = 0;
+	};
+
+	struct MeshRange : public Range {
+		uint instanceCount = 0;
 	};
 
 	using BlendingInfos = std::array<Range, World::BLEND_COUNT>;
@@ -140,7 +144,8 @@ public:
 	World world;
 
 	Mesh globalMesh{"None"};
-	std::array<std::pair<uint, uint>, Object::Material::COUNT> globalMeshMaterialRanges;
+
+	std::array<MeshRange, Object::Material::COUNT> globalMeshMaterialRanges;
 
 	Mesh billboardsMesh{"Billboards"};
 	BlendingInfos billboardRanges;
