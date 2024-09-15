@@ -1,0 +1,68 @@
+
+#include "engine/engine.glsl"
+
+layout(local_size_x=32, local_size_y=1, local_size_z=1) in;
+
+layout(set = 0, binding = 1) uniform TransparentFrameData {
+	uint firstMesh;
+	uint meshCount;
+	uint instanceCount;
+} transparentEngine;
+
+layout(std140, set = 0, binding = 2) readonly buffer MeshesInfos {
+	MeshInfos meshInfos[];
+};
+
+layout(std140, set = 0, binding = 3) readonly buffer InstancesInfos {
+	MeshInstanceInfos instanceInfos[];
+};
+
+layout(set = 0, binding = 4) readonly buffer CommandBuffer {
+	DrawCommand drawCommands[];
+};
+
+layout(set = 0, binding = 5) readonly buffer InstanceDrawInfos {
+	uint drawInstanceInfos[];
+};
+
+layout(set = 0, binding = 6) writeonly buffer TransparentInfos {
+	TransparentInstanceInfos transparentInfos[];
+};
+
+layout(set = 0, binding = 7) coherent buffer TransparentCounter {
+	uint transparentInstanceCounter[];
+};
+
+
+void main(){
+	
+
+	if(gl_GlobalInvocationID.x >= transparentEngine.meshCount){
+		return;
+	}
+
+	uint mid = gl_GlobalInvocationID.x + transparentEngine.firstMesh;
+
+	MeshInfos infos = meshInfos[mid];
+	vec4 bboxCenter = vec4(0.5 * (infos.bboxMin.xyz + infos.bboxMax.xyz), 1.0);
+
+	uint instanceCount = drawCommands[mid].instanceCount;
+	uint instanceOffset = atomicAdd(transparentInstanceCounter[0], instanceCount);
+
+	for(uint i = 0; i < instanceCount; ++i){
+
+		uint flatInstanceIndex = drawInstanceInfos[infos.firstInstanceIndex + i];
+		mat4 frame = instanceInfos[flatInstanceIndex].frame;
+		vec4 instanceCentroid = frame * bboxCenter;
+		// Compute distance to cam
+		float distance = length(instanceCentroid.xyz - engine.camPos.xyz);
+
+		TransparentInstanceInfos instance;
+		instance.meshIndex = mid;
+		instance.instanceIndex = flatInstanceIndex;
+		instance.distanceToCamera = uint(round(distance));
+		transparentInfos[instanceOffset + i] = instance;
+	}
+
+
+}

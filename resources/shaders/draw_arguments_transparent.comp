@@ -1,0 +1,42 @@
+
+#include "engine/engine.glsl"
+
+layout(local_size_x=32, local_size_y=1, local_size_z=1) in;
+
+					
+layout(std140, set = 0, binding = 1) readonly buffer MeshesInfos {
+	MeshInfos meshInfos[];
+};
+
+layout(set = 0, binding = 2) readonly buffer TransparentInfos {
+	TransparentInstanceInfos transparentInfos[];
+};
+
+layout(set = 0, binding = 3) writeonly buffer CommandBuffer {
+	DrawCommand drawCommands[];
+};
+layout(set = 0, binding = 4) readonly buffer TransparentCounter {
+	uint transparentInstanceCounter[];
+};
+
+void main(){
+
+	uint iid = gl_GlobalInvocationID.x;
+
+	if(iid < transparentInstanceCounter[0]){
+		TransparentInstanceInfos instanceInfos = transparentInfos[iid];
+		MeshInfos infos = meshInfos[instanceInfos.meshIndex];
+
+		drawCommands[iid].instanceCount = 1;
+		drawCommands[iid].indexCount = infos.indexCount;
+		drawCommands[iid].firstIndex = infos.firstIndex;
+		drawCommands[iid].vertexOffset = int(infos.vertexOffset);
+		drawCommands[iid].firstInstance = 0u;
+	} else {
+		drawCommands[iid].instanceCount = 0;
+		drawCommands[iid].indexCount = 0;
+		drawCommands[iid].firstIndex = 0;
+		drawCommands[iid].vertexOffset = 0;
+		drawCommands[iid].firstInstance = 0u;
+	}
+}

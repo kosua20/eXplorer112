@@ -132,6 +132,12 @@ struct DrawCommand {
 };
 
 
+struct TransparentInstanceInfos {
+	uint meshIndex;
+	uint instanceIndex;
+	uint distanceToCamera;
+};
+
 uvec3 clusterCellFromScreenspace(vec3 fragCoord){
 	float invViewDepth = fragCoord.z * engine.camPlanes.z + engine.camPlanes.w;
 	float zRange = -log(invViewDepth) * engine.clustersParams.x - engine.clustersParams.y;

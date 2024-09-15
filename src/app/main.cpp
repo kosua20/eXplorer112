@@ -154,6 +154,18 @@ struct FrameData {
 
 };
 
+struct TransparentFrameData {
+	uint firstMesh;
+	uint meshCount;
+	uint instanceCount;
+};
+
+struct TransparentInstanceInfos {
+	uint meshIndex;
+	uint instanceIndex;
+	uint distance;
+};
+
 struct SelectionState {
    int item = -1;
    int mesh = -1;
@@ -602,6 +614,15 @@ int main(int argc, char ** argv) {
 	programPool.push_back(loadProgram("draw_arguments_all"));
 	Program* drawArgsCompute = programPool.back().program;
 
+	programPool.push_back(loadProgram("draw_arguments_transparent"));
+	Program* drawArgsTransparentCompute = programPool.back().program;
+
+	programPool.push_back(loadProgram("expand_transparent_instances"));
+	Program* expandTransparentCompute = programPool.back().program;
+
+	programPool.push_back(loadProgram("clear_buffer"));
+	Program* clearBufferCompute = programPool.back().program;
+
 	programPool.push_back(loadProgram("lights_clustering"));
 	Program* clustersCompute = programPool.back().program;
 
@@ -610,6 +631,7 @@ int main(int argc, char ** argv) {
 
 	UniformBuffer<FrameData> frameInfos(1, 64, "FrameInfos");
 	UniformBuffer<FrameData> shadowInfos(1, 2, "ShadowInfos");
+	UniformBuffer<TransparentFrameData> transparentInfos(1, 2, "TransparentInfos");
 	UniformBuffer<glm::vec2> blurInfosV(1, 2, "BlurInfosV");
 	UniformBuffer<glm::vec2> blurInfosH(1, 2, "BlurInfosH");
 
@@ -668,6 +690,11 @@ int main(int argc, char ** argv) {
 
 	std::unique_ptr<Buffer> drawCommands = nullptr;
 	std::unique_ptr<Buffer> drawInstances = nullptr;
+
+	std::unique_ptr<Buffer> transparentDrawInstances = nullptr;
+	std::unique_ptr<Buffer> transparentDrawCommands = nullptr;
+
+	Buffer transparentCounter(sizeof(uint32_t), BufferType::STORAGE, "TransparentCounter");
 
 	// Data storage.
 	Scene scene;
@@ -756,6 +783,10 @@ int main(int argc, char ** argv) {
 		const size_t instanceCount = scene.instanceInfos->size();
 		drawCommands = std::make_unique<Buffer>( meshCount * sizeof( GPU::DrawCommand ), BufferType::INDIRECT, "DrawCommands" );
 		drawInstances = std::make_unique<Buffer>( instanceCount * sizeof( uint ), BufferType::STORAGE, "DrawInstances" );
+
+		const Scene::MeshRange& transparentRange = scene.globalMeshMaterialRanges[Object::Material::TRANSPARENT];
+		transparentDrawInstances = std::make_unique<Buffer>( transparentRange.instanceCount * sizeof( TransparentInstanceInfos ), BufferType::STORAGE, "DrawTransparentInstances" );
+		transparentDrawCommands = std::make_unique<Buffer>( transparentRange.instanceCount * sizeof( GPU::DrawCommand ), BufferType::INDIRECT, "DrawTransparentCommands" );
 
 		uint shadowCount = 0u;
 		currentShadowcastingLight = 0u;
@@ -1652,6 +1683,12 @@ int main(int argc, char ** argv) {
 
 		frameInfos.upload();
 
+		const auto& transparentRange = scene.globalMeshMaterialRanges[Object::Material::TRANSPARENT];
+		transparentInfos[0].firstMesh = transparentRange.firstIndex;
+		transparentInfos[0].meshCount = transparentRange.count;
+		transparentInfos[0].instanceCount = transparentRange.instanceCount;
+		transparentInfos.upload();
+
 		// Scale calibrated on existing frame.
 		const float scaling = 1.8f * sceneLit.width / 720.0f;
 		blurInfosH[0] = scaling * glm::vec2(1.0f/(float)bloom0.width, 0.0f);
@@ -1758,6 +1795,36 @@ int main(int argc, char ** argv) {
 				drawArgsCompute->buffer(*drawCommands, 3);
 				drawArgsCompute->buffer(*drawInstances, 4);
 				GPU::dispatch((uint)scene.meshInfos->size(), 1, 1);
+
+				// For transparent objects, we'll have to generate a draw call per instance.
+				// TODO: also sort them back to front.
+				if(showTransparents){
+					// Better safe than sorry for now.
+					clearBufferCompute->use();
+					clearBufferCompute->buffer(transparentCounter, 1);
+					GPU::dispatch(1, 1, 1);
+
+					expandTransparentCompute->use();
+					expandTransparentCompute->buffer(frameInfos, 0);
+					expandTransparentCompute->buffer(transparentInfos, 1);
+					expandTransparentCompute->buffer(*scene.meshInfos, 2);
+					expandTransparentCompute->buffer(*scene.instanceInfos, 3);
+					expandTransparentCompute->buffer(*drawCommands, 4);
+					expandTransparentCompute->buffer(*drawInstances, 5);
+					expandTransparentCompute->buffer(*transparentDrawInstances, 6);
+					expandTransparentCompute->buffer(transparentCounter, 7);
+					GPU::dispatch(transparentRange.count, 1, 1);
+
+					// Convert this list of instances to as many draw calls
+					drawArgsTransparentCompute->use();
+					drawArgsTransparentCompute->buffer(frameInfos, 0);
+					drawArgsTransparentCompute->buffer(*scene.meshInfos, 1);
+					drawArgsTransparentCompute->buffer(*transparentDrawInstances, 2);
+					drawArgsTransparentCompute->buffer(*transparentDrawCommands, 3);
+					drawArgsTransparentCompute->buffer(transparentCounter, 4);
+					GPU::dispatch(transparentRange.instanceCount, 1, 1);
+				}
+
 
 				clustersCompute->use();
 				clustersCompute->buffer(frameInfos, 0);
