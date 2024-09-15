@@ -28,16 +28,16 @@ layout(std140, set = 0, binding = 2) readonly buffer InstancesInfos {
 	MeshInstanceInfos instanceInfos[];
 };
 
-layout(set = 0, binding = 4) readonly buffer InstanceDrawInfos {
-	uint drawInstanceInfos[];
+layout(set = 0, binding = 4) readonly buffer TransparentInfos {
+	TransparentInstanceInfos transparentInfos[];
 };
+
 
 /** Apply the MVP transformation to the input vertex. */
 void main(){
-	MeshInfos mesh = meshInfos[DrawIndex];
-	uint instanceIndex = drawInstanceInfos[mesh.firstInstanceIndex + gl_InstanceIndex];
-
-	MeshInstanceInfos instance = instanceInfos[instanceIndex];
+	TransparentInstanceInfos infos = transparentInfos[DrawIndex];
+	MeshInfos mesh = meshInfos[infos.meshIndex];
+	MeshInstanceInfos instance = instanceInfos[infos.instanceIndex];
 
 	vec4 worldPos = instance.frame * vec4(v, 1.0);
 	gl_Position = engine.vp * worldPos;

@@ -2010,7 +2010,7 @@ int main(int argc, char ** argv) {
 				forwardInstancedObject->buffer(*scene.meshInfos, 1);
 				forwardInstancedObject->buffer(*scene.instanceInfos, 2);
 				forwardInstancedObject->buffer(*scene.materialInfos, 3);
-				forwardInstancedObject->buffer(*drawInstances, 4);
+				forwardInstancedObject->buffer(*transparentDrawInstances, 4);
 				forwardInstancedObject->buffer(*scene.lightInfos, 5);
 				forwardInstancedObject->buffer(*scene.zoneInfos, 6);
 				forwardInstancedObject->texture(fogXYTexture, 0);
@@ -2020,7 +2020,7 @@ int main(int argc, char ** argv) {
 				forwardInstancedObject->texture(fogClusters, 4);
 
 				const auto& range = scene.globalMeshMaterialRanges[Object::Material::TRANSPARENT];
-				GPU::drawIndirectMesh(scene.globalMesh, *drawCommands, range.first, range.second);
+				GPU::drawIndirectMesh(scene.globalMesh, *transparentDrawCommands, 0, range.instanceCount);
 			}
 
 			// Postprocess stack

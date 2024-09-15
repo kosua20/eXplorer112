@@ -22,6 +22,11 @@ layout(std140, set = 0, binding = 3) readonly buffer MaterialsInfos {
 	MaterialInfos materialInfos[];
 };
 
+layout(set = 0, binding = 4) readonly buffer TransparentInfos {
+	TransparentInstanceInfos transparentInfos[];
+};
+
+
 layout(std140, set = 0, binding = 5) readonly buffer LightsInfos {
 	LightInfos lightInfos[];
 };
@@ -44,7 +49,7 @@ layout(location = 0) out vec4 fragColor; ///< Color.
 
 /** Texture each face. */
 void main(){
-	MaterialInfos material =  materialInfos[meshInfos[DrawIndex].materialIndex];
+	MaterialInfos material =  materialInfos[meshInfos[transparentInfos[DrawIndex].meshIndex].materialIndex];
 
 	// Build normal using TBN matrix and normal map.
 	TextureInfos normalMap = material.normal;
