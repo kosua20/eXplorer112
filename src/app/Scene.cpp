@@ -143,7 +143,7 @@ void Scene::generate(const World& world, const GameFiles& files){
 	clean();
 
 	/// Populate the mesh geometry and corresponding sub-mesh info.
-	Log::info("Generating meshes...");
+	Log::verbose("Generating meshes...");
 	{
 		const size_t instanceCount = world.instances().size();
 		const size_t objectCount = world.objects().size();
@@ -315,10 +315,10 @@ void Scene::generate(const World& world, const GameFiles& files){
 			}
 		}
 	}
-	Log::info("Done.");
+	Log::verbose("Done.");
 
 	/// Material and textures.
-	Log::info("Generating materials...");
+	Log::verbose("Generating materials...");
 	{
 		const std::vector<Object::Material>& materials = world.materials();
 		materialInfos = std::make_unique<StructuredBuffer<MaterialInfos>>(materials.size(), BufferType::STORAGE, "MaterialInfos");
@@ -389,10 +389,10 @@ void Scene::generate(const World& world, const GameFiles& files){
 			++currentArrayIndex;
 		}
 	}
-	Log::info("Done.");
+	Log::verbose("Done.");
 
 	// Lights
-	Log::info("Generating Lights...");
+	Log::verbose("Generating Lights...");
 	{
 		const float sceneRadius = computeBoundingBox().getSphere().radius;
 
@@ -446,10 +446,10 @@ void Scene::generate(const World& world, const GameFiles& files){
 			info.materialIndex = light.material;
 		}
 	}
-	Log::info("Done.");
+	Log::verbose("Done.");
 	
 	// Zones
-	Log::info("Generating Zones...");
+	Log::verbose("Generating Zones...");
 	{
 		const uint zonesCount = ( uint )world.zones().size();
 		zoneInfos = std::make_unique<StructuredBuffer<ZoneInfos>>(zonesCount, BufferType::STORAGE, "ZoneInfos");
@@ -464,10 +464,10 @@ void Scene::generate(const World& world, const GameFiles& files){
 			info.bboxMax = glm::vec4(zone.bbox.maxis, 0.f);
 		}
 	}
-	Log::info("Done.");
+	Log::verbose("Done.");
 
 	// FXs
-	Log::info("Generating FXs...");
+	Log::verbose("Generating FXs...");
 	{
 		const std::array<glm::vec2, 4> uvs = {
 			glm::vec2(0.f, 1.f),
@@ -610,10 +610,11 @@ void Scene::generate(const World& world, const GameFiles& files){
 		}
 
 	}
+	Log::verbose("Done.");
 }
 
 void Scene::upload(){
-	Log::info("Uploading...");
+	Log::verbose("Uploading...");
 	// Send data to the GPU.
 	for(auto& tex : textures){
 		// Now we have a beautiful texture2D array with all images set.
@@ -630,7 +631,7 @@ void Scene::upload(){
 	zoneInfos->upload();
 
 	GPU::registerTextures( textures );
-	Log::info("Done.");
+	Log::verbose("Done.");
 }
 
 void Scene::load(const fs::path& worldPath, const GameFiles& files){
