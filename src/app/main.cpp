@@ -969,7 +969,7 @@ int main(int argc, char ** argv) {
 	glm::vec2 centerPct(50.f, 50.0f);
 
 	bool showOpaques = true;
-	bool showTransparents = false;
+	bool showTransparents = true;
 	bool showDecals = true;
 	bool showBillboards = true;
 	bool showParticles = true;
@@ -1859,6 +1859,8 @@ int main(int argc, char ** argv) {
 					expandTransparentCompute->buffer(transparentCounter, 7);
 					GPU::dispatch(transparentRange.count, 1, 1);
 
+					// TODO: radix sort
+					
 					// Convert this list of instances to as many draw calls
 					drawArgsTransparentCompute->use();
 					drawArgsTransparentCompute->buffer(frameInfos, 0);

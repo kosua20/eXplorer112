@@ -637,7 +637,10 @@ void Scene::upload(){
 void Scene::load(const fs::path& worldPath, const GameFiles& files){
 	
 	world = World();
-	world.load(worldPath, files.resourcesPath);
+	if( !world.load( worldPath, files.resourcesPath ) ){
+		world = World();
+		return;
+	}
 	generate(world, files);
 	upload();
 
