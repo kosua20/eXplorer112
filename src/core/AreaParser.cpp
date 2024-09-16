@@ -3,6 +3,9 @@
 #include "core/TextUtilities.hpp"
 
 #include <unordered_map>
+#include <set>
+#include <deque>
+
 #include <sstream>
 
 namespace Area {
@@ -188,7 +191,6 @@ bool load(const fs::path& path, Object& outObject){
 	const auto& groups = areaScene.children("group");
 	for(const auto& group : groups){
 
-
 		const auto frameNode = group.find_child_by_attribute("name", "localxform");
 		glm::mat4 frame(1.0f);
 		if(frameNode){
@@ -325,6 +327,72 @@ bool load(const fs::path& path, Object& outObject){
 
 	}
 
+	// Split transparent sets in connected components, to improve sorting when rendering
+	/*
+	for(uint setId = 0; setId < outObject.faceSets.size(); ){
+		if(outObject.materials[outObject.faceSets[setId].material].type != Object::Material::TRANSPARENT){
+			++setId;
+			continue;
+		}
+		// Copy the set
+		Object::Set set(outObject.faceSets[setId]);
+		outObject.faceSets.erase(outObject.faceSets.begin() + setId);
+
+		// Count components.
+		// Build neighbor list.
+		std::unordered_map<uint, std::set<uint>> neighbors;
+		for(const auto& face : set.faces){
+			neighbors[face.v0].insert(face.v1);
+			neighbors[face.v0].insert(face.v2);
+			neighbors[face.v1].insert(face.v0);
+			neighbors[face.v1].insert(face.v2);
+			neighbors[face.v2].insert(face.v1);
+			neighbors[face.v2].insert(face.v0);
+		}
+		uint vertCount = neighbors.size();
+		std::vector<int> vertComponent(vertCount, -1);
+		std::deque<uint> vertsToVisit;
+		vertsToVisit.push_back(0);
+		vertComponent[0] = 0;
+		uint assignedCount = 1;
+		uint currentSet = 0;
+		while(assignedCount < vertCount){
+			while(!vertsToVisit.empty()){
+				uint index = vertsToVisit.front();
+				vertsToVisit.pop_front();
+				for(const uint& neigh : neighbors[index]){
+					if(vertComponent[neigh] == -1){
+						vertComponent[neigh] = vertComponent[index];
+						vertsToVisit.push_back(neigh);
+						++assignedCount;
+					}
+				}
+			}
+			for(uint i = 0; i < vertCount; ++i){
+				if(vertComponent[i] == -1){
+					vertsToVisit.push_back(i);
+					vertComponent[i] = ++currentSet;
+					++assignedCount;
+					break;
+				}
+			}
+		}
+		Log::info("%s - %u: found %u sets.", outObject.name.c_str(), setId, currentSet);
+
+		// Generate currentSet sets instead, and replace them.
+		for(uint sid = 0; sid < currentSet; ++sid){
+			outObject.faceSets.insert(outObject.faceSets.begin() + setId, Object::Set{} );
+			Object::Set& newSet = outObject.faceSets[setId];
+			newSet.material = set.material;
+			for(const auto& face : set.faces){
+				if(vertComponent[face.v0] == sid){
+					newSet.faces.push_back(face);
+				}
+			}
+		}
+		setId += currentSet;
+	}
+	*/
 	return true;
 }
 
