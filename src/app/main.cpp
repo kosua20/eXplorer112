@@ -35,6 +35,9 @@
 #define CLUSTER_XY_SIZE 64
 #define CLUSTER_Z_COUNT 32
 
+#define SORT_BIT_RANGE 4
+#define SORT_BIN_COUNT (1 << SORT_BIT_RANGE)
+
 static const std::vector<uint> boxIndices = { 0, 1, 0, 0, 2, 0,
 	1, 3, 1, 2, 3, 2,
 	4, 5, 4, 4, 6, 4,
@@ -158,6 +161,7 @@ struct TransparentFrameData {
 	uint firstMesh;
 	uint meshCount;
 	uint instanceCount;
+	uint firstBit;
 };
 
 struct TransparentInstanceInfos {
@@ -763,12 +767,10 @@ uint roundUp( uint a, uint step ){
 int main(int argc, char ** argv) {
 
 	// TODO:
-	//	* Sort transparent objects back-to-front:
-	//		we can't just have a list of (mesh, instance count, instance list) anymore
-	//		for this pass, we need to interlace different meshes instances. Maybe just
-	//		allocate an indirect arg buffer for the worst (total instance count) case.
-	//		But with the MoltenVk limitation, this means one drawcall per instance per
-	//		mesh, far from an indirect approach (excepts if this ends up being fixed)?
+	//	* Some transparent items have multiple disjoint submeshes (ex: glass panels in
+	//      tuto_eco), which messes up transparency ordering. We could split submeshes
+	//		in multiple scene meshes and have them sorted separately. Otherwise, could
+	//		sort per primitive but far more costly...
 	//	* Bug in the light/zone clustering, for some camera angles froxels are missing
 	//      some lights/zones. Especially visible on MoltenVK, but could be compounded
 	//      with another bug or driver issue.
@@ -871,8 +873,17 @@ int main(int argc, char ** argv) {
 	programPool.push_back(loadProgram("lighting_gbuffer"));
 	Program* lightingCompute = programPool.back().program;
 
+	programPool.push_back(loadProgram("sort/sort_count"));
+	Program* sortCount = programPool.back().program;
+
+	programPool.push_back(loadProgram("sort/sort_prefix"));
+	Program* sortPrefix = programPool.back().program;
+
+	programPool.push_back(loadProgram("sort/sort_reorder"));
+	Program* sortReorder = programPool.back().program;
+
 	UniformBuffer<FrameData> frameInfos(1, 64, "FrameInfos");
-	UniformBuffer<TransparentFrameData> transparentInfos(1, 2, "TransparentInfos");
+	UniformBuffer<TransparentFrameData> transparentInfos(1, 16, "TransparentInfos");
 	UniformBuffer<glm::vec2> blurInfosV(1, 2, "BlurInfosV");
 	UniformBuffer<glm::vec2> blurInfosH(1, 2, "BlurInfosH");
 
@@ -928,10 +939,11 @@ int main(int argc, char ** argv) {
 
 	std::unique_ptr<Buffer> drawCommands = nullptr;
 	std::unique_ptr<Buffer> drawInstances = nullptr;
-	std::unique_ptr<Buffer> transparentDrawInstances = nullptr;
+	std::array<std::unique_ptr<Buffer>, 2> transparentDrawInstances;
 	std::unique_ptr<Buffer> transparentDrawCommands = nullptr;
 
 	Buffer transparentCounter(sizeof(uint32_t), BufferType::STORAGE, "TransparentCounter");
+	Buffer atomicBinCounters(SORT_BIN_COUNT * sizeof(uint32_t), BufferType::STORAGE, "BinCounters");
 
 
 	auto resizeRenderTargets = [&](const glm::vec2& renderRes){
@@ -994,7 +1006,8 @@ int main(int argc, char ** argv) {
 		drawInstances = std::make_unique<Buffer>( instanceCount * sizeof( uint ), BufferType::STORAGE, "DrawInstances" );
 
 		const Scene::MeshRange& transparentRange = scene.globalMeshMaterialRanges[Object::Material::TRANSPARENT];
-		transparentDrawInstances = std::make_unique<Buffer>( transparentRange.instanceCount * sizeof( TransparentInstanceInfos ), BufferType::STORAGE, "DrawTransparentInstances" );
+		transparentDrawInstances[0] = std::make_unique<Buffer>( transparentRange.instanceCount * sizeof( TransparentInstanceInfos ), BufferType::STORAGE, "DrawTransparentInstances0" );
+		transparentDrawInstances[1] = std::make_unique<Buffer>( transparentRange.instanceCount * sizeof( TransparentInstanceInfos ), BufferType::STORAGE, "DrawTransparentInstances1" );
 		transparentDrawCommands = std::make_unique<Buffer>( transparentRange.instanceCount * sizeof( GPU::DrawCommand ), BufferType::INDIRECT, "DrawTransparentCommands" );
 
 		shadow.setup(scene);
@@ -1833,45 +1846,6 @@ int main(int argc, char ** argv) {
 				drawArgsCompute->buffer(*drawInstances, 4);
 				GPU::dispatch((uint)scene.meshInfos->size(), 1, 1);
 
-				// For transparent objects, we'll have to generate a draw call per instance.
-				// TODO: also sort them back to front.
-				if(showTransparents){
-
-					const auto& transparentRange = scene.globalMeshMaterialRanges[Object::Material::TRANSPARENT];
-					transparentInfos[0].firstMesh = transparentRange.firstIndex;
-					transparentInfos[0].meshCount = transparentRange.count;
-					transparentInfos[0].instanceCount = transparentRange.instanceCount;
-					transparentInfos.upload();
-
-					// Better safe than sorry for now.
-					clearBufferCompute->use();
-					clearBufferCompute->buffer(transparentCounter, 1);
-					GPU::dispatch(1, 1, 1);
-
-					expandTransparentCompute->use();
-					expandTransparentCompute->buffer(frameInfos, 0);
-					expandTransparentCompute->buffer(transparentInfos, 1);
-					expandTransparentCompute->buffer(*scene.meshInfos, 2);
-					expandTransparentCompute->buffer(*scene.instanceInfos, 3);
-					expandTransparentCompute->buffer(*drawCommands, 4);
-					expandTransparentCompute->buffer(*drawInstances, 5);
-					expandTransparentCompute->buffer(*transparentDrawInstances, 6);
-					expandTransparentCompute->buffer(transparentCounter, 7);
-					GPU::dispatch(transparentRange.count, 1, 1);
-
-					// TODO: radix sort
-					
-					// Convert this list of instances to as many draw calls
-					drawArgsTransparentCompute->use();
-					drawArgsTransparentCompute->buffer(frameInfos, 0);
-					drawArgsTransparentCompute->buffer(*scene.meshInfos, 1);
-					drawArgsTransparentCompute->buffer(*transparentDrawInstances, 2);
-					drawArgsTransparentCompute->buffer(*transparentDrawCommands, 3);
-					drawArgsTransparentCompute->buffer(transparentCounter, 4);
-					GPU::dispatch(transparentRange.instanceCount, 1, 1);
-				}
-
-
 				clustersCompute->use();
 				clustersCompute->buffer(frameInfos, 0);
 				clustersCompute->buffer(*scene.lightInfos, 1);
@@ -2042,6 +2016,93 @@ int main(int argc, char ** argv) {
 			}
 
 			if(showTransparents){
+
+				const auto& transparentRange = scene.globalMeshMaterialRanges[Object::Material::TRANSPARENT];
+				transparentInfos[0].firstMesh = transparentRange.firstIndex;
+				transparentInfos[0].meshCount = transparentRange.count;
+				transparentInfos[0].instanceCount = transparentRange.instanceCount;
+				transparentInfos.upload();
+
+				Buffer* transparentItemsIn = transparentDrawInstances[0].get();
+				Buffer* transparentItemsOut = transparentDrawInstances[1].get();
+
+				// For transparent objects, we'll have to generate a draw call per instance.
+				{
+					// Better safe than sorry for now.
+					clearBufferCompute->use();
+					clearBufferCompute->buffer(transparentCounter, 1);
+					GPU::dispatch(1, 1, 1);
+
+					// Expand instances into a global list, compute sorting key (distance to camera).
+					expandTransparentCompute->use();
+					expandTransparentCompute->buffer(frameInfos, 0);
+					expandTransparentCompute->buffer(transparentInfos, 1);
+					expandTransparentCompute->buffer(*scene.meshInfos, 2);
+					expandTransparentCompute->buffer(*scene.instanceInfos, 3);
+					expandTransparentCompute->buffer(*drawCommands, 4);
+					expandTransparentCompute->buffer(*drawInstances, 5);
+					expandTransparentCompute->buffer(*transparentItemsIn, 6);
+					expandTransparentCompute->buffer(transparentCounter, 7);
+					GPU::dispatch(transparentRange.count, 1, 1);
+				}
+
+				// Perform a radix sort on the distance to each instance bounding box center.
+				// We'll then render transparent objects back to front.
+				{
+					const uint bitsToSort = 32;
+					// Because I'm lazy.
+					assert(bitsToSort % SORT_BIT_RANGE == 0);
+					const uint rounds = bitsToSort / SORT_BIT_RANGE;
+
+					// At each iteration, we'll focus on 4 bits, from least to most significant, sorted into 16 bins.
+					// The sort being stable, low bits ordering will be preserved when sorting higher bits.
+					for(uint rid = 0; rid < rounds; ++rid){
+						transparentInfos[0].firstBit = rid * SORT_BIT_RANGE;
+						transparentInfos.upload();
+
+						// Clear counters.
+						clearBufferCompute->use();
+						clearBufferCompute->buffer(atomicBinCounters, 1);
+						GPU::dispatch(SORT_BIN_COUNT, 1, 1);
+
+						// Count how many instances fall in each bin.
+						sortCount->use();
+						sortCount->buffer(transparentInfos, 1);
+						sortCount->buffer(transparentCounter, 2);
+						sortCount->buffer(*transparentItemsIn, 3);
+						sortCount->buffer(atomicBinCounters, 4);
+						GPU::dispatch(transparentRange.instanceCount, 1, 1);
+
+						// Convert bin counts into offsets in the output list.
+						sortPrefix->use();
+						sortPrefix->buffer(transparentInfos, 1);
+						sortPrefix->buffer(atomicBinCounters, 2);
+						GPU::dispatch(1, 1, 1);
+
+						// Append instances into the output list, using their bin offset and local increment.
+						sortReorder->use();
+						sortReorder->buffer(transparentInfos, 1);
+						sortReorder->buffer(transparentCounter, 2);
+						sortReorder->buffer(*transparentItemsIn, 3);
+						sortReorder->buffer(atomicBinCounters, 4);
+						sortReorder->buffer(*transparentItemsOut, 5);
+						GPU::dispatch(transparentRange.instanceCount, 1, 1);
+
+						// Swap buffers
+						std::swap(transparentItemsIn, transparentItemsOut);
+					}
+
+					// transparentItemsIn contains the result of the last sorting pass.
+					// Convert this list of instances to as many draw calls.
+					drawArgsTransparentCompute->use();
+					drawArgsTransparentCompute->buffer(frameInfos, 0);
+					drawArgsTransparentCompute->buffer(*scene.meshInfos, 1);
+					drawArgsTransparentCompute->buffer(*transparentItemsIn, 2);
+					drawArgsTransparentCompute->buffer(*transparentDrawCommands, 3);
+					drawArgsTransparentCompute->buffer(transparentCounter, 4);
+					GPU::dispatch(transparentRange.instanceCount, 1, 1);
+				}
+
 				GPU::bind(sceneLit, sceneDepth, LoadOperation::LOAD, LoadOperation::LOAD, LoadOperation::DONTCARE);
 				GPU::setViewport(sceneLit);
 
@@ -2050,13 +2111,12 @@ int main(int argc, char ** argv) {
 				GPU::setBlendState( true, BlendEquation::ADD, BlendFunction::SRC_ALPHA, BlendFunction::ONE_MINUS_SRC_ALPHA );
 				GPU::setColorState( true, true, true, false );
 
-				// Alternative possibility: real alpha blend and object sorting.
 				forwardInstancedObject->use();
 				forwardInstancedObject->buffer(frameInfos, 0);
 				forwardInstancedObject->buffer(*scene.meshInfos, 1);
 				forwardInstancedObject->buffer(*scene.instanceInfos, 2);
 				forwardInstancedObject->buffer(*scene.materialInfos, 3);
-				forwardInstancedObject->buffer(*transparentDrawInstances, 4);
+				forwardInstancedObject->buffer(*transparentItemsIn, 4);
 				forwardInstancedObject->buffer(*scene.lightInfos, 5);
 				forwardInstancedObject->buffer(*scene.zoneInfos, 6);
 				forwardInstancedObject->texture(textures.fogXY, 0);
@@ -2184,7 +2244,7 @@ int main(int argc, char ** argv) {
 
 						GPU::setPolygonState(PolygonMode::FILL);
 						GPU::setCullState(true, Faces::BACK);
-						GPU::setDepthState(true, TestFunction::EQUAL, false);
+						GPU::setDepthState(true, TestFunction::GEQUAL, false);
 						GPU::setBlendState(false);
 
 						selectionObject->use();

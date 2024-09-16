@@ -1,0 +1,26 @@
+
+#include "../engine/engine.glsl"
+
+layout(local_size_x=1, local_size_y=1, local_size_z=1) in;
+
+layout(set = 0, binding = 1) uniform TransparentFrameData {
+	uint firstMesh;
+	uint meshCount;
+	uint instanceCount;
+	uint firstBit;
+} transparentEngine;
+
+layout(set = 0, binding = 2) buffer BinCounters {
+	uint counters[];
+};
+
+void main(){
+	// Manual prefix sum
+	uint currentOffset = 0u;
+	for(int i = 0; i < SORT_BIN_COUNT; ++i){
+		uint binCount = counters[i];
+		counters[i] = currentOffset;
+		currentOffset += binCount;
+	}
+
+}

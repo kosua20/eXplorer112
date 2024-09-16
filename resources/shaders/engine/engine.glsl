@@ -69,6 +69,9 @@ layout(set = 0, binding = 0) uniform EngineData {
 
 #define ZONE_INFLUENCE_MARGIN 20.0
 
+#define SORT_BIT_RANGE 4u
+#define SORT_BIN_COUNT (1u << SORT_BIT_RANGE)
+
 const uint NO_MATERIAL = 0xFFFF;
 const uint NO_SHADOW = 0xFFFF;
 

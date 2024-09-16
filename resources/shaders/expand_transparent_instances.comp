@@ -7,6 +7,7 @@ layout(set = 0, binding = 1) uniform TransparentFrameData {
 	uint firstMesh;
 	uint meshCount;
 	uint instanceCount;
+	uint firstBit;
 } transparentEngine;
 
 layout(std140, set = 0, binding = 2) readonly buffer MeshesInfos {
