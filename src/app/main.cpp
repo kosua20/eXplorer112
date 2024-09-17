@@ -766,11 +766,7 @@ uint roundUp( uint a, uint step ){
 
 int main(int argc, char ** argv) {
 
-	// TODO:
-	//	* Some transparent items have multiple disjoint submeshes (ex: glass panels in
-	//      tuto_eco), which messes up transparency ordering. We could split submeshes
-	//		in multiple scene meshes and have them sorted separately. Otherwise, could
-	//		sort per primitive but far more costly...
+	// FIXME:
 	//	* Bug in the light/zone clustering, for some camera angles froxels are missing
 	//      some lights/zones. Especially visible on MoltenVK, but could be compounded
 	//      with another bug or driver issue.
@@ -2191,18 +2187,6 @@ int main(int argc, char ** argv) {
 				GPU::setBlendState( false );
 				GPU::setColorState( true, true, true, true );
 
-				if(debug.showWireframe){
-					debugInstancedObject->use();
-					debugInstancedObject->buffer(frameInfos, 0);
-					debugInstancedObject->buffer(*scene.meshInfos, 1);
-					debugInstancedObject->buffer(*scene.instanceInfos, 2);
-					debugInstancedObject->buffer(*scene.materialInfos, 3);
-					debugInstancedObject->buffer(*drawInstances, 4);
-					// Always draw all meshes.
-					GPU::drawIndirectMesh(scene.globalMesh, *drawCommands, 0, scene.meshInfos->size());
-					// FIXME: hides other debug draws when activated.
-				}
-
 				coloredDebugDraw->use();
 				coloredDebugDraw->buffer( frameInfos, 0 );
 				if( ( selected.mesh >= 0 || selected.instance >= 0 ) && !debug.boundingBox.indices.empty() )
@@ -2221,6 +2205,18 @@ int main(int argc, char ** argv) {
 				{
 					GPU::drawMesh( debug.fxs );
 				}
+
+				if(debug.showWireframe){
+					debugInstancedObject->use();
+					debugInstancedObject->buffer(frameInfos, 0);
+					debugInstancedObject->buffer(*scene.meshInfos, 1);
+					debugInstancedObject->buffer(*scene.instanceInfos, 2);
+					debugInstancedObject->buffer(*scene.materialInfos, 3);
+					debugInstancedObject->buffer(*drawInstances, 4);
+					// Always draw all meshes.
+					GPU::drawIndirectMesh(scene.globalMesh, *drawCommands, 0, scene.meshInfos->size());
+				}
+
 			}
 
 
