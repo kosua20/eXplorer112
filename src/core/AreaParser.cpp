@@ -328,71 +328,133 @@ bool load(const fs::path& path, Object& outObject){
 	}
 
 	// Split transparent sets in connected components, to improve sorting when rendering
-	/*
 	for(uint setId = 0; setId < outObject.faceSets.size(); ){
-		if(outObject.materials[outObject.faceSets[setId].material].type != Object::Material::TRANSPARENT){
+		const Object::Set& refSet = outObject.faceSets[ setId ];
+		// Skip non transparent sets.
+		if( refSet.material == Object::Material::NO_MATERIAL || refSet.faces.empty() 
+			|| outObject.materials[ refSet.material ].type != Object::Material::TRANSPARENT ){
 			++setId;
 			continue;
 		}
 		// Copy the set
-		Object::Set set(outObject.faceSets[setId]);
+		const Object::Set set( refSet );
+		// Remove it from the object.
 		outObject.faceSets.erase(outObject.faceSets.begin() + setId);
 
-		// Count components.
-		// Build neighbor list.
-		std::unordered_map<uint, std::set<uint>> neighbors;
-		for(const auto& face : set.faces){
-			neighbors[face.v0].insert(face.v1);
-			neighbors[face.v0].insert(face.v2);
-			neighbors[face.v1].insert(face.v0);
-			neighbors[face.v1].insert(face.v2);
-			neighbors[face.v2].insert(face.v1);
-			neighbors[face.v2].insert(face.v0);
-		}
-		uint vertCount = neighbors.size();
-		std::vector<int> vertComponent(vertCount, -1);
-		std::deque<uint> vertsToVisit;
-		vertsToVisit.push_back(0);
-		vertComponent[0] = 0;
-		uint assignedCount = 1;
-		uint currentSet = 0;
-		while(assignedCount < vertCount){
-			while(!vertsToVisit.empty()){
-				uint index = vertsToVisit.front();
-				vertsToVisit.pop_front();
-				for(const uint& neigh : neighbors[index]){
-					if(vertComponent[neigh] == -1){
-						vertComponent[neigh] = vertComponent[index];
-						vertsToVisit.push_back(neigh);
-						++assignedCount;
+		// Remap vertex indices based on position.
+		std::unordered_map<uint, uint> oldToNewMapping;
+		{
+			// Collect vertices used in the set
+			std::unordered_set<uint> oldIndicesSet;
+			for( const auto& face : set.faces )
+			{
+				oldIndicesSet.emplace( face.v0 );
+				oldIndicesSet.emplace( face.v1 );
+				oldIndicesSet.emplace( face.v2 );
+			}
+			// For easier iteration
+			const std::vector<uint> oldIndices( oldIndicesSet.begin(), oldIndicesSet.end() );
+			// Here we care about closeness in space, merge vertices if positions are close.
+			const uint oldCount = (uint)oldIndices.size();
+			constexpr float posEpsilon = 1e-3f; // World in centimeters.
+			for( uint vid = 0; vid < oldCount; ++vid )
+			{
+				oldToNewMapping[ oldIndices[ vid ] ] = oldIndices[ vid ];
+				// Look for a predecessor with the same position.
+				for( uint ovid = 0; ovid < vid; ++ovid )
+				{
+					if( glm::length( outObject.positions[ oldIndices[ vid ] ] - outObject.positions[ oldIndices[ ovid ] ] ) < posEpsilon )
+					{
+						oldToNewMapping[ oldIndices[ vid ] ] = oldToNewMapping[ oldIndices[ ovid ] ];
+						break;
 					}
 				}
 			}
-			for(uint i = 0; i < vertCount; ++i){
-				if(vertComponent[i] == -1){
-					vertsToVisit.push_back(i);
-					vertComponent[i] = ++currentSet;
-					++assignedCount;
-					break;
+		}
+		// We'll now work with the remapped indices.
+		
+		// Build neighbor lists.
+		struct VertexInfos
+		{
+			std::set<uint> neighborsNewIds;
+			int component{ -1 };
+		};
+		std::unordered_map<uint, VertexInfos> newVerticesToInfos;
+		for( const auto& face : set.faces )
+		{
+			const uint v0NewMapping = oldToNewMapping[ face.v0 ];
+			const uint v1NewMapping = oldToNewMapping[ face.v1 ];
+			const uint v2NewMapping = oldToNewMapping[ face.v2 ];
+			newVerticesToInfos[ v0NewMapping ].neighborsNewIds.insert( v1NewMapping );
+			newVerticesToInfos[ v0NewMapping ].neighborsNewIds.insert( v2NewMapping );
+			newVerticesToInfos[ v1NewMapping ].neighborsNewIds.insert( v0NewMapping );
+			newVerticesToInfos[ v1NewMapping ].neighborsNewIds.insert( v2NewMapping );
+			newVerticesToInfos[ v2NewMapping ].neighborsNewIds.insert( v0NewMapping );
+			newVerticesToInfos[ v2NewMapping ].neighborsNewIds.insert( v1NewMapping );
+		}
+
+		// Assign component index to each vertex, based on connectivity. Explore faces in a depth first search.
+		uint currentSetCount = 1;
+		{
+			std::deque<uint> newVertsToVisit;
+			// Init
+			{
+				auto firstVert = newVerticesToInfos.begin();
+				newVertsToVisit.push_back( firstVert->first );
+				firstVert->second.component = 0;
+			}
+			uint newAssignedCount = 1;
+			const uint newVertexCount = ( uint )newVerticesToInfos.size();
+			while( newAssignedCount < newVertexCount )
+			{
+				// Visit all neighbors while we have some.
+				while( !newVertsToVisit.empty() )
+				{
+					uint newVertexId = newVertsToVisit.front();
+					newVertsToVisit.pop_front();
+					const VertexInfos& newVertInfo = newVerticesToInfos[ newVertexId ];
+					for( const uint& newNeighborId : newVertInfo.neighborsNewIds )
+					{
+						if( newVerticesToInfos[ newNeighborId ].component == -1 )
+						{
+							newVerticesToInfos[ newNeighborId ].component = newVertInfo.component;
+							newVertsToVisit.push_back( newNeighborId );
+							++newAssignedCount;
+						}
+					}
+				}
+				// Find the next free vertex.
+				for( auto& newVertexInfos : newVerticesToInfos )
+				{
+					if( newVertexInfos.second.component == -1 )
+					{
+						newVertsToVisit.push_back( newVertexInfos.first );
+						newVertexInfos.second.component = currentSetCount++;
+						++newAssignedCount;
+						break;
+					}
 				}
 			}
+			Log::verbose( "%s - %u: found %u disjoint sub-sets.", outObject.name.c_str(), setId, currentSetCount );
 		}
-		Log::info("%s - %u: found %u sets.", outObject.name.c_str(), setId, currentSet);
 
-		// Generate currentSet sets instead, and replace them.
-		for(uint sid = 0; sid < currentSet; ++sid){
+		// Generate currentSetCount sets to replace the initial set.
+		for( uint sid = 0; sid < currentSetCount; ++sid )
+		{
 			outObject.faceSets.insert(outObject.faceSets.begin() + setId, Object::Set{} );
 			Object::Set& newSet = outObject.faceSets[setId];
 			newSet.material = set.material;
 			for(const auto& face : set.faces){
-				if(vertComponent[face.v0] == sid){
+				// Look at the first index in the face (any other would do too).
+				uint newVertId = oldToNewMapping[ face.v0 ];
+				if( newVerticesToInfos[ newVertId ].component == sid){
 					newSet.faces.push_back(face);
 				}
 			}
 		}
-		setId += currentSet;
+		// Skip newly insert sets.
+		setId += currentSetCount;
 	}
-	*/
 	return true;
 }
 
