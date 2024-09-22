@@ -1354,12 +1354,14 @@ int main(int argc, char ** argv) {
 
 					if(ImGui::BeginTabItem(lightsTabName.c_str())){
 
+						bool lightsBufferDirty = false;
 						static ImGuiTextFilter lightFilter;
 						lightFilter.Draw();
 
-						if(ImGui::BeginTable("#LightsList", 3, tableFlags, winSize)){
+						if(ImGui::BeginTable("#LightsList", 4, tableFlags, winSize)){
 							// Header
 							ImGui::TableSetupScrollFreeze(0, 1); // Make top row always visible
+							ImGui::TableSetupColumn("On", ImGuiTableColumnFlags_None);
 							ImGui::TableSetupColumn("Name", ImGuiTableColumnFlags_None);
 							ImGui::TableSetupColumn("Type", ImGuiTableColumnFlags_None);
 							ImGui::TableSetupColumn("Color", ImGuiTableColumnFlags_None);
@@ -1372,11 +1374,14 @@ int main(int argc, char ** argv) {
 								if(!lightFilter.PassFilter(light.name.c_str())){
 									continue;
 								}
-								const Scene::LightInfos& infos = ( *scene.lightInfos )[ row ];
+								Scene::LightInfos& infos = ( *scene.lightInfos )[ row ];
 
 								ImGui::TableNextColumn();
 								ImGui::PushID(row);
-
+								if(ImGui::CheckboxFlags("##On", &infos.enabled, 1)){
+									lightsBufferDirty = true;
+								}
+								ImGui::TableNextColumn();
 								if(ImGui::Selectable(light.name.c_str())){
 									const glm::vec3 camCenter = glm::vec3(light.frame[3]);
 									const glm::vec3 camPos = camCenter - glm::vec3(light.radius.x, 0.0f, 0.0f);
@@ -1398,6 +1403,10 @@ int main(int argc, char ** argv) {
 							ImGui::EndTable();
 						}
 						ImGui::EndTabItem();
+
+						if(lightsBufferDirty){
+							scene.lightInfos->upload();
+						}
 					}
 
 					if(ImGui::BeginTabItem(camerasTabName.c_str())){

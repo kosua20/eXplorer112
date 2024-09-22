@@ -76,7 +76,8 @@ public:
 		glm::vec4 axisAndRadiusZ;
 		uint materialIndex;
 		uint shadow;
-		uint pad1, pad2;
+		uint enabled;
+		uint pad2;
 	};
 
 	struct ZoneInfos {

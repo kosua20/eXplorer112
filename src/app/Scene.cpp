@@ -409,7 +409,8 @@ void Scene::generate(const World& world, const GameFiles& files){
 
 			const glm::vec3 lightPos = glm::vec3(light.frame[3]);
 			LightInfos& info = (*lightInfos)[i];
-
+			info.enabled = true;
+			
 			glm::mat4 view = glm::inverse(light.frame);
 			view[0][2] *= -1.0f;
 			view[1][2] *= -1.0f;

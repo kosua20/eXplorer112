@@ -81,6 +81,9 @@ void main(){
 				stop = true;
 				break;
 			}
+			if(lightInfos[lightIndex].enabled == 0){
+				continue;
+			}
 			// Test the light sphere against the bounding box.
 			vec3 lightPos = vec3(engine.v * vec4(lightInfos[lightIndex].positionAndMaxRadius.xyz, 1.0));
 			float lightRad = lightInfos[lightIndex].positionAndMaxRadius.w + 5.0;
