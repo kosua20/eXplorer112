@@ -68,6 +68,7 @@ void main(){
 	planes[4] = tvp[2];
 	planes[5] = tvp[3] - tvp[2];
 
+	bool forceAllObjects = (engine.skipCulling & SKIP_CULLING_OBJECTS) != 0;
 	uint effectiveCount = 0;
 	for(uint i = 0; i < infos.instanceCount; ++i){
 
@@ -78,7 +79,7 @@ void main(){
 			instanceCorners[cid] = frame * corners[cid];
 		}
 
-		if(engine.skipCulling != 0 || intersects(instanceCorners, planes)){
+		if(forceAllObjects || intersects(instanceCorners, planes)){
 			drawInstanceInfos[infos.firstInstanceIndex + effectiveCount] = flatInstanceIndex;
 			++effectiveCount;
 		}

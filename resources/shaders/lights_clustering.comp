@@ -70,6 +70,9 @@ void main(){
 	vec3 froxelPos = 0.5 * (minBox + maxBox);
 	float froxelRad = length(maxBox - froxelPos);
 
+	bool forceAllLights = (engine.skipCulling & SKIP_CULLING_LIGHTS) != 0;
+	bool forceAllZones = (engine.skipCulling & SKIP_CULLING_ZONES) != 0;
+
 	// Cull all lights bounding spheres against the bounding box.
 	uvec4 lightFlags = uvec4(0u);
 
@@ -88,7 +91,7 @@ void main(){
 			vec3 lightPos = vec3(engine.v * vec4(lightInfos[lightIndex].positionAndMaxRadius.xyz, 1.0));
 			float lightRad = lightInfos[lightIndex].positionAndMaxRadius.w + 5.0;
 			
-			if(sphereIntersectsBox(lightPos, lightRad, minBox, maxBox)){
+			if(forceAllLights || sphereIntersectsBox(lightPos, lightRad, minBox, maxBox)){
 				lightFlags[i] |= (1u << j);
 			}
 		}
@@ -117,7 +120,7 @@ void main(){
 		// Move to viewspace.
 		zonePos = vec3(engine.v * vec4(zonePos, 1.0));
 
-		if(sphereIntersectsSphere(froxelPos, froxelRad, zonePos, zoneRad)){
+		if(forceAllZones || sphereIntersectsSphere(froxelPos, froxelRad, zonePos, zoneRad)){
 			zoneFlags |= (1u << j);
 		}
 	}

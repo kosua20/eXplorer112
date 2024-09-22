@@ -32,6 +32,10 @@
 #define MODE_POSTPROCESS_HEAT 32
 #define MODE_POSTPROCESS_UNDERWATER 64
 
+#define SKIP_CULLING_OBJECTS 1
+#define SKIP_CULLING_LIGHTS 2
+#define SKIP_CULLING_ZONES 4
+
 #define CLUSTER_XY_SIZE 64
 #define CLUSTER_Z_COUNT 32
 
@@ -363,6 +367,7 @@ struct DebugVisualisation {
    Mesh lights{"lights"};
    Mesh zones{"zones"};
    Mesh fxs{"fxs"};
+   Mesh camera{"frustum"};
 
    bool showWireframe = false;
    bool showLights = false;
@@ -380,7 +385,28 @@ struct DebugVisualisation {
 #endif
 
 	bool anyActive() const {
-		return showWireframe || showLights || showFxs || showZones;
+		return showWireframe || showLights || showFxs || showZones || freezeCulling;
+	}
+
+	void addCamera(Mesh& mesh, const glm::mat4& viewProj){
+		BoundingBox unitBox(glm::vec3(-1.0f, -1.0, 0.f), glm::vec3(1.0f));
+		// Build box.
+		auto corners = unitBox.getCorners();
+		// Transform corners from proj space to world space.
+		for(glm::vec3& corner : corners){
+			glm::vec4 c = glm::inverse(viewProj) * glm::vec4(corner, 1.0f);
+			c /= c.w;
+			corner = glm::vec3(c);
+		}
+		const std::vector<glm::vec3> colors( corners.size(), glm::vec3(0.0f, 1.0f, 0.0f) );
+		const uint indexShift = ( uint )mesh.positions.size();
+
+		mesh.positions.insert( mesh.positions.end(), corners.begin(), corners.end() );
+		mesh.colors.insert( mesh.colors.end(), colors.begin(), colors.end() );
+		for( const uint ind : boxIndices )
+		{
+			mesh.indices.push_back( indexShift + ind );
+		}
 	}
 
 	void addLightGizmo(Mesh& mesh, const World::Light& light){
@@ -1698,7 +1724,30 @@ int main(int argc, char ** argv) {
 			ImGui::SameLine();
 			ImGui::Text( "Debug" );
 
-			ImGui::Checkbox("Freeze culling", &debug.freezeCulling);
+
+			if( ImGui::ArrowButton( "CullingArrow", ImGuiDir_Down ) )
+			{
+				ImGui::OpenPopup( "CullingPopup" );
+			}
+			if( ImGui::BeginPopup( "CullingPopup" ) )
+			{
+				ImGui::CheckboxFlags("Skip objects", &frameInfos[0].skipCulling, SKIP_CULLING_OBJECTS);
+				ImGui::CheckboxFlags("Skip lights", &frameInfos[0].skipCulling, SKIP_CULLING_LIGHTS);
+				ImGui::CheckboxFlags("Skip zones", &frameInfos[0].skipCulling, SKIP_CULLING_ZONES);
+
+				if(ImGui::Checkbox("Freeze frustum", &debug.freezeCulling)){
+				 debug.camera.clean();
+				 if(debug.freezeCulling){
+					 debug.addCamera(debug.camera, frameInfos[0].vpCulling);
+					 debug.camera.upload();
+				 }
+			 }
+
+				ImGui::EndPopup();
+			}
+			ImGui::SameLine();
+			ImGui::Text( "Culling" );
+
 			ImGui::SameLine();
 			if(ImGui::Button("Reset camera")){
 				camera.reset();
@@ -2251,6 +2300,9 @@ int main(int argc, char ** argv) {
 				if( debug.showFxs && !debug.fxs.indices.empty() )
 				{
 					GPU::drawMesh( debug.fxs );
+				}
+				if(debug.freezeCulling && !debug.camera.indices.empty()){
+					GPU::drawMesh(debug.camera);
 				}
 
 				if(debug.showWireframe){
