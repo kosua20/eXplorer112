@@ -147,7 +147,15 @@ void ShaderCompiler::clean(Program::Stage & stage){
 void ShaderCompiler::compile(const std::string & prog, ShaderType type, Program::Stage & stage, bool generateModule, std::string & finalLog) {
 
 	// Add GLSL version.
-	std::string outputProg = "#version 450\n#extension GL_ARB_separate_shader_objects : enable\n#extension GL_EXT_samplerless_texture_functions : enable\n#line 1 0\n";
+	std::string outputProg = "#version 450\n\n";
+	outputProg.append("#extension GL_ARB_separate_shader_objects : enable\n");
+	outputProg.append("#extension GL_EXT_samplerless_texture_functions : enable\n");
+#if defined(DRAW_ID_FALLBACK)
+	outputProg.append("#define DRAW_ID_FALLBACK 1\n");
+#else
+	outputProg.append("#extension GL_ARB_shader_draw_parameters : enable\n");
+#endif
+	outputProg.append("#line 1 0\n");
 	outputProg.append(prog);
 
 	// Create shader object.

@@ -447,7 +447,7 @@ bool load(const fs::path& path, Object& outObject){
 			for(const auto& face : set.faces){
 				// Look at the first index in the face (any other would do too).
 				uint newVertId = oldToNewMapping[ face.v0 ];
-				if( newVerticesToInfos[ newVertId ].component == sid){
+				if( newVerticesToInfos[ newVertId ].component == (int)sid){
 					newSet.faces.push_back(face);
 				}
 			}

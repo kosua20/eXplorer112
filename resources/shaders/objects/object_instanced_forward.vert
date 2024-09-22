@@ -8,15 +8,18 @@ layout(location = 2) in vec2 uv;///< UV.
 layout(location = 3) in vec3 tang; ///< Tangent.
 layout(location = 4) in vec3 bitan; ///< Bitangent.
 
+#if defined(DRAW_ID_FALLBACK)
 layout(push_constant) uniform constants {
 	uint DrawIndex;
 };
+#endif
 
 layout(location = 0) out INTERFACE {
 	mat4 tbn; ///< Normal to view matrix.
 	vec4 worldPos;
 	vec4 viewDir;
 	vec4 uv; ///< Texture coordinates.
+	flat uint DrawIndex;
 } Out;
 
 
@@ -35,6 +38,11 @@ layout(set = 0, binding = 4) readonly buffer TransparentInfos {
 
 /** Apply the MVP transformation to the input vertex. */
 void main(){
+
+#if !defined(DRAW_ID_FALLBACK)
+	uint DrawIndex = uint(gl_DrawIDARB);
+#endif
+	
 	TransparentInstanceInfos infos = transparentInfos[DrawIndex];
 	MeshInfos mesh = meshInfos[infos.meshIndex];
 	MeshInstanceInfos instance = instanceInfos[infos.instanceIndex];
@@ -52,5 +60,6 @@ void main(){
 	vec3 B = (nMat * bitan);
 	vec3 N = (nMat * n);
 	Out.tbn = mat4(mat3(T, B, N));
+	Out.DrawIndex = DrawIndex;
 
 }

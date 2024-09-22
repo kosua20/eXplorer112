@@ -5,12 +5,15 @@
 layout(location = 0) in vec3 v;///< Position.
 layout(location = 2) in vec2 uv;///< UV.
 
+#if defined(DRAW_ID_FALLBACK)
 layout(push_constant) uniform constants {
 	uint DrawIndex;
 };
+#endif
 
 layout(location = 0) out INTERFACE {
 	vec4 uv; ///< Texture coordinates.
+	flat uint DrawIndex;
 } Out;
 
 
@@ -28,6 +31,11 @@ layout(set = 0, binding = 4) readonly buffer InstanceDrawInfos {
 
 /** Apply the MVP transformation to the input vertex. */
 void main(){
+
+#if !defined(DRAW_ID_FALLBACK)
+	uint DrawIndex = uint(gl_DrawIDARB);
+#endif
+	
 	MeshInfos mesh = meshInfos[DrawIndex];
 	uint instanceIndex = drawInstanceInfos[mesh.firstInstanceIndex + gl_InstanceIndex];
 
@@ -36,5 +44,6 @@ void main(){
 	vec4 worldPos = instance.frame * vec4(v, 1.0);
 	gl_Position = engine.vp * worldPos;
 	Out.uv.xy = uv;
+	Out.DrawIndex = DrawIndex;
 
 }

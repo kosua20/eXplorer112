@@ -5,11 +5,8 @@
 
 layout(location = 0) in INTERFACE {
 	vec4 uv;
+	flat uint DrawIndex;
 } In ;
-
-layout(push_constant) uniform constants {
-	uint DrawIndex;
-};
 
 layout(std140, set = 0, binding = 1) readonly buffer MeshesInfos {
 	MeshInfos meshInfos[];
@@ -25,7 +22,7 @@ layout(location = 0) out vec4 fragColor; ///< Color.
 
 /** Texture each face. */
 void main(){
-	MaterialInfos material =  materialInfos[meshInfos[DrawIndex].materialIndex];
+	MaterialInfos material =  materialInfos[meshInfos[In.DrawIndex].materialIndex];
 
 	TextureInfos albedoMap = material.color;
 	float alpha = texture(sampler2DArray(textures[albedoMap.index], sRepeatLinearLinear), vec3(In.uv.xy, albedoMap.layer)).a;

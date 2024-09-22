@@ -7,10 +7,6 @@ layout(location = 0) in INTERFACE {
 	flat uint index;
 } In ;
 
-layout(push_constant) uniform constants {
-	uint DrawIndex;
-};
-
 layout(std140, set = 0, binding = 1) readonly buffer MeshesInfos {
 	MeshInfos meshInfos[];
 };

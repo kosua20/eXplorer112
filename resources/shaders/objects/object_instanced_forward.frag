@@ -8,11 +8,8 @@ layout(location = 0) in INTERFACE {
 	vec4 worldPos;
 	vec4 viewDir;
 	vec4 uv;
+	flat uint DrawIndex;
 } In ;
-
-layout(push_constant) uniform constants {
-	uint DrawIndex;
-};
 
 layout(std140, set = 0, binding = 1) readonly buffer MeshesInfos {
 	MeshInfos meshInfos[];
@@ -49,7 +46,7 @@ layout(location = 0) out vec4 fragColor; ///< Color.
 
 /** Texture each face. */
 void main(){
-	MaterialInfos material =  materialInfos[meshInfos[transparentInfos[DrawIndex].meshIndex].materialIndex];
+	MaterialInfos material =  materialInfos[meshInfos[transparentInfos[In.DrawIndex].meshIndex].materialIndex];
 
 	// Build normal using TBN matrix and normal map.
 	TextureInfos normalMap = material.normal;

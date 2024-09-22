@@ -1,5 +1,8 @@
 #pragma once
 
+// Fallback for MoltenVK and drivers lacking gl_DrawID support.
+#define DRAW_ID_FALLBACK
+
 #include "resources/Mesh.hpp"
 #include "resources/Texture.hpp"
 #include "resources/Buffer.hpp"
