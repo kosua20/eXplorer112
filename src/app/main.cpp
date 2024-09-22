@@ -1833,6 +1833,7 @@ int main(int argc, char ** argv) {
 
 			// Culling and clustering.
 			{
+				GPU::pushMarker("Frustum culling");
 				// Populate drawCommands and drawInstances by using a compute shader that performs culling.
 				drawArgsCompute->use();
 				drawArgsCompute->buffer(frameInfos, 0);
@@ -1841,7 +1842,9 @@ int main(int argc, char ** argv) {
 				drawArgsCompute->buffer(*drawCommands, 3);
 				drawArgsCompute->buffer(*drawInstances, 4);
 				GPU::dispatch((uint)scene.meshInfos->size(), 1, 1);
+				GPU::popMarker();
 
+				GPU::pushMarker("Lights/zones clustering");
 				clustersCompute->use();
 				clustersCompute->buffer(frameInfos, 0);
 				clustersCompute->buffer(*scene.lightInfos, 1);
@@ -1850,6 +1853,7 @@ int main(int argc, char ** argv) {
 				clustersCompute->texture(fogClusters, 1);
 				// We need one thread per cluster cell.
 				GPU::dispatch( lightClusters.width, lightClusters.height, lightClusters.depth );
+				GPU::popMarker();
 			}
 
 			// Use alpha to skip lighting.
@@ -1858,6 +1862,7 @@ int main(int argc, char ** argv) {
 			GPU::setViewport(sceneColor);
 
 			if(showOpaques){
+				GPU::pushMarker("Opaque objects");
 				GPU::setPolygonState(PolygonMode::FILL);
 				GPU::setCullState(true, Faces::BACK );
 				GPU::setDepthState(true, TestFunction::GEQUAL, true);
@@ -1873,10 +1878,12 @@ int main(int argc, char ** argv) {
 
 				const auto& range = scene.globalMeshMaterialRanges[Object::Material::OPAQUE];
 				GPU::drawIndirectMesh(scene.globalMesh, *drawCommands, range.firstIndex, range.count);
+				GPU::popMarker();
 			}
 
 			// Lighting
 			{
+				GPU::pushMarker("Lighting/fog");
 				lightingCompute->use();
 				lightingCompute->buffer(frameInfos, 0);
 				lightingCompute->buffer(*scene.lightInfos, 1);
@@ -1895,10 +1902,12 @@ int main(int argc, char ** argv) {
 				lightingCompute->texture(textures.fogZ, 9);
 
 				GPU::dispatch( sceneLit.width, sceneLit.height, 1u);
+				GPU::popMarker();
 			}
 
 			// Render unlit decals on top with specific blending mode, using src * dst
 			if(showDecals){
+				GPU::pushMarker("Decal objects");
 				GPU::bind(sceneLit, sceneDepth, LoadOperation::LOAD, LoadOperation::LOAD, LoadOperation::DONTCARE);
 				GPU::setViewport(sceneLit);
 
@@ -1917,6 +1926,7 @@ int main(int argc, char ** argv) {
 				const auto& range = scene.globalMeshMaterialRanges[Object::Material::DECAL];
 				GPU::drawIndirectMesh(scene.globalMesh, *drawCommands, range.firstIndex, range.count);
 
+				GPU::popMarker();
 			}
 
 			// First billboard and particle passes
@@ -1931,6 +1941,7 @@ int main(int argc, char ** argv) {
 				billboardObject->buffer(*scene.materialInfos, 1);
 				// First billboards
 				if(showBillboards){
+					GPU::pushMarker("Billboards 1");
 					for(World::Blending blend : blendsPreFog){
 						const Scene::Range & range = scene.billboardRanges[blend];
 						if(range.count <= 0){
@@ -1939,10 +1950,12 @@ int main(int argc, char ** argv) {
 						GPU::setBlendState(true, BlendEquation::ADD, srcFuncs[blend], dstFuncs[blend]);
 						GPU::drawMesh(scene.billboardsMesh, range.firstIndex, range.count);
 					}
+					GPU::popMarker();
 				}
 
 				// Then particles
 				if(showParticles){
+					GPU::pushMarker("Emitters 1");
 					for(World::Blending blend : blendsPreFog){
 						const Scene::Range & range = scene.particleRanges[blend];
 						if(range.count <= 0){
@@ -1951,11 +1964,13 @@ int main(int argc, char ** argv) {
 						GPU::setBlendState(true, BlendEquation::ADD, srcFuncs[blend], dstFuncs[blend]);
 						GPU::drawMesh(scene.billboardsMesh, range.firstIndex, range.count);
 					}
+					GPU::popMarker();
 				}
 			}
 
 			// Fog
 			if(showFog){
+				GPU::pushMarker("Apply fog");
 				GPU::bind(sceneLit, LoadOperation::LOAD);
 				GPU::setViewport(sceneLit);
 				GPU::setDepthState(false);
@@ -1972,6 +1987,7 @@ int main(int argc, char ** argv) {
 				passthroughImage->texture(sceneFog, 0);
 				GPU::drawQuad();
 
+				GPU::popMarker();
 			}
 
 			// Then render post fog emissive billboards
@@ -1987,6 +2003,7 @@ int main(int argc, char ** argv) {
 
 				// First billboards
 				if(showBillboards){
+					GPU::pushMarker("Billboards 2");
 					for(World::Blending blend : blendsPostFog){
 						const Scene::Range & range = scene.billboardRanges[blend];
 						if(range.count <= 0){
@@ -1995,10 +2012,12 @@ int main(int argc, char ** argv) {
 						GPU::setBlendState(true, BlendEquation::ADD, srcFuncs[blend], dstFuncs[blend]);
 						GPU::drawMesh(scene.billboardsMesh, range.firstIndex, range.count);
 					}
+					GPU::popMarker();
 				}
 
 				// Then particles
 				if(showParticles){
+					GPU::pushMarker("Emitters 2");
 					for(World::Blending blend : blendsPostFog){
 						const Scene::Range & range = scene.particleRanges[blend];
 						if(range.count <= 0){
@@ -2007,12 +2026,14 @@ int main(int argc, char ** argv) {
 						GPU::setBlendState(true, BlendEquation::ADD, srcFuncs[blend], dstFuncs[blend]);
 						GPU::drawMesh(scene.billboardsMesh, range.firstIndex, range.count);
 					}
+					GPU::popMarker();
 				}
 
 			}
 
 			if(showTransparents){
 
+				GPU::pushMarker("Transparency");
 				const auto& transparentRange = scene.globalMeshMaterialRanges[Object::Material::TRANSPARENT];
 				transparentInfos[0].firstMesh = transparentRange.firstIndex;
 				transparentInfos[0].meshCount = transparentRange.count;
@@ -2024,6 +2045,7 @@ int main(int argc, char ** argv) {
 
 				// For transparent objects, we'll have to generate a draw call per instance.
 				{
+					GPU::pushMarker("Expand instances");
 					// Better safe than sorry for now.
 					clearBufferCompute->use();
 					clearBufferCompute->buffer(transparentCounter, 1);
@@ -2040,11 +2062,13 @@ int main(int argc, char ** argv) {
 					expandTransparentCompute->buffer(*transparentItemsIn, 6);
 					expandTransparentCompute->buffer(transparentCounter, 7);
 					GPU::dispatch(transparentRange.count, 1, 1);
+					GPU::popMarker();
 				}
 
 				// Perform a radix sort on the distance to each instance bounding box center.
 				// We'll then render transparent objects back to front.
 				{
+					GPU::pushMarker("Radix sort");
 					const uint bitsToSort = 32;
 					// Because I'm lazy.
 					assert(bitsToSort % SORT_BIT_RANGE == 0);
@@ -2087,9 +2111,12 @@ int main(int argc, char ** argv) {
 						// Swap buffers
 						std::swap(transparentItemsIn, transparentItemsOut);
 					}
+					GPU::popMarker();
 
 					// transparentItemsIn contains the result of the last sorting pass.
 					// Convert this list of instances to as many draw calls.
+
+					GPU::pushMarker("Prepare arguments");
 					drawArgsTransparentCompute->use();
 					drawArgsTransparentCompute->buffer(frameInfos, 0);
 					drawArgsTransparentCompute->buffer(*scene.meshInfos, 1);
@@ -2097,7 +2124,11 @@ int main(int argc, char ** argv) {
 					drawArgsTransparentCompute->buffer(*transparentDrawCommands, 3);
 					drawArgsTransparentCompute->buffer(transparentCounter, 4);
 					GPU::dispatch(transparentRange.instanceCount, 1, 1);
+					GPU::popMarker();
 				}
+
+
+				GPU::pushMarker("Transparent objects");
 
 				GPU::bind(sceneLit, sceneDepth, LoadOperation::LOAD, LoadOperation::LOAD, LoadOperation::DONTCARE);
 				GPU::setViewport(sceneLit);
@@ -2123,6 +2154,8 @@ int main(int argc, char ** argv) {
 
 				const auto& range = scene.globalMeshMaterialRanges[Object::Material::TRANSPARENT];
 				GPU::drawIndirectMesh(scene.globalMesh, *transparentDrawCommands, 0, range.instanceCount);
+				GPU::popMarker();
+				GPU::popMarker();
 			}
 
 			// Postprocess stack
@@ -2136,6 +2169,7 @@ int main(int argc, char ** argv) {
 				// Bloom
 				if(showPostprocess & MODE_POSTPROCESS_BLOOM){
 
+					GPU::pushMarker("Bloom chain");
 					GPU::blit(sceneLit, bloom0, 0, 0, Filter::LINEAR);
 					GPU::setViewport(0, 0, bloom0.width, bloom0.height);
 
@@ -2151,11 +2185,13 @@ int main(int argc, char ** argv) {
 						bloomBlur->buffer(blurInfosV, 0);
 						GPU::drawQuad();
 					}
+					GPU::popMarker();
 
 				}
 
 				// Postprocesses
 				{
+					GPU::pushMarker("Postprocess");
 					GPU::bind(sceneFog, LoadOperation::DONTCARE);
 					GPU::setViewport(sceneFog);
 					GPU::setDepthState(false);
@@ -2172,12 +2208,14 @@ int main(int argc, char ** argv) {
 					noiseGrainQuad->texture(textures.water, 6);
 					noiseGrainQuad->buffer(frameInfos, 0);
 					GPU::drawQuad();
+					GPU::popMarker();
 				}
 			}
 
 			// Debug view.
 			if(debug.anyActive()){
 
+				GPU::pushMarker("Debug draw");
 				GPU::bind( sceneFog, sceneDepth, LoadOperation::LOAD, LoadOperation::LOAD, LoadOperation::DONTCARE );
 				GPU::setViewport( sceneFog );
 
@@ -2216,6 +2254,7 @@ int main(int argc, char ** argv) {
 					// Always draw all meshes.
 					GPU::drawIndirectMesh(scene.globalMesh, *drawCommands, 0, scene.meshInfos->size());
 				}
+				GPU::popMarker();
 
 			}
 
@@ -2232,6 +2271,7 @@ int main(int argc, char ** argv) {
 				// Check that we are in the viewport.
 				if(glm::all(glm::lessThan(mousePos, glm::vec2(1.0f))) && glm::all(glm::greaterThan(mousePos, glm::vec2(0.0f)))){
 
+					GPU::pushMarker("Selection");
 					// Render to selection ID texture
 					{
 						selectionColor.resize(sceneLit.width, sceneLit.height);
@@ -2252,6 +2292,7 @@ int main(int argc, char ** argv) {
 						// Draw all meshes.
 						GPU::drawIndirectMesh(scene.globalMesh, *drawCommands, 0, scene.meshInfos->size());
 					}
+					GPU::popMarker();
 
 					const glm::vec2 texSize(selectionColor.width, selectionColor.height);
 					glm::uvec2 readbackCoords = mousePos * texSize;

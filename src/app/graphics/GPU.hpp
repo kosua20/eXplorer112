@@ -392,7 +392,10 @@ public:
 	 */
 	static void blit(const Texture & src, Texture & dst, Filter filter);
 
+	static void pushMarker(const std::string& label);
 
+	static void popMarker();
+	
 	/** \return the opaque internal GPU context. */
 	static GPUContext* getInternal();
 

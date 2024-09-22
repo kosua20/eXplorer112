@@ -1754,7 +1754,25 @@ void GPU::blit(const Texture & src, Texture & dst, Filter filter) {
 	++_metrics.blitCount;
 }
 
+void GPU::pushMarker(const std::string& label){
+	if(!_context.markersEnabled)
+		return;
+	VkDebugUtilsLabelEXT labelInfo = {};
+	labelInfo.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_LABEL_EXT;
+	labelInfo.pLabelName = label.c_str();
+	labelInfo.color[0] = 255;
+	labelInfo.color[1] = 255;
+	labelInfo.color[2] = 255;
+	labelInfo.color[3] = 255;
 
+	vkCmdBeginDebugUtilsLabelEXT(_context.getRenderCommandBuffer(), &labelInfo);
+}
+
+void GPU::popMarker(){
+	if(!_context.markersEnabled)
+		return;
+	vkCmdEndDebugUtilsLabelEXT(_context.getRenderCommandBuffer());
+}
 
 void GPU::unbindFramebufferIfNeeded(){
 	if(_state.pass.depthStencil == nullptr && _state.pass.colors.empty()){
