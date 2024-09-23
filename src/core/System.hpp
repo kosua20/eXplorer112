@@ -22,7 +22,11 @@ namespace System {
 
 	void saveString(const fs::path & path, const std::string & content);
 
-	std::string getStringWithIncludes(const fs::path & filename, std::vector<fs::path>& names);
+	std::string getStringWithIncludes( const fs::path& filename, std::vector<fs::path>& names );
+
+	uint64_t hash64( const void* data, size_t size );
+
+	uint32_t hash32( const void* data, size_t size );
 
 	/** Multi-threaded for-loop.
 		 \param low lower (included) bound

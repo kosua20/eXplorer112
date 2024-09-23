@@ -1757,13 +1757,28 @@ void GPU::blit(const Texture & src, Texture & dst, Filter filter) {
 void GPU::pushMarker(const std::string& label){
 	if(!_context.markersEnabled)
 		return;
+
 	VkDebugUtilsLabelEXT labelInfo = {};
 	labelInfo.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_LABEL_EXT;
 	labelInfo.pLabelName = label.c_str();
-	labelInfo.color[0] = 255;
-	labelInfo.color[1] = 255;
-	labelInfo.color[2] = 255;
-	labelInfo.color[3] = 255;
+
+	{
+		const uint32_t hash = System::hash32( label.data(), label.size() * sizeof( label[ 0 ] ) );
+		// Basic hash to color conversion, putting more emphasis on the hue.
+		float hue = ( float )( ( hash & 0x0000ffff ) ) / 65535.f;
+		float saturation = ( float )( ( hash & 0x00ff0000 ) >> 16 ) / 255.0f;
+		float value = ( float )( ( hash & 0xff000000 ) >> 24 ) / 255.0f;
+		// Use the same ranges as in random color generation (see Random.cpp)
+		hue *= 360.0f;
+		saturation = saturation * 0.45f + 0.5f;
+		value = value * 0.45f + 0.5f;
+
+		const glm::vec3 color = glm::rgbColor( glm::vec3( hue, saturation, value ) );
+		labelInfo.color[ 0 ] = color[ 0 ];
+		labelInfo.color[ 1 ] = color[ 1 ];
+		labelInfo.color[ 2 ] = color[ 2 ];
+		labelInfo.color[ 3 ] = 1.f;
+	}
 
 	vkCmdBeginDebugUtilsLabelEXT(_context.getRenderCommandBuffer(), &labelInfo);
 }

@@ -6,6 +6,9 @@
 #include "core/TextUtilities.hpp"
 #include "core/Log.hpp"
 
+#define XXH_INLINE_ALL
+#include <xxhash/xxhash.h>
+
 #include <sstream>
 
 void System::listAllFilesOfType(const fs::path& root, const std::string& ext, std::vector<fs::path>& paths){
@@ -123,4 +126,14 @@ std::string System::getStringWithIncludes(const fs::path & filename, std::vector
 
 	}
 	return newStr;
+}
+
+uint64_t System::hash64( const void* data, size_t size )
+{
+	return XXH3_64bits( data, size );
+}
+
+uint32_t System::hash32( const void* data, size_t size )
+{
+	return XXH32( data, size, 0 );
 }
