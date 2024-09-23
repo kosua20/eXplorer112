@@ -176,9 +176,10 @@ bool Window::nextFrame() {
 		ImGui::Render();
 
 		// Draw ImGui.
+		GPU::pushMarker( "GUI" );
 		bind(LoadOperation::LOAD, LoadOperation::LOAD, LoadOperation::LOAD);
 		ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), GPU::getInternal()->getRenderCommandBuffer());
-		
+		GPU::popMarker( );
 	}
 
 	// Notify GPU for book-keeping.

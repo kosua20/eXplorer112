@@ -702,7 +702,6 @@ struct ShadowGeneration {
 		if(currentLight >= lightsCount || currentMapLayer >= maps.depth){
 			return;
 		}
-
 		// As long as we have a light left to process and enough room in the texture array.
 		const glm::mat4 pointViews[6] = {
 			glm::lookAt(glm::vec3(0.0f), glm::vec3(-1.0f,0.0f,0.0f), glm::vec3(0.0f, 1.0f, 0.0f)),
@@ -731,6 +730,7 @@ struct ShadowGeneration {
 			return;
 		}
 
+		GPU::pushMarker( "Shadow map" );
 		const Scene::LightInfos& infos = ( *scene.lightInfos )[ currentLight ];
 		const bool isPointLight = scene.world.lights()[ currentLight ].type == World::Light::POINT;
 		uint layerId = currentLightFace;
@@ -776,6 +776,8 @@ struct ShadowGeneration {
 		shadowInstancedObject->buffer( *drawInstances, 4 );
 
 		GPU::drawIndirectMesh(scene.globalMesh, *drawCommands, range.firstIndex, range.count);
+
+		GPU::popMarker();
 
 		++currentMapLayer;
 		++currentLightFace;
@@ -1997,9 +1999,10 @@ int main(int argc, char ** argv) {
 				billboardObject->use();
 				billboardObject->buffer(frameInfos, 0);
 				billboardObject->buffer(*scene.materialInfos, 1);
+
+				GPU::pushMarker( "Billboards & Emitters 1" );
 				// First billboards
 				if(showBillboards){
-					GPU::pushMarker("Billboards 1");
 					for(World::Blending blend : blendsPreFog){
 						const Scene::Range & range = scene.billboardRanges[blend];
 						if(range.count <= 0){
@@ -2008,12 +2011,10 @@ int main(int argc, char ** argv) {
 						GPU::setBlendState(true, BlendEquation::ADD, srcFuncs[blend], dstFuncs[blend]);
 						GPU::drawMesh(scene.billboardsMesh, range.firstIndex, range.count);
 					}
-					GPU::popMarker();
 				}
 
 				// Then particles
 				if(showParticles){
-					GPU::pushMarker("Emitters 1");
 					for(World::Blending blend : blendsPreFog){
 						const Scene::Range & range = scene.particleRanges[blend];
 						if(range.count <= 0){
@@ -2022,8 +2023,8 @@ int main(int argc, char ** argv) {
 						GPU::setBlendState(true, BlendEquation::ADD, srcFuncs[blend], dstFuncs[blend]);
 						GPU::drawMesh(scene.billboardsMesh, range.firstIndex, range.count);
 					}
-					GPU::popMarker();
 				}
+				GPU::popMarker();
 			}
 
 			// Fog
@@ -2059,9 +2060,9 @@ int main(int argc, char ** argv) {
 				billboardObject->buffer(frameInfos, 0);
 				billboardObject->buffer(*scene.materialInfos, 1);
 
+				GPU::pushMarker( "Billboards & Emitters 2" );
 				// First billboards
 				if(showBillboards){
-					GPU::pushMarker("Billboards 2");
 					for(World::Blending blend : blendsPostFog){
 						const Scene::Range & range = scene.billboardRanges[blend];
 						if(range.count <= 0){
@@ -2070,12 +2071,10 @@ int main(int argc, char ** argv) {
 						GPU::setBlendState(true, BlendEquation::ADD, srcFuncs[blend], dstFuncs[blend]);
 						GPU::drawMesh(scene.billboardsMesh, range.firstIndex, range.count);
 					}
-					GPU::popMarker();
 				}
 
 				// Then particles
 				if(showParticles){
-					GPU::pushMarker("Emitters 2");
 					for(World::Blending blend : blendsPostFog){
 						const Scene::Range & range = scene.particleRanges[blend];
 						if(range.count <= 0){
@@ -2084,8 +2083,8 @@ int main(int argc, char ** argv) {
 						GPU::setBlendState(true, BlendEquation::ADD, srcFuncs[blend], dstFuncs[blend]);
 						GPU::drawMesh(scene.billboardsMesh, range.firstIndex, range.count);
 					}
-					GPU::popMarker();
 				}
+				GPU::popMarker();
 
 			}
 
@@ -2134,7 +2133,9 @@ int main(int argc, char ** argv) {
 
 					// At each iteration, we'll focus on 4 bits, from least to most significant, sorted into 16 bins.
 					// The sort being stable, low bits ordering will be preserved when sorting higher bits.
-					for(uint rid = 0; rid < rounds; ++rid){
+					for( uint rid = 0; rid < rounds; ++rid )
+					{
+						GPU::pushMarker( "Radix sort pass" );
 						transparentInfos[0].firstBit = rid * SORT_BIT_RANGE;
 						transparentInfos.upload();
 
@@ -2167,7 +2168,8 @@ int main(int argc, char ** argv) {
 						GPU::dispatch(transparentRange.instanceCount, 1, 1);
 
 						// Swap buffers
-						std::swap(transparentItemsIn, transparentItemsOut);
+						std::swap( transparentItemsIn, transparentItemsOut );
+						GPU::popMarker();
 					}
 					GPU::popMarker();
 
@@ -2231,7 +2233,9 @@ int main(int argc, char ** argv) {
 					GPU::blit(sceneLit, bloom0, 0, 0, Filter::LINEAR);
 					GPU::setViewport(0, 0, bloom0.width, bloom0.height);
 
-					for(uint blurStep = 0; blurStep < bloomBlurSteps; ++blurStep){
+					for( uint blurStep = 0; blurStep < bloomBlurSteps; ++blurStep )
+					{
+						GPU::pushMarker( "Bloom pass" );
 						GPU::bind(bloom1, LoadOperation::DONTCARE);
 						bloomBlur->use();
 						bloomBlur->texture(bloom0, 0);
@@ -2242,6 +2246,7 @@ int main(int argc, char ** argv) {
 						bloomBlur->texture(bloom1, 0);
 						bloomBlur->buffer(blurInfosV, 0);
 						GPU::drawQuad();
+						GPU::popMarker( );
 					}
 					GPU::popMarker();
 
@@ -2313,7 +2318,7 @@ int main(int argc, char ** argv) {
 					debugInstancedObject->buffer(*scene.materialInfos, 3);
 					debugInstancedObject->buffer(*drawInstances, 4);
 					// Always draw all meshes.
-					GPU::drawIndirectMesh(scene.globalMesh, *drawCommands, 0, scene.meshInfos->size());
+					GPU::drawIndirectMesh(scene.globalMesh, *drawCommands, 0, (uint)scene.meshInfos->size());
 				}
 				GPU::popMarker();
 
@@ -2351,7 +2356,7 @@ int main(int argc, char ** argv) {
 						selectionObject->buffer(*scene.materialInfos, 3);
 						selectionObject->buffer(*drawInstances, 4);
 						// Draw all meshes.
-						GPU::drawIndirectMesh(scene.globalMesh, *drawCommands, 0, scene.meshInfos->size());
+						GPU::drawIndirectMesh(scene.globalMesh, *drawCommands, 0, ( uint )scene.meshInfos->size());
 					}
 					GPU::popMarker();
 
@@ -2376,7 +2381,9 @@ int main(int argc, char ** argv) {
 			GPU::clearTexture(sceneFog, glm::vec4(0.2f, 0.2f, 0.2f, 1.0f));
 		}
 
-		if(selected.texture >= 0){
+		if( selected.texture >= 0 )
+		{
+			GPU::pushMarker("Debug texture");
 			GPU::setViewport(textureView);
 			GPU::bind(textureView, glm::vec4(1.0f, 0.0f, 0.5f, 1.0f));
 			GPU::setDepthState(false);
@@ -2386,6 +2393,7 @@ int main(int argc, char ** argv) {
 			textureDebugQuad->use();
 			textureDebugQuad->buffer(frameInfos, 0);
 			GPU::drawQuad();
+			GPU::popMarker();
 		}
 
 		scrollToItem = false;
@@ -2399,7 +2407,9 @@ int main(int argc, char ** argv) {
 
 		window.bind(glm::vec4(0.058f, 0.133f, 0.219f, 1.0f), LoadOperation::DONTCARE, LoadOperation::DONTCARE);
 
-		if(textures.bg.gpu){
+		if( textures.bg.gpu )
+		{
+			GPU::pushMarker( "GUI Background" );
 			GPU::setViewport(window.color());
 			GPU::setDepthState(false);
 			GPU::setCullState(true, Faces::BACK );
@@ -2408,6 +2418,7 @@ int main(int argc, char ** argv) {
 			passthrough->use();
 			passthrough->texture(textures.bg, 0);
 			GPU::drawQuad();
+			GPU::popMarker();
 		}
 		++frameIndex;
 	}
