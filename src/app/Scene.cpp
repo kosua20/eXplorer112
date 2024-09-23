@@ -72,14 +72,27 @@ uint Scene::retrieveTexture(const std::string& textureName, const GameFiles& fil
 
 	// Else emplace the texture.
 	Texture& tex = textures2D.emplace_back(textureName);
-	// Find the file on disk.
-	for( const fs::path& texturePath : files.texturesList){
-		const std::string existingName = texturePath.filename().replace_extension().string();
-		if(existingName == textureName){
-			tex.images.resize(1);
-			tex.images[0].load(texturePath);
-			break;
+
+	// Might be an inline color.
+	if(TextUtilities::hasPrefix(textureName, INTERNAL_TEXTURE_PREFIX)){
+		auto tokens = TextUtilities::split(textureName.substr(3), " ", false);
+		glm::vec3 color(1.0f);
+		color[0] = std::stof(tokens[0]);
+		color[1] = std::stof(tokens[1]);
+		color[2] = std::stof(tokens[2]);
+		tex.images.resize(1);
+		Image::generateImageWithColor(tex.images[0], color);
+	} else {
+		// Find the file on disk.
+		for( const fs::path& texturePath : files.texturesList){
+			const std::string existingName = texturePath.filename().replace_extension().string();
+			if(existingName == textureName){
+				tex.images.resize(1);
+				tex.images[0].load(texturePath);
+				break;
+			}
 		}
+
 	}
 	// If nothing was loaded, populate with default data.
 	if(tex.images.empty()){

@@ -40,6 +40,21 @@ void Image::generateDefaultNormalImage(Image& image){
 
 }
 
+void Image::generateImageWithColor(Image& image, const glm::vec3& color){
+
+	image = Image(4, 4, 4, 0);
+	unsigned char r = (unsigned char)glm::clamp(color[0]*255.f, 0.f, 255.f);
+	unsigned char g = (unsigned char)glm::clamp(color[1]*255.f, 0.f, 255.f);
+	unsigned char b = (unsigned char)glm::clamp(color[2]*255.f, 0.f, 255.f);
+	image.pixels = {
+		r, g, b, 255, r, g, b, 255, r, g, b, 255, r, g, b, 255,
+		r, g, b, 255, r, g, b, 255, r, g, b, 255, r, g, b, 255,
+		r, g, b, 255, r, g, b, 255, r, g, b, 255, r, g, b, 255,
+		r, g, b, 255, r, g, b, 255, r, g, b, 255, r, g, b, 255
+	};
+
+}
+
 Image::Image(unsigned int awidth, unsigned int aheight, unsigned int acomponents, char value) :
 	width(awidth), height(aheight), components(acomponents) {
 	pixels.resize(width * height * components, value);

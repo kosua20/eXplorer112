@@ -44,6 +44,7 @@ public:
 	
 	static void generateDefaultColorImage(Image & image);
 	static void generateDefaultNormalImage(Image & image);
+	static void generateImageWithColor(Image& image, const glm::vec3& color);
 
 	/** Copy assignment operator (disabled).
 	 \return a reference to the object assigned to

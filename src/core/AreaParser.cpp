@@ -183,7 +183,20 @@ bool load(const fs::path& path, Object& outObject){
 		// Color
 		{
 			const auto textureRef = shader.child("shaderfunc").find_child_by_attribute("channel", "name", "color").child("texture");
-			const std::string textureName = retrieveTextureName(textureRef, shader);
+			std::string textureName = retrieveTextureName(textureRef, shader);
+			if(textureName.empty()){
+				// Fallback to diffuse color?
+				auto colorDef = shader.child("shaderfunc").find_child_by_attribute("param", "name", "diffuse");
+				if(!colorDef){
+					colorDef = shader.child("shaderfunc").find_child_by_attribute("param", "name", "ambient");
+				}
+				if(colorDef){
+					std::string colorStr = colorDef.child_value();
+					const glm::vec3 color = parseVec3(colorStr.c_str());
+					textureName = std::string(INTERNAL_TEXTURE_PREFIX) + std::to_string(color[0]) + " " + std::to_string(color[1]) + " "+ std::to_string(color[2]);
+				}
+
+			}
 			shaderDesc.material.color = !textureName.empty() ? textureName : DEFAULT_ALBEDO_TEXTURE;
 		}
 		// Normal

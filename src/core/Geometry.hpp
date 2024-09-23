@@ -9,6 +9,7 @@
 
 #define DEFAULT_ALBEDO_TEXTURE "checker"
 #define DEFAULT_NORMAL_TEXTURE "flat_n"
+#define INTERNAL_TEXTURE_PREFIX "###"
 
 struct Color {
 	uint8_t r;
