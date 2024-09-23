@@ -1868,8 +1868,8 @@ int main(int argc, char ** argv) {
 			frameInfos[0].randomW = glm::linearRand( 0.f, 1.0f );
 
 			frameInfos[0].lightsCount = uint(scene.world.lights().size());
-			frameInfos[0].zonesCount = uint(scene.world.zones().size());
-			frameInfos[0].meshCount = uint(scene.meshInfos->size());
+			frameInfos[0].zonesCount  = uint(scene.world.zones().size());
+			frameInfos[0].meshCount   = uint(scene.meshInfos ? scene.meshInfos->size() : 0u);
 			frameInfos[0].clustersSize = glm::uvec4(lightClusters.width, lightClusters.height, lightClusters.depth, clusterDims.x);
 			const float logRatio = float(clusterDims.y) / std::log(nearFar.y / nearFar.x);
 			frameInfos[0].clustersParams = glm::vec4(logRatio, std::log(nearFar.x) * logRatio, 0.0f, 0.0f);
@@ -1921,7 +1921,8 @@ int main(int argc, char ** argv) {
 			GPU::bind(sceneColor, sceneNormal, sceneHeat, sceneDepth, clearColor, 0.0f, LoadOperation::DONTCARE);
 			GPU::setViewport(sceneColor);
 
-			if(showOpaques){
+			const auto& opaqueRange = scene.globalMeshMaterialRanges[Object::Material::OPAQUE];
+			if(showOpaques && !opaqueRange.empty()){
 				GPU::pushMarker("Opaque objects");
 				GPU::setPolygonState(PolygonMode::FILL);
 				GPU::setCullState(true, Faces::BACK );
@@ -1936,8 +1937,7 @@ int main(int argc, char ** argv) {
 				gbufferInstancedObject->buffer(*scene.materialInfos, 3);
 				gbufferInstancedObject->buffer(*drawInstances, 4);
 
-				const auto& range = scene.globalMeshMaterialRanges[Object::Material::OPAQUE];
-				GPU::drawIndirectMesh(scene.globalMesh, *drawCommands, range.firstIndex, range.count);
+				GPU::drawIndirectMesh(scene.globalMesh, *drawCommands, opaqueRange.firstIndex, opaqueRange.count);
 				GPU::popMarker();
 			}
 
@@ -1966,7 +1966,8 @@ int main(int argc, char ** argv) {
 			}
 
 			// Render unlit decals on top with specific blending mode, using src * dst
-			if(showDecals){
+			const auto& decalRange = scene.globalMeshMaterialRanges[Object::Material::DECAL];
+			if(showDecals && !decalRange.empty()){
 				GPU::pushMarker("Decal objects");
 				GPU::bind(sceneLit, sceneDepth, LoadOperation::LOAD, LoadOperation::LOAD, LoadOperation::DONTCARE);
 				GPU::setViewport(sceneLit);
@@ -1983,8 +1984,7 @@ int main(int argc, char ** argv) {
 				decalInstancedObject->buffer(*scene.materialInfos, 3);
 				decalInstancedObject->buffer(*drawInstances, 4);
 
-				const auto& range = scene.globalMeshMaterialRanges[Object::Material::DECAL];
-				GPU::drawIndirectMesh(scene.globalMesh, *drawCommands, range.firstIndex, range.count);
+				GPU::drawIndirectMesh(scene.globalMesh, *drawCommands, decalRange.firstIndex, decalRange.count);
 
 				GPU::popMarker();
 			}
@@ -2005,7 +2005,7 @@ int main(int argc, char ** argv) {
 				if(showBillboards){
 					for(World::Blending blend : blendsPreFog){
 						const Scene::Range & range = scene.billboardRanges[blend];
-						if(range.count <= 0){
+						if(range.empty()){
 							continue;
 						}
 						GPU::setBlendState(true, BlendEquation::ADD, srcFuncs[blend], dstFuncs[blend]);
@@ -2017,7 +2017,7 @@ int main(int argc, char ** argv) {
 				if(showParticles){
 					for(World::Blending blend : blendsPreFog){
 						const Scene::Range & range = scene.particleRanges[blend];
-						if(range.count <= 0){
+						if(range.empty()){
 							continue;
 						}
 						GPU::setBlendState(true, BlendEquation::ADD, srcFuncs[blend], dstFuncs[blend]);
@@ -2065,7 +2065,7 @@ int main(int argc, char ** argv) {
 				if(showBillboards){
 					for(World::Blending blend : blendsPostFog){
 						const Scene::Range & range = scene.billboardRanges[blend];
-						if(range.count <= 0){
+						if(range.empty()){
 							continue;
 						}
 						GPU::setBlendState(true, BlendEquation::ADD, srcFuncs[blend], dstFuncs[blend]);
@@ -2077,7 +2077,7 @@ int main(int argc, char ** argv) {
 				if(showParticles){
 					for(World::Blending blend : blendsPostFog){
 						const Scene::Range & range = scene.particleRanges[blend];
-						if(range.count <= 0){
+						if(range.empty()){
 							continue;
 						}
 						GPU::setBlendState(true, BlendEquation::ADD, srcFuncs[blend], dstFuncs[blend]);
@@ -2088,10 +2088,10 @@ int main(int argc, char ** argv) {
 
 			}
 
-			if(showTransparents){
+			const auto& transparentRange = scene.globalMeshMaterialRanges[Object::Material::TRANSPARENT];
+			if(showTransparents && !transparentRange.empty()){
 
 				GPU::pushMarker("Transparency");
-				const auto& transparentRange = scene.globalMeshMaterialRanges[Object::Material::TRANSPARENT];
 				transparentInfos[0].firstMesh = transparentRange.firstIndex;
 				transparentInfos[0].meshCount = transparentRange.count;
 				transparentInfos[0].instanceCount = transparentRange.instanceCount;
@@ -2212,8 +2212,7 @@ int main(int argc, char ** argv) {
 				forwardInstancedObject->texture(shadow.maps, 3);
 				forwardInstancedObject->texture(fogClusters, 4);
 
-				const auto& range = scene.globalMeshMaterialRanges[Object::Material::TRANSPARENT];
-				GPU::drawIndirectMesh(scene.globalMesh, *transparentDrawCommands, 0, range.instanceCount);
+				GPU::drawIndirectMesh(scene.globalMesh, *transparentDrawCommands, 0, transparentRange.instanceCount);
 				GPU::popMarker();
 				GPU::popMarker();
 			}

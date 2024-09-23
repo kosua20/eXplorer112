@@ -106,6 +106,10 @@ public:
 	struct Range {
 		uint firstIndex = 0;
 		uint count = 0;
+
+		bool empty() const {
+			return count == 0;
+		}
 	};
 
 	struct MeshRange : public Range {
