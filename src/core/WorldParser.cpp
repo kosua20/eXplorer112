@@ -527,13 +527,26 @@ void World::processEntity(const pugi::xml_node& entity, const glm::mat4& globalF
 
 }
 
+void applyWorldFixups(std::string& content){
+	TextUtilities::replace(content, "\"count=", "\" count=");
+	TextUtilities::replace(content, "<param name=\"scale\" data=\"string\">data_", "<param name=\"scale\" data=\"string\">data_");
+}
+
 bool World::load(const fs::path& path, const fs::path& resourcePath){
 
 	pugi::xml_document world;
 	pugi::xml_parse_result res = world.load_file(path.c_str());
 	if(!res){
-		Log::error("Unable to load world file at path %s:%llu %s", path.string().c_str(), res.offset, res.description());
-		return false;
+		// Attempt to load the string content, apply a few fixups, and reparse.
+		std::string worldContent = System::loadString(path);
+		if(!worldContent.empty()){
+			applyWorldFixups(worldContent);
+			res = world.load_string(worldContent.c_str());
+		}
+		if(!res){
+			Log::error("Unable to load world file at path %s:%llu %s", path.string().c_str(), res.offset, res.description());
+			return false;
+		}
 	}
 
 	_name = path.filename().replace_extension().string();

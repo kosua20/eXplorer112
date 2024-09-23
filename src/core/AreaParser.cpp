@@ -33,19 +33,27 @@ float parseFloat(const char* val, float fallback){
 	return std::stof(val);
 }
 
+// e for exponent should not be first/last character.
+// f at the end of a float has no extra meaning
+static const std::string kTrimVecStr = "()abcdefghijklmnopqrstuvwxyz_ABCDEFGHIJKLMNOPQRSTUVWXYZ[]{}";
+
 glm::vec2 parseVec2(const char* val, const glm::vec2& fallback){
 	if(val == nullptr || val[0] == '\0'){
 		return fallback;
 	}
 
 	std::string valStr(val);
-	valStr = TextUtilities::trim(valStr, "()");
+	valStr = TextUtilities::trim(valStr, kTrimVecStr);
 	const std::vector<std::string> tokens = TextUtilities::split(valStr, " ", true);
-	if(tokens.size() < 2){
-		Log::error("Unable to parse vec2.");
-		return fallback;
+	const uint tokenCount = glm::min(2u, (uint)tokens.size());
+	if(tokenCount < 2u){
+		Log::warning("Unable to fully parse vec2: %s", valStr.c_str());
 	}
-	return { std::stof(tokens[0]), std::stof(tokens[1])};
+	glm::vec2 res = fallback;
+	for(uint i = 0; i < tokenCount; ++i){
+		res[i] = std::stof(tokens[i]);
+	}
+	return res;
 }
 
 glm::vec3 parseVec3(const char* val, const glm::vec3& fallback){
@@ -54,14 +62,17 @@ glm::vec3 parseVec3(const char* val, const glm::vec3& fallback){
 	}
 
 	std::string valStr(val);
-	valStr = TextUtilities::trim(valStr, "()");
+	valStr = TextUtilities::trim(valStr, kTrimVecStr);
 	const std::vector<std::string> tokens = TextUtilities::split(valStr, " ", true);
-	if(tokens.size() < 3){
-		// We have to be lenient for some parameters (RGB/RGBA colors)
-		Log::error("Unable to parse vec3.");
-		return fallback;
+	const uint tokenCount = glm::min(3u, (uint)tokens.size());
+	if(tokenCount < 3u){
+		Log::warning("Unable to fully parse vec3: %s", valStr.c_str());
 	}
-	return { std::stof(tokens[0]), std::stof(tokens[1]), std::stof(tokens[2])};
+	glm::vec3 res = fallback;
+	for(uint i = 0; i < tokenCount; ++i){
+		res[i] = std::stof(tokens[i]);
+	}
+	return res;
 }
 
 glm::vec4 parseVec4(const char* val, const glm::vec4& fallback){
@@ -70,13 +81,18 @@ glm::vec4 parseVec4(const char* val, const glm::vec4& fallback){
 	}
 
 	std::string valStr(val);
-	valStr = TextUtilities::trim(valStr, "()");
+	valStr = TextUtilities::trim(valStr, kTrimVecStr);
 	const std::vector<std::string> tokens = TextUtilities::split(valStr, " ", true);
-	if(tokens.size() < 4){
-		Log::error("Unable to parse vec4.");
-		return fallback;
+
+	const uint tokenCount = glm::min(4u, (uint)tokens.size());
+	if(tokenCount < 4u){
+		Log::warning("Unable to fully parse vec4: %s", valStr.c_str());
 	}
-	return { std::stof(tokens[0]), std::stof(tokens[1]), std::stof(tokens[2]), std::stof(tokens[3])};
+	glm::vec4 res = fallback;
+	for(uint i = 0; i < tokenCount; ++i){
+		res[i] = std::stof(tokens[i]);
+	}
+	return res;
 }
 
 glm::mat4 parseFrame(const char* val){
@@ -84,7 +100,7 @@ glm::mat4 parseFrame(const char* val){
 		return glm::mat4(1.0f);
 	}
 	std::string valStr(val);
-	valStr = TextUtilities::trim(valStr, "()");
+	valStr = TextUtilities::trim(valStr, kTrimVecStr);
 	TextUtilities::replace(valStr, ")(", ";");
 	const auto rows = TextUtilities::split(valStr, ";", true);
 	if(rows.size() != 4){
