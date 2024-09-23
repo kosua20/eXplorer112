@@ -10,6 +10,25 @@
 #include <glm/gtx/euler_angles.hpp>
 #include <unordered_map>
 
+// Fix up data
+
+static const std::unordered_map<std::string, std::string> mtlFileSubtitutions = {
+	{"materials/effects/ecran_nb.mtl", "materials/effects/ecran_nb01.mtl"},
+	{"materials/lights/archive_c.mtl", "materials/effects/archive_c.mtl"}
+};
+
+static const std::unordered_map<std::string, std::string> dffFileSubstitutions = {
+		{"box", "obj_carton_19"},
+		{"t04_rock_02c", "t04_rock_02b"},
+		{"galet_pouf_b", "galet_pouf"},
+};
+
+void applyWorldFixups(std::string& content){
+	TextUtilities::replace(content, "\"count=", "\" count=");
+	TextUtilities::replace(content, "<param name=\"scale\" data=\"string\">data_", "<param name=\"scale\" data=\"string\">data_");
+}
+
+// World
 
 //#define LOG_WORLD_LOADING
 
@@ -139,7 +158,6 @@ glm::mat4 getEntityFrame(const pugi::xml_node& entity){
 	return frame;
 }
 
-
 std::string getMaterialTexture(const std::string& inMaterialStr, const fs::path& resourcePath){
 
 	if(inMaterialStr.empty()){
@@ -158,9 +176,28 @@ std::string getMaterialTexture(const std::string& inMaterialStr, const fs::path&
 
 	if(extension == ".mtl"){
 		// Load the mtl XML file.
-		const fs::path mtlPath = resourcePath / materialPath;
+		fs::path mtlPath = resourcePath / materialPath;
 		pugi::xml_document mtlDef;
-		if(mtlDef.load_file(mtlPath.c_str())){
+		bool success = mtlDef.load_file(mtlPath.c_str());
+		if(!success){
+			// Find a correspondance in list
+			auto substitute = mtlFileSubtitutions.find(materialPath.string());
+			if(substitute != mtlFileSubtitutions.end()){
+				Log::info("Substituting %s to %s", substitute->second.c_str(), substitute->first.c_str());
+				mtlPath = resourcePath / substitute->second;
+				success = mtlDef.load_file(mtlPath.c_str());
+			}
+			if(!success){
+				// Else, attempt to fix a known issue in movieprojector.mtl
+				std::string fileContent = System::loadString(mtlPath);
+				if(!fileContent.empty()){
+					TextUtilities::replace(fileContent, "$movie", "movie");
+					success = mtlDef.load_string(fileContent.c_str());
+				}
+
+			}
+		}
+		if(success){
 			pugi::xml_node frame = mtlDef.child("matDef").child("framelist").first_child();
 			// Extract texture name, assume it is unique.
 			std::string textureStr = frame.attribute("sourcename").value();
@@ -527,11 +564,6 @@ void World::processEntity(const pugi::xml_node& entity, const glm::mat4& globalF
 
 }
 
-void applyWorldFixups(std::string& content){
-	TextUtilities::replace(content, "\"count=", "\" count=");
-	TextUtilities::replace(content, "<param name=\"scale\" data=\"string\">data_", "<param name=\"scale\" data=\"string\">data_");
-}
-
 bool World::load(const fs::path& path, const fs::path& resourcePath){
 
 	pugi::xml_document world;
@@ -595,12 +627,21 @@ bool World::load(const fs::path& path, const fs::path& resourcePath){
 	// Create objects from reference list.
 	_objects.resize(referencedObjects.size());
 	for(const auto& objRef : referencedObjects){
-		const fs::path objPath = resourcePath / objRef.first;
+		fs::path objPath = resourcePath / objRef.first;
 		const std::string modelName = objPath.filename().replace_extension().string();
 #ifdef LOG_WORLD_LOADING
 		Log::info("Retrieving model %s", modelName.c_str());
 #endif
-		Dff::load(objPath, _objects[objRef.second]);
+
+		if(!Dff::load(objPath, _objects[objRef.second])){
+			// Attempt a substitution
+			auto substitute = dffFileSubstitutions.find(modelName);
+			if(substitute != dffFileSubstitutions.end()){
+				Log::info("Substituting %s to %s", substitute->second.c_str(), substitute->first.c_str());
+				objPath.replace_filename(substitute->second).replace_extension("dff");
+				Dff::load(objPath, _objects[objRef.second]);
+			}
+		}
 	}
 
 	/// Areas loading.
