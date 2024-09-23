@@ -7,6 +7,47 @@
 #include "graphics/GPU.hpp"
 #include "Common.hpp"
 
+// Fix up data
+
+static const std::unordered_map<std::string, std::string> texFileSubtitutions = {
+	/*
+	// Probably unused normals for decals and billboards
+	affiche_01_n
+	balles_beton_n
+	balles_rouille_n
+	rust_n
+	papier_02_n
+	glass3break_n
+	glass4break_n
+	griffes_n
+	dirty2_n
+	dirty3_n
+	dirty4_n
+	dirty_n
+	dirtymousse_n
+	*/
+
+	/*
+	// Really missing
+	biground1
+	couverts_c
+	couverts_n
+	dresser5ice_n
+	pochoir_03
+	pochoirs_02
+	pochoirs_1
+	tache_06_c
+	*/
+	{ "ceiling2beam-n", "ceiling2beam_n"},
+	{ "tuyau_02_c", "tuyaux_02_c"},
+	{ "tuyau_02_n", "tuyaux_02_n"},
+	{ "vegetal4_c", "vegetal_04_c"},
+	{ "ventilo_c", "ventilateur_c"},
+	{ "ventilo_n", "ventilateur_n"},
+	{ "cable1c", "cable1_c"},
+};
+
+// Scene
 
 GameFiles::GameFiles(){}
 
@@ -94,6 +135,25 @@ uint Scene::retrieveTexture(const std::string& textureName, const GameFiles& fil
 		}
 
 	}
+
+	if(tex.images.empty()){
+
+		// Find a substitution
+		auto substitute = texFileSubtitutions.find(textureName);
+		if(substitute != texFileSubtitutions.end()){
+			Log::info("Substituting %s to %s", substitute->second.c_str(), substitute->first.c_str());
+			// Find the file on disk.
+			for( const fs::path& texturePath : files.texturesList){
+				const std::string existingName = texturePath.filename().replace_extension().string();
+				if(existingName == substitute->second){
+					tex.images.resize(1);
+					tex.images[0].load(texturePath);
+					break;
+				}
+			}
+		}
+	}
+
 	// If nothing was loaded, populate with default data.
 	if(tex.images.empty()){
 		tex.images.emplace_back();
