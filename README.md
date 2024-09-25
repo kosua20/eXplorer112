@@ -9,14 +9,18 @@ You will have to first extract the data using [Exp112ArcExtractor](https://githu
 
 ## Comparison with the original game
 
+Game left, renderer right:
+
 ![Game left, renderer right](doc/comparison.png)
 
 ## Results
 
 ![](doc/result_0.png)
+
 ![](doc/result_1.png)
 
 ## User interface
 
 ![](doc/ui_0.png)
+
 ![](doc/ui_1.png)
