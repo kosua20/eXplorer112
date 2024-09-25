@@ -1066,7 +1066,7 @@ int main(int argc, char ** argv) {
 				  scene.world.particles().size(), scene.world.billboards().size());
 	};
 
-#define FORCE_LOAD_TUTO_ECO
+//#define FORCE_LOAD_TUTO_ECO
 #ifdef FORCE_LOAD_TUTO_ECO
 	{
 		const fs::path worldpath = gameFiles.worldsPath / "tutoeco.world";

@@ -1,7 +1,9 @@
 #pragma once
 
 // Fallback for MoltenVK and drivers lacking gl_DrawID support.
+#if defined(__APPLE__)
 #define DRAW_ID_FALLBACK
+#endif
 
 #include "resources/Mesh.hpp"
 #include "resources/Texture.hpp"
