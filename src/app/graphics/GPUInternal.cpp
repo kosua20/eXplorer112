@@ -730,7 +730,7 @@ void VkUtils::blitTexture(VkCommandBuffer& commandBuffer, const Texture& src, co
 
 
 void VkUtils::setDebugName(GPUContext& context, VkObjectType type, uint64_t handle, const char* format, ...){
-	if(!context.markersEnabled)
+	if(!context.markersEnabled || handle == 0)
 		return;
 
 	std::string str;

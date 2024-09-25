@@ -18,7 +18,7 @@ static const std::unordered_map<std::string, std::string> mtlFileSubtitutions = 
 };
 
 static const std::unordered_map<std::string, std::string> dffFileSubstitutions = {
-		{"box", "obj_carton_19"},
+		{"box", "cube"},
 		{"t04_rock_02c", "t04_rock_02b"},
 		{"galet_pouf_b", "galet_pouf"},
 };
