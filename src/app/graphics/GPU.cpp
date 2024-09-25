@@ -1457,6 +1457,7 @@ void GPU::drawIndirectMesh(const Mesh & mesh, const Buffer& args, uint first, ui
 		++_metrics.drawCalls;
 	}
 #else
+	vkCmdPushConstants(cmdBuffer, progState.layout, (VkShaderStageFlags)progState.pushConstantsStages, 0, sizeof(uint32_t), &first);	
 	vkCmdDrawIndexedIndirect(cmdBuffer, args.gpu->buffer, sizeof(DrawCommand) * first, count, sizeof(DrawCommand));
 	++_metrics.drawCalls;
 #endif

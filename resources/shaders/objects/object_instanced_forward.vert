@@ -8,11 +8,9 @@ layout(location = 2) in vec2 uv;///< UV.
 layout(location = 3) in vec3 tang; ///< Tangent.
 layout(location = 4) in vec3 bitan; ///< Bitangent.
 
-#if defined(DRAW_ID_FALLBACK)
 layout(push_constant) uniform constants {
-	uint DrawIndex;
+	uint FirstDrawIndex;
 };
-#endif
 
 layout(location = 0) out INTERFACE {
 	mat4 tbn; ///< Normal to view matrix.
@@ -39,8 +37,9 @@ layout(set = 0, binding = 4) readonly buffer TransparentInfos {
 /** Apply the MVP transformation to the input vertex. */
 void main(){
 
+	uint DrawIndex = FirstDrawIndex;
 #if !defined(DRAW_ID_FALLBACK)
-	uint DrawIndex = uint(gl_DrawIDARB);
+	DrawIndex += uint(gl_DrawIDARB);
 #endif
 	
 	TransparentInstanceInfos infos = transparentInfos[DrawIndex];
