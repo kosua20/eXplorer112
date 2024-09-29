@@ -1878,7 +1878,7 @@ int main(int argc, char ** argv) {
 			frameInfos.upload();
 
 			// Scale calibrated on existing frame.
-			const float scaling = 1.8f * sceneLit.width / 720.0f;
+			const float scaling = 1.0f;// 1.8f * sceneLit.width / 720.0f;
 			blurInfosH[0] = scaling * glm::vec2(1.0f/(float)bloom0.width, 0.0f);
 			blurInfosV[0] = scaling * glm::vec2(0.0f, 1.0f/(float)bloom0.height);
 
@@ -2231,8 +2231,8 @@ int main(int argc, char ** argv) {
 					GPU::pushMarker("Bloom chain");
 					GPU::blit(sceneLit, bloom0, 0, 0, Filter::LINEAR);
 					GPU::setViewport(0, 0, bloom0.width, bloom0.height);
-
-					for( uint blurStep = 0; blurStep < bloomBlurSteps; ++blurStep )
+					uint finalBloomBlurSteps = bloomBlurSteps + (uint)glm::max(0.f, std::round(std::log2(sceneLit.width / 720.f)));
+					for( uint blurStep = 0; blurStep < finalBloomBlurSteps; ++blurStep )
 					{
 						GPU::pushMarker( "Bloom pass" );
 						GPU::bind(bloom1, LoadOperation::DONTCARE);
