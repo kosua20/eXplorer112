@@ -178,32 +178,22 @@ bool load(const fs::path& path, Object& outObject){
 		std::string shaderBaseName(shaderName);
 		TextUtilities::replace(shaderBaseName, "-", "_");
 		const std::string shaderFullName = areaName + "_" + shaderBaseName;
-		Shader& shaderDesc = shaders[shaderFullName];
+		// Check if the material has at least one texture, else ignore it (shadow mesh or bounds).
+		const auto textureRef = shader.child("shaderfunc").find_child_by_attribute("channel", "name", "color").child("texture");
+		std::string textureName = retrieveTextureName(textureRef, shader);
+		if(textureName.empty())
+			continue;
 
+		Shader& shaderDesc = shaders[shaderFullName];
 		// Color
 		{
-			const auto textureRef = shader.child("shaderfunc").find_child_by_attribute("channel", "name", "color").child("texture");
-			std::string textureName = retrieveTextureName(textureRef, shader);
-			if(textureName.empty()){
-				// Fallback to diffuse color?
-				auto colorDef = shader.child("shaderfunc").find_child_by_attribute("param", "name", "diffuse");
-				if(!colorDef){
-					colorDef = shader.child("shaderfunc").find_child_by_attribute("param", "name", "ambient");
-				}
-				if(colorDef){
-					std::string colorStr = colorDef.child_value();
-					const glm::vec3 color = parseVec3(colorStr.c_str());
-					textureName = std::string(INTERNAL_TEXTURE_PREFIX) + std::to_string(color[0]) + " " + std::to_string(color[1]) + " "+ std::to_string(color[2]);
-				}
-
-			}
 			shaderDesc.material.color = !textureName.empty() ? textureName : DEFAULT_ALBEDO_TEXTURE;
 		}
 		// Normal
 		{
-			const auto textureRef = shader.child("shaderfunc").find_child_by_attribute("channel", "name", "normal").child("texture");
-			const std::string textureName = retrieveTextureName(textureRef, shader);
-			shaderDesc.material.normal = !textureName.empty() ? textureName : DEFAULT_NORMAL_TEXTURE;
+			const auto textureRefN = shader.child("shaderfunc").find_child_by_attribute("channel", "name", "normal").child("texture");
+			const std::string textureNameN = retrieveTextureName(textureRefN, shader);
+			shaderDesc.material.normal = !textureNameN.empty() ? textureNameN : DEFAULT_NORMAL_TEXTURE;
 		}
 	}
 
@@ -241,7 +231,7 @@ bool load(const fs::path& path, Object& outObject){
 			} else if(strstr(userType, "\"portal") != nullptr){
 				// Skip physics/sound/visibility portals
 				continue;
-			}
+			} // "bounds" (see t16)
 		}
 
 		// In practice there is always one polymesh per group.
@@ -307,8 +297,12 @@ bool load(const fs::path& path, Object& outObject){
 				std::string shaderBaseName(pShader);
 				TextUtilities::replace(shaderBaseName, "-", "_");
 				const std::string shaderFullName = areaName + "_" + shaderBaseName;
-
-				Shader& shader = shaders[shaderFullName];
+				auto shadIt = shaders.find(shaderFullName);
+				// Skip missing (non-textured materials).
+				if(shadIt == shaders.end()){
+					continue;
+				}
+				Shader& shader = shadIt->second;
 				if(shader.index < 0){
 					shader.index = ( int )outObject.materials.size();
 					outObject.materials.push_back(shader.material);
