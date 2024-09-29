@@ -31,6 +31,7 @@
 #define MODE_POSTPROCESS_JITTER 16
 #define MODE_POSTPROCESS_HEAT 32
 #define MODE_POSTPROCESS_UNDERWATER 64
+#define MODE_POSTPROCESS_UNFOCUS 128
 
 #define SKIP_CULLING_OBJECTS 1
 #define SKIP_CULLING_LIGHTS 2
@@ -1003,7 +1004,8 @@ int main(int argc, char ** argv) {
 	ViewerMode viewMode = ViewerMode::MODEL;
 	float zoomPct = 100.f;
 	glm::vec2 centerPct(50.f, 50.0f);
-
+	double lastTimeSinceFocusShift = 0.0;
+	int currentFocusShift = 0u;
 	bool showOpaques = true;
 	bool showTransparents = true;
 	bool showDecals = true;
@@ -1705,6 +1707,7 @@ int main(int argc, char ** argv) {
 				ImGui::CheckboxFlags("Jitter", &showPostprocess, MODE_POSTPROCESS_JITTER);
 				ImGui::CheckboxFlags("Heat map", &showPostprocess, MODE_POSTPROCESS_HEAT);
 				ImGui::CheckboxFlags("Underwater", &showPostprocess, MODE_POSTPROCESS_UNDERWATER);
+				ImGui::CheckboxFlags("Unfocus", &showPostprocess, MODE_POSTPROCESS_UNFOCUS);
 				ImGui::EndPopup();
 			}
 			ImGui::SameLine();
@@ -2271,6 +2274,46 @@ int main(int argc, char ** argv) {
 					noiseGrainQuad->buffer(frameInfos, 0);
 					GPU::drawQuad();
 					GPU::popMarker();
+				}
+
+				// Second blur pass.
+				if(showPostprocess & (MODE_POSTPROCESS_HEAT | MODE_POSTPROCESS_UNFOCUS)){
+
+					GPU::pushMarker("Blur chain");
+					GPU::blit(sceneFog, bloom0, 0, 0, Filter::LINEAR);
+					GPU::setViewport(0, 0, bloom0.width, bloom0.height);
+					uint finalBloomBlurSteps = 2u + (uint)glm::max(0.f, std::round(std::log2(sceneLit.width / 720.f)));
+
+					// Pick a new unfocus value from time to time
+					if(showPostprocess & MODE_POSTPROCESS_UNFOCUS){
+						if(lastTimeSinceFocusShift > 0.1){
+							currentFocusShift += Random::Int(-2,2);
+							currentFocusShift = glm::clamp(currentFocusShift, -1, 15);
+							lastTimeSinceFocusShift = 0.0;
+						}
+						finalBloomBlurSteps += currentFocusShift;
+						lastTimeSinceFocusShift += frameTime * Random::Float(0.8f, 1.2f);
+					}
+
+					for( uint blurStep = 0; blurStep < finalBloomBlurSteps; ++blurStep )
+					{
+						GPU::pushMarker( "Bloom pass" );
+						GPU::bind(bloom1, LoadOperation::DONTCARE);
+						bloomBlur->use();
+						bloomBlur->texture(bloom0, 0);
+						bloomBlur->buffer(blurInfosH, 0);
+						GPU::drawQuad();
+						Texture& dst = blurStep == finalBloomBlurSteps - 1 ? sceneFog : bloom0;
+						GPU::setViewport(0, 0, dst.width, dst.height);
+						GPU::bind(dst, LoadOperation::DONTCARE);
+						bloomBlur->use();
+						bloomBlur->texture(bloom1, 0);
+						bloomBlur->buffer(blurInfosV, 0);
+						GPU::drawQuad();
+						GPU::popMarker( );
+					}
+					GPU::popMarker();
+
 				}
 			}
 
