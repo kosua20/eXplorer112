@@ -1920,7 +1920,11 @@ int main(int argc, char ** argv) {
 			}
 
 			// Use alpha to skip lighting.
-			const glm::vec4 clearColor = glm::vec4(0.0f, 0.0f, 0.0f, 0.0f);
+			glm::vec4 clearColor = glm::vec4(0.0f, 0.0f, 0.0f, 0.0f);
+			if(!showFog && !scene.world.zones().empty()){
+				clearColor = scene.world.zones()[0].ambientColor;
+				clearColor[3] = 0.0f;
+			}
 			GPU::bind(sceneColor, sceneNormal, sceneHeat, sceneDepth, clearColor, 0.0f, LoadOperation::DONTCARE);
 			GPU::setViewport(sceneColor);
 
