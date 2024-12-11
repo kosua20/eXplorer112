@@ -1,26 +1,59 @@
 
 #include "../engine/engine.glsl"
 
-layout(local_size_x=1, local_size_y=1, local_size_z=1) in;
+layout(local_size_x=SORT_BIN_COUNT, local_size_y=1, local_size_z=1) in;
 
 layout(set = 0, binding = 1) uniform TransparentFrameData {
 	uint firstMesh;
 	uint meshCount;
 	uint instanceCount;
 	uint firstBit;
+	uint batchCount;
 } transparentEngine;
 
 layout(set = 0, binding = 2) buffer BinCounters {
 	uint counters[];
 };
 
+shared uint[SORT_BIN_COUNT] globalCounters;
+
+
 void main(){
-	// Manual prefix sum
-	uint currentOffset = 0u;
-	for(int i = 0; i < SORT_BIN_COUNT; ++i){
-		uint binCount = counters[i];
-		counters[i] = currentOffset;
-		currentOffset += binCount;
+	// Manual prefix sum for a given bin.
+	uint threadBinIndex = gl_LocalInvocationID.x;
+
+	// Sum all counts for the bin.
+	uint currentCount = 0;
+	for(int j = 0; j < transparentEngine.batchCount; ++j){
+		uint currentIndex = j * SORT_BIN_COUNT + threadBinIndex;
+		uint localBinCount = counters[currentIndex];
+		counters[currentIndex] = currentCount;
+		currentCount += localBinCount;
+	}
+	globalCounters[threadBinIndex] = currentCount;
+
+	groupMemoryBarrier();
+	barrier();
+
+	// One thread then does the global prefix sum.
+	if(gl_LocalInvocationID.x == 0){
+		uint totalCount = 0;
+		for(int i = 0; i < SORT_BIN_COUNT; ++i){
+			uint globalBinCount = globalCounters[i];
+			globalCounters[i] = totalCount;
+			totalCount += globalBinCount;
+		}
+	}
+
+	groupMemoryBarrier();
+	barrier();
+
+	// Then each thread apply the global bin offset to each local bin.
+	uint globalOffset = globalCounters[threadBinIndex];
+
+	for(int j = 0; j < transparentEngine.batchCount; ++j){
+		uint currentIndex = j * SORT_BIN_COUNT + threadBinIndex;
+		counters[currentIndex] += globalOffset;
 	}
 
 }

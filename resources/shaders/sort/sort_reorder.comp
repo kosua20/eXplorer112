@@ -8,6 +8,7 @@ layout(set = 0, binding = 1) uniform TransparentFrameData {
 	uint meshCount;
 	uint instanceCount;
 	uint firstBit;
+	uint batchCount;
 } transparentEngine;
 
 
@@ -19,7 +20,7 @@ layout(set = 0, binding = 3) readonly buffer TransparentInfosIn {
 	TransparentInstanceInfos transparentInfosIn[];
 };
 
-layout(set = 0, binding = 4) coherent buffer BinCounters {
+layout(set = 0, binding = 4) readonly buffer BinCounters {
 	uint counters[];
 };
 
@@ -28,18 +29,30 @@ layout(set = 0, binding = 5) writeonly buffer TransparentInfosOut {
 };
 
 void main(){
-	
 
-	if(gl_GlobalInvocationID.x >= transparentInstanceCounter[0]){
+	// Load offsets for this batch.
+	uint offsets[SORT_BIN_COUNT];
+	uint batchIndex = gl_GlobalInvocationID.x;
+	if(batchIndex >= transparentEngine.batchCount){
 		return;
 	}
+	
+	for(int i = 0; i < SORT_BIN_COUNT; ++i){
+		offsets[i] = counters[batchIndex * SORT_BIN_COUNT + i];
+	}
 
-	TransparentInstanceInfos infos = transparentInfosIn[gl_GlobalInvocationID.x];
-	uint maskedDistance = (infos.distanceToCamera >> transparentEngine.firstBit) & (SORT_BIN_COUNT - 1u);
-	// Reverse order, draw from furthest to closest.
-	uint binIndex = SORT_BIN_COUNT - 1u - maskedDistance;
-	uint offset = atomicAdd(counters[binIndex], 1);
-
-	transparentInfosOut[offset] = infos;
-
+	// Then iterate over items in the batch.
+	for(int j = 0; j < SORT_ITEMS_PER_BATCH; ++j)
+	{
+		uint itemIndex = batchIndex * SORT_ITEMS_PER_BATCH + j;
+		if(itemIndex >= transparentInstanceCounter[0]){
+			continue;
+		}
+		TransparentInstanceInfos infos = transparentInfosIn[itemIndex];
+		uint maskedDistance = (infos.distanceToCamera >> transparentEngine.firstBit) & (SORT_BIN_COUNT - 1u);
+		// Reverse order, draw from furthest to closest.
+		uint binIndex = SORT_BIN_COUNT - 1u - maskedDistance;
+		transparentInfosOut[offsets[binIndex]] = infos;
+		offsets[binIndex] += 1u;
+	}
 }

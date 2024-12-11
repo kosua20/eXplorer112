@@ -1,13 +1,14 @@
 
 #include "../engine/engine.glsl"
 
-layout(local_size_x=32, local_size_y=1, local_size_z=1) in;
+layout(local_size_x=SORT_ITEMS_PER_BATCH, local_size_y=1, local_size_z=1) in;
 
 layout(set = 0, binding = 1) uniform TransparentFrameData {
 	uint firstMesh;
 	uint meshCount;
 	uint instanceCount;
 	uint firstBit;
+	uint batchCount;
 } transparentEngine;
 
 layout(set = 0, binding = 2) readonly buffer TransparentCounter {
@@ -32,5 +33,7 @@ void main(){
 	uint maskedDistance = (infos.distanceToCamera >> transparentEngine.firstBit) & (SORT_BIN_COUNT - 1u);
 	// Reverse order, draw from furthest to closest.
 	uint binIndex = SORT_BIN_COUNT - 1u - maskedDistance;
-	atomicAdd(counters[binIndex], 1);
+	// Increment dedicated counter. This could be done in shared memory before a unique thread write it to buffer memory.
+	uint counterIndex = SORT_BIN_COUNT * gl_WorkGroupID.x + binIndex;
+	atomicAdd(counters[counterIndex], 1);
 }

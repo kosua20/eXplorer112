@@ -42,6 +42,7 @@
 
 #define SORT_BIT_RANGE 4
 #define SORT_BIN_COUNT (1 << SORT_BIT_RANGE)
+#define SORT_ITEMS_PER_BATCH 32
 
 static const std::vector<uint> boxIndices = { 0, 1, 0, 0, 2, 0,
 	1, 3, 1, 2, 3, 2,
@@ -167,6 +168,7 @@ struct TransparentFrameData {
 	uint meshCount;
 	uint instanceCount;
 	uint firstBit;
+	uint batchCount;
 };
 
 struct TransparentInstanceInfos {
@@ -793,6 +795,10 @@ uint roundUp( uint a, uint step ){
 	return (int)std::floor( int(a) - 1) / int( step ) + 1;
 }
 
+uint upperMultiple( uint a, uint b){
+	return (a + b - 1u) / b;
+}
+
 int main(int argc, char ** argv) {
 
 	// FIXME:
@@ -966,10 +972,9 @@ int main(int argc, char ** argv) {
 	std::unique_ptr<Buffer> drawInstances = nullptr;
 	std::array<std::unique_ptr<Buffer>, 2> transparentDrawInstances;
 	std::unique_ptr<Buffer> transparentDrawCommands = nullptr;
+	std::unique_ptr<Buffer> atomicBinCounters = nullptr;
 
 	Buffer transparentCounter(sizeof(uint32_t), BufferType::STORAGE, "TransparentCounter");
-	Buffer atomicBinCounters(SORT_BIN_COUNT * sizeof(uint32_t), BufferType::STORAGE, "BinCounters");
-
 
 	auto resizeRenderTargets = [&](const glm::vec2& renderRes){
 		sceneColor.resize(renderRes);
@@ -1035,6 +1040,8 @@ int main(int argc, char ** argv) {
 		transparentDrawInstances[0] = std::make_unique<Buffer>( transparentRange.instanceCount * sizeof( TransparentInstanceInfos ), BufferType::STORAGE, "DrawTransparentInstances0" );
 		transparentDrawInstances[1] = std::make_unique<Buffer>( transparentRange.instanceCount * sizeof( TransparentInstanceInfos ), BufferType::STORAGE, "DrawTransparentInstances1" );
 		transparentDrawCommands = std::make_unique<Buffer>( transparentRange.instanceCount * sizeof( GPU::DrawCommand ), BufferType::INDIRECT, "DrawTransparentCommands" );
+		const uint sortBatchesCount = upperMultiple(transparentRange.instanceCount, SORT_ITEMS_PER_BATCH);
+		atomicBinCounters = std::make_unique<Buffer>(sortBatchesCount * SORT_BIN_COUNT * sizeof(uint32_t), BufferType::STORAGE, "BinCounters");
 
 		shadow.setup(scene);
 
@@ -2102,6 +2109,7 @@ int main(int argc, char ** argv) {
 				transparentInfos[0].firstMesh = transparentRange.firstIndex;
 				transparentInfos[0].meshCount = transparentRange.count;
 				transparentInfos[0].instanceCount = transparentRange.instanceCount;
+				transparentInfos[0].batchCount = upperMultiple(transparentRange.instanceCount, SORT_ITEMS_PER_BATCH);
 				transparentInfos.upload();
 
 				Buffer* transparentItemsIn = transparentDrawInstances[0].get();
@@ -2137,7 +2145,7 @@ int main(int argc, char ** argv) {
 					// Because I'm lazy.
 					assert(bitsToSort % SORT_BIT_RANGE == 0);
 					const uint rounds = bitsToSort / SORT_BIT_RANGE;
-
+					const uint batchCount = transparentInfos[0].batchCount;
 					// At each iteration, we'll focus on 4 bits, from least to most significant, sorted into 16 bins.
 					// The sort being stable, low bits ordering will be preserved when sorting higher bits.
 					for( uint rid = 0; rid < rounds; ++rid )
@@ -2148,31 +2156,31 @@ int main(int argc, char ** argv) {
 
 						// Clear counters.
 						clearBufferCompute->use();
-						clearBufferCompute->buffer(atomicBinCounters, 1);
-						GPU::dispatch(SORT_BIN_COUNT, 1, 1);
+						clearBufferCompute->buffer(*atomicBinCounters, 1);
+						GPU::dispatch(SORT_BIN_COUNT * batchCount, 1, 1);
 
 						// Count how many instances fall in each bin.
 						sortCount->use();
 						sortCount->buffer(transparentInfos, 1);
 						sortCount->buffer(transparentCounter, 2);
 						sortCount->buffer(*transparentItemsIn, 3);
-						sortCount->buffer(atomicBinCounters, 4);
+						sortCount->buffer(*atomicBinCounters, 4);
 						GPU::dispatch(transparentRange.instanceCount, 1, 1);
 
 						// Convert bin counts into offsets in the output list.
 						sortPrefix->use();
 						sortPrefix->buffer(transparentInfos, 1);
-						sortPrefix->buffer(atomicBinCounters, 2);
-						GPU::dispatch(1, 1, 1);
+						sortPrefix->buffer(*atomicBinCounters, 2);
+						GPU::dispatch(SORT_BIN_COUNT, 1, 1);
 
 						// Append instances into the output list, using their bin offset and local increment.
 						sortReorder->use();
 						sortReorder->buffer(transparentInfos, 1);
 						sortReorder->buffer(transparentCounter, 2);
 						sortReorder->buffer(*transparentItemsIn, 3);
-						sortReorder->buffer(atomicBinCounters, 4);
+						sortReorder->buffer(*atomicBinCounters, 4);
 						sortReorder->buffer(*transparentItemsOut, 5);
-						GPU::dispatch(transparentRange.instanceCount, 1, 1);
+						GPU::dispatch(batchCount, 1, 1);
 
 						// Swap buffers
 						std::swap( transparentItemsIn, transparentItemsOut );
